@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Sandbox } from "@/components/sandbox";
 import { HeroToasts } from "@/components/mocks";
 import { Shot } from "@/components/shot";
@@ -34,14 +34,71 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 pt-16" aria-label="Trusted by">
-        <Reveal className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 border-y border-line py-6 sm:justify-start">
-          <span className="text-[13px] font-medium text-soft">Trusted by</span>
-          <span className="lift inline-flex items-center gap-3 rounded-lg border border-line bg-surface py-1.5 pl-1.5 pr-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/roleflow.png" width={36} height={36} alt="" className="h-9 w-9 rounded-md" />
-            <span className="font-display text-lg font-semibold tracking-[-0.03em]">Roleflow</span>
-          </span>
+      <section className="mx-auto max-w-6xl px-4 pt-20" aria-label="Trusted by">
+        <Reveal className="relative overflow-hidden rounded-2xl border border-line bg-surface/90 p-6 shadow-sm sm:p-8">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
+
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-md space-y-2">
+              <div className="mono inline-flex items-center gap-2 rounded-full border border-line bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Trusted Partners
+              </div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                Trusted by modern operations teams
+              </h2>
+              <p className="text-[13px] leading-relaxed text-soft">
+                High-volume moderation, retail, and live-ops teams run their daily onboarding, shift checklists, and conduct logs on OnboardOps.
+              </p>
+            </div>
+
+            <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
+              <div className="lift group relative flex items-center gap-4 rounded-xl border border-line bg-canvas/80 p-4 transition-all hover:border-accent/50 hover:shadow-md">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/retailnetwork.jpg"
+                  width={52}
+                  height={52}
+                  alt="RetailNetwork logo"
+                  className="h-[52px] w-[52px] shrink-0 rounded-xl border border-line object-cover shadow-sm transition-transform group-hover:scale-105"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">RetailNetwork</span>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-label="Verified Partner" />
+                  </div>
+                  <p className="mt-0.5 text-xs text-soft">Retail &amp; Live-Ops Moderation</p>
+                  <div className="mono mt-2 inline-flex items-center gap-1.5 rounded-md border border-line bg-muted px-2 py-0.5 text-[10px] text-soft">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Training · Checklists · Conduct
+                  </div>
+                </div>
+              </div>
+
+              <div className="lift group relative flex items-center gap-4 rounded-xl border border-line bg-canvas/80 p-4 transition-all hover:border-accent/50 hover:shadow-md">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/roleflow.png"
+                  width={52}
+                  height={52}
+                  alt="Roleflow logo"
+                  className="h-[52px] w-[52px] shrink-0 rounded-xl border border-line object-cover shadow-sm transition-transform group-hover:scale-105"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">Roleflow</span>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-label="Verified Partner" />
+                  </div>
+                  <p className="mt-0.5 text-xs text-soft">Team Operations &amp; Role Management</p>
+                  <div className="mono mt-2 inline-flex items-center gap-1.5 rounded-md border border-line bg-muted px-2 py-0.5 text-[10px] text-soft">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Onboarding · Compliance · Audit
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </Reveal>
       </section>
 
