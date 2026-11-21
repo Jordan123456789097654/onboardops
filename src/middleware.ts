@@ -6,7 +6,7 @@ const PROTECTED = ["/app", "/print", "/admin", "/workplaces", "/account", "/api/
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const host = cleanHost(req.headers.get("host"));
+  const host = cleanHost(req.headers.get("x-forwarded-host") || req.headers.get("host"));
   const custom = !isMainHost(host);
 
   // Custom domains only serve that workspace's staff login and the app. Everything else goes to the login page.

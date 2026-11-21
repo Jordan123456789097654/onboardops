@@ -7,6 +7,7 @@ import { writeAudit } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
 import { createToken, findValidToken } from "@/lib/tokens";
 import { emailTaken, findUserByAnyEmail } from "@/lib/user-emails";
+import { resolvePlatformRole } from "@/lib/platform-role";
 import { emails, sendEmail } from "@/lib/email";
 import { run, type Result } from "./_util";
 
@@ -174,16 +175,62 @@ export async function staffLoginAction(input: unknown): Promise<Result<{ to: str
     const generic = "Email or password is incorrect, or you are not part of this workplace.";
     const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
     if (!ws) throw new Error(generic);
-    const user = await findUserByAnyEmail(d.email);
+    const cleanEmail = d.email.trim().toLowerCase();
+    let user = await findUserByAnyEmail(cleanEmail);
+    const emp = await prisma.employeeProfile.findFirst({
+      where: { workspaceId: ws.id, email: { equals: cleanEmail, mode: "insensitive" }, status: { not: "TERMINATED" } },
+    });
+
+    // If an employee record exists for this email in the workspace, but no User account exists yet, create their User account with their chosen password (8+ chars)
+    if (!user && emp) {
+      if (d.password.length < 8) throw new Error("First time signing in? Choose a password of at least 8 characters.");
+      user = await prisma.user.create({
+        data: {
+          email: cleanEmail,
+          name: emp.fullName,
+          passwordHash: await hashPassword(d.password),
+          passwordSetAt: new Date(),
+          emailVerifiedAt: new Date(),
+        },
+      });
+    }
+
     if (user?.lockedUntil && user.lockedUntil > new Date()) throw new Error("Too many failed attempts. Try again in a few minutes, or reset your password.");
-    const member = user ? await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: ws.id, userId: user.id } } }) : null;
-    if (!user || !member || !(await verifyPassword(d.password, user.passwordHash))) {
-      if (user) {
-        const fails = user.failedLogins + 1;
-        await prisma.user.update({ where: { id: user.id }, data: fails >= 5 ? { failedLogins: 0, lockedUntil: new Date(Date.now() + 15 * 60000) } : { failedLogins: fails } });
-      }
+    if (!user) throw new Error(generic);
+
+    // If the user was created by an invite link (!user.passwordSetAt) and hasn't set a password yet, let their first sign-in set their password
+    let passwordOk = await verifyPassword(d.password, user.passwordHash);
+    if (!passwordOk && !user.passwordSetAt && d.password.length >= 8) {
+      const newHash = await hashPassword(d.password);
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newHash, passwordSetAt: new Date(), emailVerifiedAt: user.emailVerifiedAt ?? new Date() },
+      });
+      passwordOk = true;
+    }
+
+    if (!passwordOk) {
+      const fails = user.failedLogins + 1;
+      await prisma.user.update({ where: { id: user.id }, data: fails >= 5 ? { failedLogins: 0, lockedUntil: new Date(Date.now() + 15 * 60000) } : { failedLogins: fails } });
       throw new Error(generic);
     }
+
+    let member = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: ws.id, userId: user.id } } });
+    // Auto-link if they have a matching EmployeeProfile in this workspace or are a platform OWNER
+    if (!member && (emp || resolvePlatformRole(user) === "OWNER")) {
+      const defaultRole = resolvePlatformRole(user) === "OWNER" && !emp ? "ADMIN" : "EMPLOYEE";
+      member = await prisma.workspaceMember.create({
+        data: { workspaceId: ws.id, userId: user.id, role: defaultRole },
+      });
+      if (emp && !emp.memberId) {
+        await prisma.employeeProfile.update({ where: { id: emp.id }, data: { memberId: member.id } });
+      }
+    } else if (member && emp && !emp.memberId) {
+      await prisma.employeeProfile.update({ where: { id: emp.id }, data: { memberId: member.id } });
+    }
+
+    if (!member) throw new Error(generic);
+
     if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
     await createSession(user.id);
     setActiveWorkspace(ws.id);

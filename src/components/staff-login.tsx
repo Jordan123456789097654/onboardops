@@ -25,7 +25,7 @@ export function StaffLogin({ workspaceId, name, onCustomDomain }: { workspaceId:
         <div className="flex justify-between lg:justify-end"><span className="flex items-center gap-2 text-sm font-semibold lg:hidden"><span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-xs text-accent-fg">{initials}</span>{name}</span><ThemeToggle /></div>
         <div className="flex flex-1 items-center justify-center">
           {magic ? <div className="w-full max-w-sm"><p className="text-xs font-semibold text-accent">Staff sign in</p><h1 className="mb-3 mt-1 text-xl font-semibold">{name}</h1><MagicLinkBox workspaceId={workspaceId} initialEmail={email} onBack={() => setMagic(false)} /></div> : (
-          <form className="w-full max-w-sm space-y-4" onSubmit={(e) => { e.preventDefault(); exec(() => staffLoginAction({ workspaceId, email, password }), { onOk: (d) => { router.push(d.to); router.refresh(); } }); }}>
+          <form className="w-full max-w-sm space-y-4" onSubmit={(e) => { e.preventDefault(); exec(() => staffLoginAction({ workspaceId, email, password }), { onOk: (d) => { window.location.href = d.to; } }); }}>
             <div><p className="text-xs font-semibold text-accent">Staff sign in</p><h1 className="mt-1 text-xl font-semibold">{name}</h1><p className="mt-1 text-[13px] text-soft">Use the email your employer has on file.</p></div>
             <Field label="Email"><input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></Field>
             <Field label="Password"><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></Field>

@@ -3,18 +3,19 @@ import { prisma } from "./prisma";
 import { cleanHost, isMainHost } from "./host-shared";
 
 export function requestHost() {
-  return cleanHost(headers().get("host"));
+  const h = headers();
+  return cleanHost(h.get("x-forwarded-host") || h.get("host"));
 }
 
 export function onCustomHost() {
   return !isMainHost(requestHost());
 }
 
-/** Finds the workspace a custom hostname belongs to. Verified domains only; `slug.localhost` also works for local testing. */
+/** Finds the workspace a custom hostname belongs to. `slug.localhost` also works for local testing. */
 export async function workspaceForHost(host: string) {
   if (!host || isMainHost(host)) return null;
   if (host.endsWith(".localhost")) return prisma.workspace.findUnique({ where: { slug: host.slice(0, -".localhost".length) } });
-  return prisma.workspace.findFirst({ where: { customDomain: host, domainStatus: "VERIFIED" } });
+  return prisma.workspace.findFirst({ where: { customDomain: { equals: host, mode: "insensitive" } } });
 }
 
 /** Workspace id for the current request when it arrived on a custom domain, otherwise null. */

@@ -1,6 +1,6 @@
 /** Edge-safe helpers (used by middleware). */
 export function cleanHost(h: string | null | undefined) {
-  return (h ?? "").toLowerCase().split(":")[0].trim();
+  return (h ?? "").split(",")[0].toLowerCase().split(":")[0].trim();
 }
 
 const base = () => {

@@ -2,7 +2,21 @@ import { prisma } from "./prisma";
 import { EMAIL_IMAGES } from "./email-assets";
 import { buildEmail } from "./email-template";
 
-const appUrl = () => process.env.APP_URL || "http://localhost:3000";
+const appUrl = () => (process.env.APP_URL || "https://onboardops.org").trim().replace(/^["']+|["']+$/g, "").replace(/\/$/, "");
+
+function resolveFromAddress(): string {
+  const fallback = "OnboardOps <notifications@onboardops.org>";
+  const raw = (process.env.EMAIL_FROM || "").trim().replace(/^["']+|["']+$/g, "").trim();
+  if (!raw) return fallback;
+  const simpleEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+  const namedEmail = /^[^<>]+<\s*[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+\s*>$/;
+  if (simpleEmail.test(raw)) return `OnboardOps <${raw}>`;
+  if (namedEmail.test(raw)) return raw.replace(/<\s*/, "<").replace(/\s*>/, ">");
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(raw)) return `OnboardOps <notifications@${raw.toLowerCase()}>`;
+  const match = raw.match(/([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/);
+  if (match) return `OnboardOps <${match[1]}>`;
+  return fallback;
+}
 
 export type SendOpts = { kind?: string; workspaceId?: string | null; html?: string };
 
@@ -12,7 +26,7 @@ export type SendOpts = { kind?: string; workspaceId?: string | null; html?: stri
  * If EMAIL_REDIRECT_TO is set (testing), every message goes to that address instead, with the original recipient in the subject.
  */
 export async function sendEmail(to: string, subject: string, text: string, opts: SendOpts = {}): Promise<{ ok: boolean; error?: string }> {
-  const redirect = process.env.EMAIL_REDIRECT_TO?.trim();
+  const redirect = process.env.EMAIL_REDIRECT_TO?.trim().replace(/^["']+|["']+$/g, "").trim();
   const realTo = redirect || to;
   const finalSubject = redirect ? `[to: ${to}] ${subject}` : subject;
   const finalText = redirect ? `(Test mode: this message was meant for ${to}.)\n\n${text}` : text;
@@ -20,24 +34,37 @@ export async function sendEmail(to: string, subject: string, text: string, opts:
   const log = (status: "SENT" | "FAILED" | "SKIPPED", error?: string, providerId?: string) =>
     prisma.emailLog.create({ data: { to: realTo, redirectedFrom: redirect ? to : null, subject: finalSubject, kind: opts.kind ?? "", status, error: error?.slice(0, 500), providerId, workspaceId: opts.workspaceId ?? null } }).catch(() => {});
 
-  const key = process.env.RESEND_API_KEY;
+  const key = process.env.RESEND_API_KEY?.trim().replace(/^["']+|["']+$/g, "").trim();
   if (!key) { await log("SKIPPED", "RESEND_API_KEY not set"); return { ok: false, error: "RESEND_API_KEY not set" }; }
   try {
     const cids = finalHtml ? Array.from(new Set(Array.from(finalHtml.matchAll(/cid:([a-z-]+)/g)).map((m) => m[1]))).filter((id) => EMAIL_IMAGES[id]) : [];
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM || "OnboardOps <onboarding@resend.dev>",
-        to: [realTo],
-        subject: finalSubject,
-        text: finalText,
-        ...(finalHtml ? { html: finalHtml } : {}),
-        ...(cids.length ? { attachments: cids.map((id) => ({ filename: `${id}.png`, content: EMAIL_IMAGES[id], content_type: "image/png", content_id: id })) } : {}),
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
-    const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
+    const sendWithFrom = async (fromAddr: string) => {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: fromAddr,
+          to: [realTo],
+          subject: finalSubject,
+          text: finalText,
+          ...(finalHtml ? { html: finalHtml } : {}),
+          ...(cids.length ? { attachments: cids.map((id) => ({ filename: `${id}.png`, content: EMAIL_IMAGES[id], content_type: "image/png", content_id: id })) } : {}),
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
+      return { res, json };
+    };
+
+    const primaryFrom = resolveFromAddress();
+    let { res, json } = await sendWithFrom(primaryFrom);
+    if (!res.ok && primaryFrom !== "OnboardOps <onboarding@resend.dev>") {
+      const retry = await sendWithFrom("OnboardOps <onboarding@resend.dev>");
+      if (retry.res.ok) {
+        res = retry.res;
+        json = retry.json;
+      }
+    }
     if (!res.ok) { const msg = json.message ?? `Resend responded ${res.status}`; await log("FAILED", msg); return { ok: false, error: msg }; }
     await log("SENT", undefined, json.id);
     return { ok: true };
