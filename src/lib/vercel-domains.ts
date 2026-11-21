@@ -35,25 +35,36 @@ export function isApex(domain: string) {
   return domain.split(".").length <= 2; // good enough for example.com; multi-part TLDs (co.uk) are treated as subdomains of the TLD, so use A/CNAME guidance from Vercel's config
 }
 
+export function isOnboardOpsSubdomain(domain: string) {
+  return domain.endsWith(".onboardops.org") && domain !== "onboardops.org" && domain !== "www.onboardops.org";
+}
+
 export function validateDomain(raw: string): { ok: true; domain: string } | { ok: false; error: string } {
   const domain = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
-  if (!/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) return { ok: false, error: "Enter a domain like hr.yourcompany.com" };
-  if (/(^|\.)(onboardops\.org|vercel\.app|localhost)$/.test(domain)) return { ok: false, error: "Use a domain you own, not an OnboardOps or Vercel address." };
+  if (!/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) return { ok: false, error: "Enter a domain like retailnetwork.onboardops.org or hr.yourcompany.com" };
+  if (domain === "onboardops.org" || domain === "www.onboardops.org" || /(^|\.)(vercel\.app|localhost)$/.test(domain)) return { ok: false, error: "Cannot use the root onboardops.org, vercel.app, or localhost address." };
   return { ok: true, domain };
 }
 
 /** Adds the domain to the Vercel project and returns what the customer must add at their DNS provider. */
 export async function connectDomain(domain: string): Promise<DomainDetails> {
-  const base: DomainDetails = { apex: isApex(domain), cname: DEFAULT_CNAME, a: DEFAULT_A, verification: [], verified: false, misconfigured: true, manual: !vercelConfigured() };
+  const isSub = isOnboardOpsSubdomain(domain);
+  const base: DomainDetails = { apex: isApex(domain), cname: DEFAULT_CNAME, a: DEFAULT_A, verification: [], verified: isSub, misconfigured: !isSub, manual: !vercelConfigured() };
   if (!vercelConfigured()) return base;
   const add = await call("POST", `/v10/projects/${project()}/domains`, { name: domain });
-  if (!add.ok && add.status !== 409) return { ...base, manual: false, error: add.json?.error?.message ?? `Vercel responded ${add.status}` };
+  if (!add.ok && add.status !== 409) {
+    if (isSub) return { ...base, verified: true, misconfigured: false };
+    return { ...base, manual: false, error: add.json?.error?.message ?? `Vercel responded ${add.status}` };
+  }
+  if (isSub) return { ...base, manual: false, verified: true, misconfigured: false };
   return refreshDomain(domain, base);
 }
 
 /** Reads the current state from Vercel (and triggers its verification check). */
 export async function refreshDomain(domain: string, prev?: Partial<DomainDetails>): Promise<DomainDetails> {
-  const base: DomainDetails = { apex: isApex(domain), cname: DEFAULT_CNAME, a: DEFAULT_A, verification: [], verified: false, misconfigured: true, manual: !vercelConfigured(), ...prev };
+  const isSub = isOnboardOpsSubdomain(domain);
+  const base: DomainDetails = { apex: isApex(domain), cname: DEFAULT_CNAME, a: DEFAULT_A, verification: [], verified: isSub, misconfigured: !isSub, manual: !vercelConfigured(), ...prev };
+  if (isSub) return { ...base, verified: true, misconfigured: false, error: undefined };
   if (!vercelConfigured()) return manualCheck(domain, base);
   let info = await call("GET", `/v9/projects/${project()}/domains/${encodeURIComponent(domain)}`);
   if (!info.ok) return { ...base, manual: false, error: info.json?.error?.message ?? `Vercel responded ${info.status}` };

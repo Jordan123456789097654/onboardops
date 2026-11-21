@@ -17,4 +17,4 @@ export function isMainHost(host: string) {
   return false; // includes custom domains and *.localhost (used to test custom domains locally)
 }
 
-export const MARKETING_PREFIXES = ["/why", "/features", "/solutions", "/security", "/pricing", "/changelog", "/support", "/faq", "/about", "/contact", "/legal", "/register", "/staff", "/w/", "/workplaces", "/admin"];
+export const MARKETING_PREFIXES = ["/why", "/features", "/solutions", "/security", "/pricing", "/changelog", "/support", "/faq", "/about", "/contact", "/legal", "/register", "/staff", "/w/", "/workplaces"];

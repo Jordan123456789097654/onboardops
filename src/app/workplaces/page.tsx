@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { resolvePlatformRole } from "@/lib/platform-role";
 import { verifiedEmails } from "@/lib/user-emails";
 import { Brand, ThemeToggle } from "@/components/ui";
 import { logoutAction } from "@/actions/auth";
@@ -20,7 +21,7 @@ export default async function WorkplacesPage() {
   ]);
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-4">
-      <div className="flex items-center justify-between"><Link href="/" aria-label="OnboardOps home"><Brand /></Link><div className="flex items-center gap-2"><ThemeToggle /><Link href="/account" className="btn">Account</Link><form action={logoutAction}><button className="btn">Sign out</button></form></div></div>
+      <div className="flex items-center justify-between"><Link href="/" aria-label="OnboardOps home"><Brand /></Link><div className="flex items-center gap-2"><ThemeToggle />{resolvePlatformRole(user) && <Link href="/admin" className="btn-primary">Staff Console</Link>}<Link href="/account" className="btn">Account</Link><form action={logoutAction}><button className="btn">Sign out</button></form></div></div>
       <div className="flex-1 py-10">
         <h1 className="text-2xl font-semibold">Workplaces I&apos;m employed in</h1>
         <p className="mt-1 text-[13px] text-soft">Signed in as {user.name} ({user.email}).</p>

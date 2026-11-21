@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getActiveMembership, listMemberships, unauthPath } from "@/lib/auth";
 import { visibleTo, hasFeature } from "@/lib/rbac";
 import { can } from "@/lib/perms";
+import { resolvePlatformRole } from "@/lib/platform-role";
 import { Shell, type NavItem } from "@/components/shell";
 import { prisma } from "@/lib/prisma";
 import { LockedScreen } from "@/components/locked-screen";
@@ -48,6 +49,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (v.seeAudit) nav.push({ href: "/app/audit", label: "Audit Log", group: "Discipline" });
     if (v.seeSettings) nav.push({ href: "/app/settings", label: "Settings", group: "Admin" });
     if (m.profile) nav.push({ href: "/app/my-portal", label: "My Portal", group: "Me" });
+  }
+  if (resolvePlatformRole(m.user)) {
+    nav.push({ href: "/admin", label: "Staff Console", group: "Platform" });
   }
   return (
     <>

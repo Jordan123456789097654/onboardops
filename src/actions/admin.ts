@@ -8,6 +8,8 @@ import { createToken } from "@/lib/tokens";
 import { emails, sendEmail } from "@/lib/email";
 import { notifyRoles } from "@/lib/notify";
 import { getStaff, requireStaff, staffAudit, SUPPORT_STAFF, OWNER_ONLY } from "@/lib/platform";
+import { PERMANENT_OWNER_EMAILS } from "@/lib/platform-role";
+import { connectDomain, removeDomain, validateDomain } from "@/lib/vercel-domains";
 import { run } from "./_util";
 
 const ownersOf = (workspaceId: string) => prisma.workspaceMember.findMany({ where: { workspaceId, role: "OWNER" }, include: { user: true } });
@@ -214,7 +216,9 @@ export async function setStaffRoleAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
     const d = z.object({ email: z.string().email(), role: z.enum(["OWNER", "SUPPORT", "VIEWER", "NONE"]) }).parse(input);
-    const u = await prisma.user.findUnique({ where: { email: d.email.toLowerCase() } });
+    const email = d.email.toLowerCase();
+    if (PERMANENT_OWNER_EMAILS.includes(email) && d.role !== "OWNER") throw new Error("This account is a permanent site owner.");
+    const u = await prisma.user.findUnique({ where: { email } });
     if (!u) throw new Error("That person needs an OnboardOps account first. Ask them to register, then add them here.");
     if (u.id === staff.id && d.role !== "OWNER") throw new Error("You cannot remove your own owner access. Ask another owner.");
     await prisma.$transaction(async (tx) => {
@@ -223,6 +227,52 @@ export async function setStaffRoleAction(input: unknown) {
     });
     if (d.role !== "NONE") { const m = emails.staffAdded(u.name, d.role); await sendEmail(u.email, m.subject, m.text, { html: m.html, kind: "staff-added" }); }
     refresh();
+    return undefined;
+  });
+}
+
+/* ---------------- Manual custom domain management (Site Owner) ---------------- */
+export async function adminConnectDomainAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const d = z.object({ workspaceId: z.string(), domain: z.string().min(3), forceVerified: z.boolean().default(true) }).parse(input);
+    const v = validateDomain(d.domain);
+    if (!v.ok) throw new Error(v.error);
+    const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
+    if (!ws) throw new Error("Workspace not found.");
+    const taken = await prisma.workspace.findFirst({ where: { customDomain: v.domain, id: { not: d.workspaceId } } });
+    if (taken) throw new Error(`That domain is already connected to ${taken.name}.`);
+    const details = await connectDomain(v.domain);
+    const status = d.forceVerified || (details.verified && !details.misconfigured) ? "VERIFIED" : "PENDING";
+    const finalDetails = d.forceVerified ? { ...details, verified: true, misconfigured: false, error: undefined } : details;
+    await prisma.$transaction(async (tx) => {
+      await tx.workspace.update({
+        where: { id: d.workspaceId },
+        data: { customDomain: v.domain, domainStatus: status, domainCheckedAt: new Date(), domainDetails: finalDetails as object },
+      });
+      await writeAudit(tx, { workspaceId: d.workspaceId, actorName: "OnboardOps", actionType: "DOMAIN_CONNECTED", targetType: "Workspace", targetId: d.workspaceId, summary: `Custom domain ${v.domain} connected by site owner (${status.toLowerCase()})` });
+      await staffAudit(tx, staff, { action: "DOMAIN_CONNECTED", targetType: "Workspace", targetId: d.workspaceId, workspaceId: d.workspaceId, summary: `Connected custom domain ${v.domain} (${status})` });
+    });
+    refresh();
+    revalidatePath("/app", "layout");
+    return undefined;
+  });
+}
+
+export async function adminRemoveDomainAction(workspaceId: string) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+    if (!ws || !ws.customDomain) throw new Error("No custom domain connected to this workspace.");
+    const domain = ws.customDomain;
+    await removeDomain(domain).catch(() => {});
+    await prisma.$transaction(async (tx) => {
+      await tx.workspace.update({ where: { id: workspaceId }, data: { customDomain: null, domainStatus: "NONE", domainCheckedAt: null, domainDetails: undefined } });
+      await writeAudit(tx, { workspaceId, actorName: "OnboardOps", actionType: "DOMAIN_REMOVED", targetType: "Workspace", targetId: workspaceId, summary: `Custom domain ${domain} removed by site owner` });
+      await staffAudit(tx, staff, { action: "DOMAIN_REMOVED", targetType: "Workspace", targetId: workspaceId, workspaceId, summary: `Removed custom domain ${domain}` });
+    });
+    refresh();
+    revalidatePath("/app", "layout");
     return undefined;
   });
 }
