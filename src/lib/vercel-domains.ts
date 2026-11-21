@@ -39,10 +39,15 @@ export function isOnboardOpsSubdomain(domain: string) {
   return domain.endsWith(".onboardops.org") && domain !== "onboardops.org" && domain !== "www.onboardops.org";
 }
 
-export function validateDomain(raw: string): { ok: true; domain: string } | { ok: false; error: string } {
+export function validateDomain(raw: string, opts?: { allowPartnerSubdomain?: boolean }): { ok: true; domain: string } | { ok: false; error: string } {
   const domain = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
-  if (!/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) return { ok: false, error: "Enter a domain like retailnetwork.onboardops.org or hr.yourcompany.com" };
-  if (domain === "onboardops.org" || domain === "www.onboardops.org" || /(^|\.)(vercel\.app|localhost)$/.test(domain)) return { ok: false, error: "Cannot use the root onboardops.org, vercel.app, or localhost address." };
+  if (!/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) return { ok: false, error: "Enter a domain like hr.yourcompany.com" };
+  if (domain === "onboardops.org" || domain === "www.onboardops.org" || /(^|\.)(vercel\.app|localhost)$/.test(domain)) {
+    return { ok: false, error: "Cannot use the root onboardops.org, vercel.app, or localhost address." };
+  }
+  if (isOnboardOpsSubdomain(domain) && !opts?.allowPartnerSubdomain) {
+    return { ok: false, error: "*.onboardops.org subdomains are reserved for partners. Ask the site owner to assign one, or connect a domain you own." };
+  }
   return { ok: true, domain };
 }
 

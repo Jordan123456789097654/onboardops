@@ -32,7 +32,7 @@ export function WorkspaceActions({
   const [reason, setReason] = useState("");
   const [hours, setHours] = useState(1);
   const [to, setTo] = useState("");
-  const [domainInput, setDomainInput] = useState(customDomain || `${workspaceSlug}.onboardops.org`);
+  const [domainInput, setDomainInput] = useState(customDomain || "");
   const [forceVerified, setForceVerified] = useState(true);
   const isOwner = role === "OWNER";
   const canSupport = role !== "VIEWER";
@@ -45,7 +45,7 @@ export function WorkspaceActions({
           <button className="btn-primary" onClick={() => setDlg("access")}>Start support access…</button>
           {isOwner && (locked ? <button className="btn" disabled={pending} onClick={() => exec(() => unsuspendWorkspaceAction(workspaceId), { success: "Workspace unlocked", onOk: () => router.refresh() })}>Unlock workspace</button> : <button className="btn-danger" onClick={() => setDlg("lock")}>Lock workspace…</button>)}
           {isOwner && <button className="btn" onClick={() => setDlg("transfer")}>Transfer ownership…</button>}
-          {isOwner && <button className="btn" onClick={() => { setDomainInput(customDomain || `${workspaceSlug}.onboardops.org`); setDlg("domain"); }}>Connect custom domain…</button>}
+          {isOwner && <button className="btn" onClick={() => { setDomainInput(customDomain || ""); setDlg("domain"); }}>Connect custom domain…</button>}
         </div>
       )}
 
@@ -57,7 +57,7 @@ export function WorkspaceActions({
               {customDomain ? (
                 <>Connected: <span className="mono font-medium text-ink">{customDomain}</span></>
               ) : (
-                <>No custom domain connected. Default portal: <span className="mono">/w/{workspaceSlug}</span> (or <span className="mono">{workspaceSlug}.onboardops.org</span>)</>
+                <>No custom domain connected. Default portal: <span className="mono">/w/{workspaceSlug}</span></>
               )}
             </p>
           </div>
@@ -65,7 +65,7 @@ export function WorkspaceActions({
             {customDomain && <Badge value={domainStatus === "VERIFIED" ? "PASSED" : "PENDING"} label={domainStatus} />}
             {isOwner && (
               <>
-                <button className="btn" onClick={() => { setDomainInput(customDomain || `${workspaceSlug}.onboardops.org`); setDlg("domain"); }}>
+                <button className="btn" onClick={() => { setDomainInput(customDomain || ""); setDlg("domain"); }}>
                   {customDomain ? "Change domain" : "Connect domain manually"}
                 </button>
                 {customDomain && (
@@ -127,12 +127,12 @@ export function WorkspaceActions({
       </Modal>
       <Modal open={dlg === "domain"} onClose={close} title="Connect custom domain manually">
         <div className="space-y-3 text-[13px]">
-          <p className="text-soft">Assign a custom domain or an OnboardOps subdomain (e.g. <span className="mono">{workspaceSlug}.onboardops.org</span> or <span className="mono">retailnetwork.onboardops.org</span>) directly to {workspaceName}.</p>
+          <p className="text-soft">Assign a custom domain or a partner-only <span className="mono">*.onboardops.org</span> subdomain directly to {workspaceName}.</p>
           <Field label="Domain">
-            <input className="input mono" value={domainInput} onChange={(e) => setDomainInput(e.target.value)} placeholder={`${workspaceSlug}.onboardops.org`} />
+            <input className="input mono" value={domainInput} onChange={(e) => setDomainInput(e.target.value)} placeholder="hr.company.com or partner.onboardops.org" />
           </Field>
           <div className="flex flex-wrap gap-1.5">
-            <button type="button" className="btn !h-7 !text-xs" onClick={() => setDomainInput(`${workspaceSlug}.onboardops.org`)}>Use {workspaceSlug}.onboardops.org</button>
+            <button type="button" className="btn !h-7 !text-xs" onClick={() => setDomainInput(`${workspaceSlug}.onboardops.org`)}>Fill partner subdomain ({workspaceSlug}.onboardops.org)</button>
           </div>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={forceVerified} onChange={(e) => setForceVerified(e.target.checked)} />

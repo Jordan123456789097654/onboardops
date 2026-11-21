@@ -29,14 +29,11 @@ export function DomainPanel({ slug, baseUrl, domain, status, details, vercel }: 
       <div className="card p-4 text-[13px]">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Globe className="h-4 w-4" />Custom domain</h2>
         {!domain ? (
-          <form className="mt-2 space-y-3" onSubmit={(e) => { e.preventDefault(); exec(() => connectDomainAction({ domain: name }), { success: "Domain added.", onOk: () => router.refresh() }); }}>
-            <p className="text-soft">Put your staff sign-in on an OnboardOps subdomain like <span className="mono">{slug}.onboardops.org</span>, or your own address such as <span className="mono">hr.yourcompany.com</span>.</p>
-            <Field label="Domain"><input className="input mono" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${slug}.onboardops.org`} /></Field>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn-primary" disabled={pending || name.length < 4}>{pending ? "Connecting…" : "Connect domain"}</button>
-              <button type="button" className="btn" onClick={() => setName(`${slug}.onboardops.org`)}>Use {slug}.onboardops.org</button>
-            </div>
-            {!vercel && <p className="text-xs text-soft">Automatic Vercel connection is not configured on this server (VERCEL_API_TOKEN and VERCEL_PROJECT_ID), so external domains must also be added to the Vercel project by the site owner.</p>}
+          <form className="mt-2 space-y-3" onSubmit={(e) => { e.preventDefault(); exec(() => connectDomainAction({ domain: name }), { success: "Domain added. Now add the DNS records below.", onOk: () => router.refresh() }); }}>
+            <p className="text-soft">Put your staff sign-in on your own address, such as <span className="mono">hr.yourcompany.com</span>. Visitors to that address see your company&apos;s staff sign-in and your workspace only. (Partner <span className="mono">*.onboardops.org</span> subdomains are assigned directly by the OnboardOps team.)</p>
+            <Field label="Domain"><input className="input mono" value={name} onChange={(e) => setName(e.target.value)} placeholder="hr.yourcompany.com" /></Field>
+            <button className="btn-primary" disabled={pending || name.length < 4}>{pending ? "Connecting…" : "Connect domain"}</button>
+            {!vercel && <p className="text-xs text-soft">Automatic Vercel connection is not configured on this server (VERCEL_API_TOKEN and VERCEL_PROJECT_ID), so the domain must also be added to the Vercel project by the site owner.</p>}
           </form>
         ) : (
           <div className="mt-2 space-y-3">

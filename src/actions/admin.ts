@@ -236,7 +236,7 @@ export async function adminConnectDomainAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
     const d = z.object({ workspaceId: z.string(), domain: z.string().min(3), forceVerified: z.boolean().default(true) }).parse(input);
-    const v = validateDomain(d.domain);
+    const v = validateDomain(d.domain, { allowPartnerSubdomain: true });
     if (!v.ok) throw new Error(v.error);
     const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
     if (!ws) throw new Error("Workspace not found.");
