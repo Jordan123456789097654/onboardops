@@ -67,10 +67,16 @@ export const articles: Article[] = [
     ],
   },
   {
-    slug: "change-a-members-role", cat: "People and roles", title: "Change someone's role", summary: "Promote or demote a person with a login.",
+    slug: "change-a-members-role", cat: "People and roles", title: "Assign or change someone's role", summary: "Promote or assign Employee, Supervisor, Manager or Admin roles in one click.",
     body: [
-      ol("Open Settings and choose the Access tab.", "Find the person and pick a new role from the menu.", "The change takes effect immediately and is written to the audit log."),
-      p("The Owner's role cannot be changed. Admins can change Managers, Supervisors and Employees but cannot create other Admins."),
+      p("You can assign or change a person's workspace access role in four places:"),
+      ul(
+        "Staff Accounts (/app/access): Every row has an inline Access role dropdown (EMPLOYEE, SUPERVISOR, MANAGER, ADMIN). Selecting a role updates their permissions immediately—and if they don't have a login yet, it automatically sends an invite or links their account with that role.",
+        "Bulk Invites (/app/access): Select multiple employees, choose 'Invite as MANAGER', 'Invite as SUPERVISOR', etc., and send invites in one batch.",
+        "Add Employee drawer (/app/directory): Choose the person's Workspace access role right when creating their employee profile.",
+        "Employee Dossier (/app/employee/[id]): Change their Workspace access role directly on the Overview tab or when granting sign-in access."
+      ),
+      p("The Workspace Owner's role cannot be changed. Every role change takes effect immediately and is recorded in the append-only audit log."),
     ],
   },
   {
@@ -262,14 +268,83 @@ export const articles: Article[] = [
     ],
   },
   {
-    slug: "staff-sign-in-and-custom-domains", cat: "Account and data", title: "Staff sign-in page and custom domains", summary: "Give your team a branded sign-in, on your own address if you like.",
+    slug: "staff-sign-in-and-custom-domains", cat: "Account and data", title: "Staff sign-in page and custom domains", summary: "Give your team a branded sign-in, on your own address or a partner subdomain.",
     body: [
       h("Staff sign-in link"),
       p("Every workspace has a staff sign-in page at /w/your-workspace-name. It shows your company name and signs people into your workspace only. Find the link in Settings, Sign-in & domain, or on the Staff Accounts page, and share it with your team. Employees can also search for it at Find your workplace sign in."),
       h("Custom domain (Owners and Admins)"),
       ol("Open Settings, then Sign-in & domain, and enter an address you own, such as hr.yourcompany.com.", "OnboardOps adds it to our hosting and shows the DNS records to create at your domain provider: a CNAME for a subdomain, or an A record for a bare domain, plus a verification TXT record if one is requested.", "Choose Check status. DNS changes can take a few minutes to a few hours. When it shows Connected, your staff sign-in is live on that address, with HTTPS."),
-      p("Visitors to your address see only your staff sign-in and the app for your workspace. The OnboardOps marketing pages are not served there, and people who are not part of your workplace cannot sign in."),
-      note("Sessions are separate between onboardops.org and your own domain. A person signs in on each."),
+      h("Partner *.onboardops.org subdomains"),
+      p("Partner workspaces can be assigned a dedicated <partner>.onboardops.org subdomain (such as retailnexus.onboardops.org) by the OnboardOps site owner from the Staff Console. These subdomains are reserved for partners and are verified immediately upon assignment."),
+      p("Visitors to your custom or partner address see only your staff sign-in and the app for your workspace. If an invited employee whose invite email did not arrive signs in on your custom domain for the first time with an 8+ character password, their account is set up and linked to your workspace automatically."),
+      note("Sessions are separate between onboardops.org and your own custom domain. A person signs in on each."),
+    ],
+  },
+  {
+    slug: "shift-handoff-notes", cat: "Checklists", title: "Shift handoff notes", summary: "Pass operational updates and checklist notes between opening, mid-shift and closing teams.",
+    body: [
+      p("Open Handoff Notes (/app/handoff) from the sidebar to view and post operational updates between shifts."),
+      ul(
+        "Post a handoff note for a specific department or for the entire workplace.",
+        "Filter the handoff feed by department to see what happened on the previous shift.",
+        "Handoff notes written by employees when submitting shift checklists appear automatically in the right-hand checklist notes panel."
+      ),
+      note("Managers and above can delete outdated handoff notes, and every new note is recorded in the workspace audit log."),
+    ],
+  },
+  {
+    slug: "scheduling-timesheets-and-equipment", cat: "Checklists", title: "Shift scheduling, time clock and equipment sign-out", summary: "Optional operations tools you can turn on in Workspace Features.",
+    body: [
+      p("Owners and Admins can enable these operational modules in Settings → Features:"),
+      h("Shift scheduling (/app/schedule)"),
+      p("Create shifts for specific employees or post open shifts by department with start/end times, shift labels (Opening, Mid, Closing) and notes."),
+      h("Time clock & timesheets (/app/timesheets)"),
+      p("Clock staff in and out, view active shifts in real time, and track shift durations and station notes."),
+      h("Equipment sign-out (/app/assets)"),
+      p("Register tools, keys, radios or vehicles with unique asset tags. Sign items out to employees with condition notes and check them back in when returned."),
+    ],
+  },
+  {
+    slug: "credentials-and-licenses", cat: "Compliance and records", title: "Credentials and license tracking", summary: "Track employee licenses, certifications and upcoming expiry dates.",
+    body: [
+      p("Open Credentials (/app/credentials) to see every license and certification across your staff, sorted by expiration date."),
+      ol(
+        "Select Add credential.",
+        "Pick the employee and enter the credential or license name (for example, Forklift Operator License or Food Handler Permit).",
+        "Optionally add the license number, issuing authority, issue date and expiration date.",
+        "Save. Any credential expiring within 30 days is highlighted with an expiry warning badge."
+      ),
+    ],
+  },
+  {
+    slug: "templates-library", cat: "Training", title: "Templates library and corrective-action templates", summary: "Install ready-made courses, policies, checklists and infraction wording in one click.",
+    body: [
+      p("Open Templates Library (/app/templates) to jump-start your workspace with pre-built templates:"),
+      ul(
+        "Courses: Workplace safety, customer service, data privacy and onboarding fundamentals.",
+        "Policies: Code of conduct, attendance, safety and confidentiality.",
+        "Shift checklists: Opening, mid-shift, closing and vehicle inspection checklists.",
+        "Corrective-action templates: Pre-filled severity, strike points, policy violated and summary wording that managers can pick from a dropdown when logging an infraction."
+      ),
+    ],
+  },
+  {
+    slug: "system-status-and-maintenance", cat: "Support", title: "System status, BetterStack monitoring and maintenance mode", summary: "Live health checks, JSON monitoring endpoints and scheduled maintenance locks.",
+    body: [
+      h("Live status page and BetterStack endpoints"),
+      p("Visit /status to view real-time health and latency across all OnboardOps subsystems. External uptime monitors (such as BetterStack) can poll our JSON health endpoints (GET or HEAD, returning HTTP 200 when healthy and HTTP 503 if degraded):"),
+      ul(
+        "/api/status (or /api/health): Master status summary across all services.",
+        "/api/status/frontend: Next.js App Router frontend, SSR and maintenance state.",
+        "/api/status/database: Live PostgreSQL SELECT 1 ping and latency.",
+        "/api/status/auth: JWT session signing and verification probe.",
+        "/api/status/api: Core API routes and server actions readiness.",
+        "/api/status/email: Resend email transport status (all emails send from notifications@onboardops.org).",
+        "/api/status/storage: Document and file storage connectivity.",
+        "/api/status/domains: Custom domain and partner subdomain routing."
+      ),
+      h("Full-site maintenance mode"),
+      p("During scheduled upgrades, the OnboardOps site owner can place the website into Maintenance Mode from the Staff Console (/admin). Visitors and customers see a maintenance lock screen with the reason and estimated return time (ETA), while site owners see an Owner-only control card on the maintenance screen to jump directly into the Admin Panel or preview the site."),
     ],
   },
   {

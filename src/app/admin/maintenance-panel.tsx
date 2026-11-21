@@ -7,6 +7,39 @@ import { Badge, Field, Modal, useAction } from "@/components/ui";
 import type { MaintenanceState } from "@/lib/maintenance";
 import { fmtDateTime } from "@/lib/utils";
 
+const PRESETS: { label: string; message: string; eta: string }[] = [
+  {
+    label: "Scheduled Upgrade",
+    message: "OnboardOps is currently undergoing scheduled system upgrades and performance improvements. All workspace data is safe and we will be back online shortly.",
+    eta: "~30 minutes",
+  },
+  {
+    label: "Database Maintenance",
+    message: "We are performing scheduled database maintenance and indexing to keep OnboardOps fast and reliable. Your employee records and audit logs remain completely intact.",
+    eta: "~45 minutes",
+  },
+  {
+    label: "Security Patch",
+    message: "We are deploying routine security patches and infrastructure hardening updates. Services will resume shortly.",
+    eta: "~20 minutes",
+  },
+  {
+    label: "New Feature Rollout",
+    message: "We are rolling out a new OnboardOps release with updated workspace tools and features. Hang tight while we finish the deployment!",
+    eta: "~15 minutes",
+  },
+  {
+    label: "Emergency Hotfix",
+    message: "Our team is applying an urgent hotfix to resolve a service issue. Thank you for your patience while we restore full operations.",
+    eta: "Shortly",
+  },
+  {
+    label: "Infrastructure Migration",
+    message: "We are upgrading server infrastructure to expand capacity. Workspaces are temporarily locked during the transition to keep records consistent.",
+    eta: "~1 hour",
+  },
+];
+
 export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceState; canManage: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
@@ -33,8 +66,8 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
               </div>
               <p className="mt-0.5 text-xs text-soft">
                 {initial.enabled
-                  ? `Entire website is locked for visitors and customers.${initial.eta ? ` ETA: ${initial.eta}.` : ""}${initial.updatedAt ? ` Updated ${fmtDateTime(initial.updatedAt)} by ${initial.updatedBy ?? "Owner"}.` : ""}`
-                  : "Put the entire website into maintenance mode. Locks all pages and workspaces for everyone except site owners."}
+                  ? `Entire website is locked with the maintenance screen.${initial.eta ? ` ETA: ${initial.eta}.` : ""}${initial.updatedAt ? ` Updated ${fmtDateTime(initial.updatedAt)} by ${initial.updatedBy ?? "Owner"}.` : ""}`
+                  : "Put the entire website into maintenance mode. Locks all pages and workspaces with a maintenance screen."}
               </p>
             </div>
           </div>
@@ -43,7 +76,7 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
             <div className="flex items-center gap-2">
               {initial.enabled ? (
                 <>
-                  <button className="btn" onClick={() => setOpen(true)}>Edit message / ETA</button>
+                  <button className="btn" onClick={() => setOpen(true)}>Edit reason / ETA</button>
                   <button
                     className="btn-primary"
                     disabled={pending}
@@ -70,9 +103,27 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
       <Modal open={open} onClose={() => setOpen(false)} title={initial.enabled ? "Update maintenance details" : "Put website in maintenance"}>
         <div className="space-y-3 text-[13px]">
           <p className="text-soft">
-            When enabled, the entire website (homepage, marketing pages, sign-in, and all customer workspaces) is locked with a maintenance screen. Site owners still have full access.
+            Pick a premade maintenance reason below or write a custom message. Everyone (including you on regular pages) will see the maintenance lock screen, with an Owner-only button for you to jump back into the Admin Panel.
           </p>
-          <Field label="Message shown to visitors">
+          <div>
+            <div className="mb-1.5 text-xs font-medium text-soft">Premade reasons (click to fill)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className="btn !h-7 !px-2.5 !text-xs"
+                  onClick={() => {
+                    setMessage(p.message);
+                    setEta(p.eta);
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Field label="Message shown on maintenance screen">
             <textarea
               className="textarea"
               rows={3}
@@ -86,7 +137,7 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
               className="input mono"
               value={eta}
               onChange={(e) => setEta(e.target.value)}
-              placeholder="e.g. Today at 8:00 PM EST or ~30 minutes"
+              placeholder="e.g. ~30 minutes or Today at 8:00 PM EST"
             />
           </Field>
           <div className="flex gap-2">

@@ -1,73 +1,101 @@
 # OnboardOps
 
-Staff records, infraction tracking and training/certification in one multi-tenant app. Next.js 14 (App Router), Prisma, Neon Postgres, Resend. Free plan only for now; the desktop (Electron) app is not included yet.
+Staff records, infraction tracking, training/certification, shift checklists, handoff notes, and operational tools in one multi-tenant workspace platform. Built with **Next.js 14 (App Router)**, **Prisma**, **Neon Postgres**, **Resend**, and **Tailwind CSS**.
 
-## Run locally
+---
+
+## Core Features
+
+### 1. People, Roles & One-Click Access Management
+- **Staff Directory (`/app/directory`):** Track employee status (`ONBOARDING`, `ACTIVE`, `LOA`, `SUSPENDED`, `TERMINATED`), readiness (`PENDING`, `CERTIFIED`, `RETRAINING_REQUIRED`), strike points, emergency contacts, documents, performance reviews, and immutable per-employee audit trails.
+- **One-Click Role Assignment (`/app/access`, `/app/directory`, `/app/employee/[id]`):**
+  - Assign or promote anyone to `EMPLOYEE`, `SUPERVISOR`, `MANAGER`, or `ADMIN` directly from the **Staff Accounts** table dropdown, the **Add Employee** drawer, the **Employee Dossier** Overview card, or when **Bulk Inviting** staff.
+  - Selecting a role for an employee without a login automatically creates/links their account and sends an invite with that role in one click.
+- **Custom Roles & Feature Toggles (`/app/settings`):** Create custom roles (e.g., *Safety Lead*) with granular permission checklists and toggle individual workspace modules on or off.
+
+### 2. Training Academy & Compliance
+- **Course Builder (`/app/training/builder`):** Multi-lesson Markdown courses with video embeds, minimum read timers, and server-graded multiple-choice quizzes with retake cooldowns.
+- **Auto-Enrollment & Certificates (`/print/certificate/[id]`):** Assigning a job role automatically enrolls the employee in required courses. Passing issues a verifiable `CERT-#####` certificate and transitions onboarding staff to `ACTIVE` + `CERTIFIED`.
+- **Compliance Matrix (`/app/training/compliance`) & Templates Library (`/app/templates`):** Real-time matrix across all staff and one-click installation of pre-built courses, policies, checklists, and corrective-action templates.
+
+### 3. Discipline, Infractions & Policies
+- **Infraction Ledger (`/app/infractions`):** Append-only case numbers (`CASE-####`), timeline events, evidence links, employee signature acknowledgments, and confidential manager notes (stripped on the server for non-managers via `serializeInfraction`).
+- **Corrective-Action Template Picker:** Pre-fill severity, strike points, policy violated, and summary from saved templates when logging a case.
+- **Automated Escalations:** Auto-assigns remedial training on written infractions or `2+` points, and auto-suspends/terminates at the workspace strike threshold.
+- **Incident Reports (`/app/incidents`) & Policies (`/app/policies`):** Anyone can file near-misses or hazards from My Portal; managers review and convert them into cases. Publish versioned handbooks/policies and track employee signatures.
+
+### 4. Shift Operations
+- **Shift Checklists (`/app/checklists`):** Opening, mid-shift, and closing checklists by department with supervisor verification.
+- **Shift Handoff Notes (`/app/handoff`):** Shared operational feed passed between shifts, filterable by department, alongside handoff notes attached to checklist submissions.
+- **Shift Schedule (`/app/schedule`):** Schedule employee or open shifts by department with start/end times and shift labels.
+- **Time Clock & Timesheets (`/app/timesheets`):** Clock staff in and out and track active shift durations.
+- **Equipment Sign-Out (`/app/assets`):** Register tools, keys, radios, or vehicles by asset tag, sign them out to employees with condition notes, and check them back in.
+- **Credentials & Licenses (`/app/credentials`):** Track external licenses and certifications across all staff with 30-day expiry warnings.
+
+---
+
+## Staff Console (`/admin`), Maintenance Mode & Custom Domains
+
+### Permanent Site Owner & Staff Roles
+- `jordanedanield13@gmail.com` is configured as a permanent 24/7 platform `OWNER` in `src/lib/platform-role.ts` (and protected from removal in `src/actions/admin.ts`). Additional bootstrap owners can be listed in `PLATFORM_OWNER_EMAILS`.
+- Platform staff roles (`OWNER`, `SUPPORT`, `VIEWER`) can manage support requests, beta feedback, privacy exports/deletions, email delivery logs, workspace locks, and time-limited read-only support access grants.
+
+### Full-Site Maintenance Mode
+- Controlled from the top of the **Staff Console Dashboard (`/admin`)**:
+  - Choose from **6 premade maintenance reasons** (*Scheduled Upgrade*, *Database Maintenance*, *Security Patch*, *New Feature Rollout*, *Emergency Hotfix*, *Infrastructure Migration*) or write a custom message and estimated return time (**ETA**).
+  - Locks the **entire website** (homepage, marketing pages, registration, customer workspaces, and custom domains) with a full-screen maintenance lock screen.
+  - **Owner Controls on the Lock Screen:** Site owners also see the live maintenance lock screen when visiting regular pages, complete with an **Owner-Only Control Card** containing **"Access Admin Panel"** (`/admin`) and **"Preview Site"** buttons.
+
+### Custom Domains & Partner-Only `*.onboardops.org` Subdomains
+- **Default Staff Portal:** Every workspace gets `/w/<workspace-slug>`.
+- **Customer Custom Domains:** Workspace owners can connect external domains they own (e.g., `hr.yourcompany.com`) in **Settings → Sign-in & domain**.
+- **Partner-Only `*.onboardops.org` Subdomains:** Subdomains such as `retailnexus.onboardops.org` are reserved exclusively for partners and do **not** auto-default. The Site Owner can manually assign and immediately verify a `*.onboardops.org` subdomain (or any custom domain) for a workspace from **`/admin/workspaces/<id>` → Connect custom domain…**.
+- **Resilient Custom-Domain Sign-In:** If an invited employee signs in on their workplace's custom domain for the first time before receiving an invite email, their password (8+ characters) is set and their membership is linked automatically.
+
+---
+
+## Forced `notifications@onboardops.org` Email Sender
+
+All outgoing emails via Resend (`src/lib/email.ts`) force `notifications@onboardops.org` as the sender address (ignoring `process.env.EMAIL_FROM` so misconfigured environment variables never cause Resend `Invalid 'from' field` errors):
+- **Workspace emails** (invites, training assignments, infractions, magic links):
+  `"<Workspace Name> via OnboardOps <notifications@onboardops.org>"`
+- **System emails** (account verification, password resets, staff console notifications):
+  `"OnboardOps <notifications@onboardops.org>"`
+
+---
+
+## BetterStack Status & Health Endpoints
+
+All status endpoints support `GET` and `HEAD`, return `HTTP 200` when healthy (`HTTP 503` when down), set `Cache-Control: no-store`, and return structured JSON with latency metrics:
+
+| Service | Endpoint | Description |
+| :--- | :--- | :--- |
+| **Master Status** | `/api/status` (or `/api/health`) | Aggregated health, uptime, maintenance state, and all subsystem checks |
+| **Frontend & SSR** | `/api/status/frontend` | Next.js App Router, SSR, and active maintenance state |
+| **Database** | `/api/status/database` | Live PostgreSQL `SELECT 1` ping and latency (`latencyMs`) |
+| **Auth & JWT** | `/api/status/auth` | Session JWT signing and verification probe |
+| **Core API** | `/api/status/api` | API routes and server actions readiness |
+| **Email Transport** | `/api/status/email` | Resend configuration and email subsystem health |
+| **File Storage** | `/api/status/storage` | Document storage database connectivity |
+| **Custom Domains** | `/api/status/domains` | Custom domain and partner subdomain routing status |
+| **Visual Status Page** | `/status` | Public system status page with live latency and endpoint links |
+
+---
+
+## Run Locally
 
 ```powershell
 npm install
-copy .env.example .env      # fill in the values below
+copy .env.example .env      # fill in DATABASE_URL, DIRECT_URL, SESSION_SECRET, APP_URL
 npx prisma db push
 npx prisma db seed
 npm run dev
 ```
 
-`.env` needs:
-
-- `DATABASE_URL`: Neon **pooled** connection string. `DIRECT_URL`: Neon **direct** connection string (used by `db push`).
-- `SESSION_SECRET`: 32+ random characters.
-- `APP_URL`: public base URL (used in emails).
-- `RESEND_API_KEY` and `EMAIL_FROM`: optional. Without a key, emails are skipped. Use a sending domain verified in Resend.
-
-## Demo data
-
-`npx prisma db seed` creates **Northside Supply & Logistics** (8 employees, 3 departments, 3 courses, 2 infraction cases, checklists, audit log). Password for every demo login is `OnboardOps!2026`:
-
-| Role | Email |
-| --- | --- |
-| Owner | dana@northside.example |
-| Admin | helen@northside.example |
-| Manager | marcus@northside.example |
-| Supervisor | priya@northside.example |
-| Employee | tomas@northside.example |
-
-## Deploy to Vercel
-
-1. Create a Neon project (Vercel's Neon integration works) and copy the pooled and direct strings.
-2. Add `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, `APP_URL`, and the Resend variables in Vercel project settings.
-3. Run `npx prisma db push` once against Neon from your machine, then deploy. The build script runs `prisma generate`.
-
-## How it is put together
-
-- `src/lib/rbac.ts`: `requireWorkspaceRole` (actions and routes) and `requirePageRole` (pages). `serializeInfraction` is the single place confidential notes are removed for non-manager roles.
-- `src/lib/automations.ts`: the three transactional state machines (role-based enrollment, quiz certification, infraction escalation). Webhooks and email run **after** commit and never roll back data; failures are recorded in the audit log.
-- `src/lib/audit.ts`: append-only audit log; each entry's SHA-256 hash chains over the previous one. No action or route edits or deletes cases, timeline events or audit entries.
-- `src/actions/*`: server actions, each starting with a role check and zod validation.
-
-## Not included yet
-
-- Desktop app (Electron) and paid plans (Pro/Scale) were deferred.
-- Two-factor authentication, single sign-on and a public API.
-- Files are stored in the database (4 MB limit). Move to object storage such as Vercel Blob if you need larger files.
-
-## Domain: onboardops.org
-
-Local development keeps using `http://localhost:3000` (`APP_URL` in your local `.env`). For production:
-
-1. In Vercel, open the project, Settings, Domains, and add `onboardops.org` (and `www.onboardops.org` set to redirect to it). Add the DNS records Vercel shows at your registrar.
-2. Set `APP_URL=https://onboardops.org` in Vercel environment variables. Emailed links (password reset, invites) and the sitemap use it.
-3. In Resend, add and verify `onboardops.org` (SPF and DKIM records), then set `EMAIL_FROM="OnboardOps <notifications@onboardops.org>"`.
-4. Create the mailbox you want on the Contact page, then set `NEXT_PUBLIC_CONTACT_EMAIL`, and optionally `SUPPORT_INBOX` to receive support form messages.
-5. Set `CRON_SECRET` so the daily reminders job (`vercel.json`) is authorized.
-
-## Scripts
-
-- `node scripts/local-db.mjs`: embedded Postgres for local development (port 5433).
-- `node scripts/screenshots.mjs`: re-captures the marketing screenshots from the running app.
-- `node scripts/e2e-smoke.mjs`: end-to-end smoke test against a running, seeded local app.
-
-## Staff console, custom domains and testing
-
-- **Staff console** at `/admin`. Set `PLATFORM_OWNER_EMAILS` to your email to bootstrap an owner, then add teammates under Staff & roles. The local demo has `staff@onboardops.org` (owner) and `support@onboardops.org`, same demo password.
-- **Custom domains.** Set `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID` (and `VERCEL_TEAM_ID` for a team project) so owners can connect domains from Settings, Sign-in & domain. Without them the panel still shows the DNS records and checks DNS, but the domain must be added to the Vercel project by hand. To test locally, visit `http://<workspace-slug>.localhost:3000` (for example `northside-supply-logistics.localhost:3000`).
-- **Email.** `EMAIL_REDIRECT_TO` sends every outgoing email to one address for testing. Remove it in production. `npx tsx --env-file=.env scripts/test-emails.ts` sends one of every template. Email icons are regenerated with `node scripts/build-email-assets.mjs`.
+### Environment Variables (`.env`)
+- `DATABASE_URL`: Neon **pooled** Postgres connection string.
+- `DIRECT_URL`: Neon **direct** Postgres connection string (used by `prisma db push`).
+- `SESSION_SECRET`: 32+ random characters for JWT session signing.
+- `APP_URL`: Public base URL (e.g., `https://onboardops.org` in production, `http://localhost:3000` locally).
+- `RESEND_API_KEY`: Resend API key for sending emails from `notifications@onboardops.org`.
+- `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` *(optional)*: For automated Vercel custom domain attachment.
