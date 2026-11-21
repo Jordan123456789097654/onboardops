@@ -1,0 +1,923 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Plan {
+  FREE
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  SUPERVISOR
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ONBOARDING
+  ACTIVE
+  LOA
+  SUSPENDED
+  TERMINATED
+}
+
+enum Readiness {
+  PENDING
+  CERTIFIED
+  RETRAINING_REQUIRED
+}
+
+enum EnrollmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  PASSED
+  FAILED
+}
+
+enum Severity {
+  VERBAL_WARNING
+  WRITTEN_INFRACTION
+  STRIKE_POINTS
+  SUSPENSION
+  TERMINATION
+}
+
+enum TimelineEventType {
+  CREATED
+  NOTE_ADDED
+  APPEAL_LOGGED
+  ACKNOWLEDGED
+  RETRAINING_TRIGGERED
+}
+
+enum ShiftType {
+  OPENING
+  MID_SHIFT
+  CLOSING
+}
+
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  name              String
+  passwordHash      String
+  avatarUrl         String?
+  createdAt         DateTime          @default(now())
+  passwordChangedAt DateTime?
+  platformRole      String?
+  emailVerifiedAt   DateTime?
+  nickname          String?
+  passwordSetAt     DateTime?
+  avatarData        Bytes?
+  avatarMime        String?
+  avatarUpdatedAt   DateTime?
+  extraEmails       UserEmail[]
+  failedLogins      Int               @default(0)
+  lockedUntil       DateTime?
+  memberships       WorkspaceMember[]
+  tokens            AuthToken[]
+  sessions          UserSession[]
+  emailPrefs        Json              @default("{}")
+  quietStart        Int?
+  quietEnd          Int?
+  timezone          String?
+}
+
+model Workspace {
+  id                             String         @id @default(cuid())
+  name                           String
+  slug                           String         @unique
+  plan                           Plan           @default(FREE)
+  operationsWebhookUrl           String?
+  confidentialWebhookUrl         String?
+  autoSuspendStrikeThreshold     Int            @default(5)
+  autoRetrainOnWrittenInfraction Boolean        @default(true)
+  remindersEnabled               Boolean        @default(true)
+  suspendedAt                    DateTime?
+  customDomain                   String?        @unique
+  domainStatus                   String         @default("NONE")
+  domainCheckedAt                DateTime?
+  domainDetails                  Json?
+  staffRequests                  StaffRequest[]
+  suspendedReason                String         @default("")
+  createdAt                      DateTime       @default(now())
+
+  members         WorkspaceMember[]
+  departments     Department[]
+  jobRoles        JobRole[]
+  employees       EmployeeProfile[]
+  courses         Course[]
+  enrollments     CourseEnrollment[]
+  infractions     InfractionCase[]
+  templates       ShiftChecklistTemplate[]
+  submissions     ShiftChecklistSubmission[]
+  auditLogs       AuditLog[]
+  files           StoredFile[]
+  policies        Policy[]
+  policyAcks      PolicyAcknowledgment[]
+  documents       EmployeeDocument[]
+  incidents       IncidentReport[]
+  reviews         Review[]
+  notifications   Notification[]
+  features        Json                       @default("{}")
+  rolePerms       Json                       @default("{}")
+  legalHold       Boolean                    @default(false)
+  legalHoldReason String                     @default("")
+  setupDone       Boolean                    @default(false)
+  timezone        String                     @default("America/New_York")
+  customRoles     CustomRole[]
+  customFields    CustomField[]
+  caseTemplates   CaseTemplate[]
+  disciplineRules DisciplineRule[]
+  credentials     Credential[]
+  profileChanges  ProfileChangeRequest[]
+  appeals         Appeal[]
+  handoffNotes    HandoffNote[]
+  shifts          Shift[]
+  timeEntries     TimeEntry[]
+  assets          Asset[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role     @default(EMPLOYEE)
+  createdAt   DateTime @default(now())
+
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile       EmployeeProfile?
+  issued        InfractionCase[] @relation("IssuedBy")
+  notifications Notification[]
+  customRoleId  String?
+  customRole    CustomRole?      @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Department {
+  id              String  @id @default(cuid())
+  workspaceId     String
+  name            String
+  colorCode       String  @default("#52525B")
+  managerMemberId String?
+
+  workspace Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employees EmployeeProfile[]
+  templates ShiftChecklistTemplate[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model JobRole {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  title             String
+  description       String   @default("")
+  requiredCourseIds String[]
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employees EmployeeProfile[]
+
+  @@index([workspaceId])
+}
+
+model EmployeeProfile {
+  id                String         @id @default(cuid())
+  workspaceId       String
+  memberId          String?        @unique
+  staffCode         String
+  fullName          String
+  email             String
+  phone             String?
+  emergencyContact  String?
+  departmentId      String?
+  jobRoleId         String?
+  status            EmployeeStatus @default(ONBOARDING)
+  readiness         Readiness      @default(PENDING)
+  strikePoints      Int            @default(0)
+  hireDate          DateTime       @default(now())
+  shiftAvailability Json           @default("{}")
+
+  workspace        Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member           WorkspaceMember?           @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  department       Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  jobRole          JobRole?                   @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  enrollments      CourseEnrollment[]
+  infractions      InfractionCase[]
+  submissions      ShiftChecklistSubmission[]
+  policyAcks       PolicyAcknowledgment[]
+  documents        EmployeeDocument[]
+  incidents        IncidentReport[]
+  reviews          Review[]
+  staffRequests    StaffRequest[]
+  separationDate   DateTime?
+  separationReason String?
+  customValues     Json                       @default("{}")
+  credentials      Credential[]
+  profileChanges   ProfileChangeRequest[]
+  shifts           Shift[]
+  timeEntries      TimeEntry[]
+  assetCheckouts   AssetCheckout[]
+
+  @@unique([workspaceId, staffCode])
+  @@index([workspaceId, status])
+  @@index([workspaceId, departmentId])
+}
+
+model Course {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  title           String
+  description     String   @default("")
+  category        String   @default("General")
+  passingScore    Int      @default(85)
+  cooldownMinutes Int      @default(15)
+  isRemedial      Boolean  @default(false)
+  isPublished     Boolean  @default(false)
+  validityDays    Int?
+  defaultDueDays  Int      @default(14)
+  createdAt       DateTime @default(now())
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lessons     CourseLesson[]
+  questions   QuizQuestion[]
+  enrollments CourseEnrollment[]
+
+  @@index([workspaceId])
+}
+
+model CourseLesson {
+  id              String  @id @default(cuid())
+  courseId        String
+  orderIndex      Int
+  title           String
+  contentMarkdown String
+  videoUrl        String?
+  minReadSeconds  Int     @default(30)
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, orderIndex])
+}
+
+model QuizQuestion {
+  id                 String @id @default(cuid())
+  courseId           String
+  orderIndex         Int
+  prompt             String
+  options            Json
+  correctOptionIndex Int
+  explanation        String @default("")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, orderIndex])
+}
+
+model CourseEnrollment {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  employeeId      String
+  courseId        String
+  status          EnrollmentStatus @default(ASSIGNED)
+  bestScore       Int?
+  attemptsCount   Int              @default(0)
+  lastAttemptAt   DateTime?
+  assignedReason  String           @default("")
+  dueDate         DateTime?
+  completedAt     DateTime?
+  certificateCode String?          @unique
+  expiresAt       DateTime?
+  reminderSentAt  DateTime?
+  reminderStage   Int              @default(0)
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, courseId])
+  @@index([workspaceId])
+}
+
+model InfractionCase {
+  id                       String    @id @default(cuid())
+  workspaceId              String
+  caseNumber               String
+  employeeId               String
+  issuedByMemberId         String
+  severity                 Severity
+  pointsAdded              Int       @default(0)
+  policyViolated           String
+  summary                  String
+  evidenceUrls             String[]
+  confidentialManagerNotes String    @default("")
+  employeeAcknowledged     Boolean   @default(false)
+  employeeSignatureName    String?
+  acknowledgedAt           DateTime?
+  assignedRemedialCourseId String?
+  createdAt                DateTime  @default(now())
+
+  workspace   Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee    EmployeeProfile           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  issuedBy    WorkspaceMember           @relation("IssuedBy", fields: [issuedByMemberId], references: [id])
+  timeline    InfractionTimelineEvent[]
+  attachments CaseAttachment[]
+  appeals     Appeal[]
+
+  @@unique([workspaceId, caseNumber])
+  @@index([workspaceId, createdAt])
+  @@index([employeeId])
+}
+
+model InfractionTimelineEvent {
+  id             String            @id @default(cuid())
+  caseId         String
+  actorMemberId  String?
+  actorName      String            @default("System")
+  eventType      TimelineEventType
+  note           String            @default("")
+  isConfidential Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+
+  case InfractionCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+}
+
+model ShiftChecklistTemplate {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  departmentId String?
+  shiftType    ShiftType
+  title        String
+  items        Json
+
+  workspace    Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  department   Department?                @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  submissions  ShiftChecklistSubmission[]
+  scheduleDays Int[]
+  dueTime      String?
+
+  @@index([workspaceId])
+}
+
+model ShiftChecklistSubmission {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  templateId            String
+  completedByEmployeeId String
+  completedItems        Json
+  handoffNotes          String    @default("")
+  submittedAt           DateTime  @default(now())
+  verifiedByName        String?
+  verifiedAt            DateTime?
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template  ShiftChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile        @relation(fields: [completedByEmployeeId], references: [id], onDelete: Cascade)
+  photos    ChecklistPhoto[]
+
+  @@index([workspaceId, submittedAt])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  actorMemberId String?
+  actorName     String
+  actionType    String
+  targetType    String
+  targetId      String
+  summary       String
+  metadata      Json     @default("{}")
+  hash          String
+  createdAt     DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, targetType, targetId])
+}
+
+model SupportRequest {
+  id          String   @id @default(cuid())
+  name        String
+  email       String
+  topic       String
+  message     String
+  status      String   @default("OPEN")
+  source      String   @default("CONTACT")
+  workspaceId String?
+  userId      String?
+  assignee    String?
+  boardStatus String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages SupportMessage[]
+
+  @@index([email, createdAt])
+  @@index([status, createdAt])
+  @@index([workspaceId])
+}
+
+model SupportMessage {
+  id         String   @id @default(cuid())
+  requestId  String
+  kind       String
+  authorName String
+  body       String
+  emailed    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  request SupportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+}
+
+model AuthToken {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+}
+
+model StoredFile {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  mime           String
+  size           Int
+  data           Bytes
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model Policy {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  title              String
+  description        String   @default("")
+  contentMarkdown    String   @default("")
+  fileId             String?
+  fileName           String?
+  version            Int      @default(1)
+  appliesToAll       Boolean  @default(false)
+  requiredJobRoleIds String[]
+  isPublished        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  acks      PolicyAcknowledgment[]
+  reackDays Int?
+
+  @@index([workspaceId])
+}
+
+model PolicyAcknowledgment {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  policyId       String
+  employeeId     String
+  version        Int
+  signatureName  String
+  acknowledgedAt DateTime @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  policy    Policy          @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([policyId, employeeId, version])
+  @@index([workspaceId])
+}
+
+model EmployeeDocument {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  employeeId        String
+  fileId            String
+  title             String
+  category          String
+  restricted        Boolean   @default(false)
+  visibleToEmployee Boolean   @default(false)
+  expiresAt         DateTime?
+  uploadedByName    String
+  createdAt         DateTime  @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, employeeId])
+}
+
+model IncidentReport {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  reporterEmployeeId  String?
+  reportedByName      String
+  type                String
+  occurredAt          DateTime
+  location            String   @default("")
+  description         String
+  status              String   @default("NEW")
+  reviewerNotes       String   @default("")
+  convertedCaseNumber String?
+  createdAt           DateTime @default(now())
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reporter  EmployeeProfile? @relation(fields: [reporterEmployeeId], references: [id], onDelete: SetNull)
+  severity  String           @default("LOW")
+  rootCause String           @default("")
+  actions   Json             @default("[]")
+
+  @@index([workspaceId, status, createdAt])
+}
+
+model Review {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  employeeId     String
+  authorName     String
+  authorMemberId String?
+  kind           String
+  periodLabel    String    @default("")
+  rating         Int?
+  summary        String    @default("")
+  strengths      String    @default("")
+  improvements   String    @default("")
+  goals          String    @default("")
+  privateNotes   String    @default("")
+  status         String    @default("DRAFT")
+  sharedAt       DateTime?
+  createdAt      DateTime  @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, employeeId, createdAt])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  memberId    String
+  title       String
+  body        String    @default("")
+  href        String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, readAt, createdAt])
+}
+
+model StaffAudit {
+  id          String   @id @default(cuid())
+  staffUserId String
+  staffName   String
+  action      String
+  targetType  String
+  targetId    String
+  workspaceId String?
+  summary     String
+  metadata    Json     @default("{}")
+  hash        String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+model SupportAccessGrant {
+  id          String    @id @default(cuid())
+  workspaceId String
+  staffUserId String
+  staffName   String
+  reason      String
+  requestId   String?
+  expiresAt   DateTime
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([staffUserId, expiresAt])
+}
+
+model EmailLog {
+  id             String   @id @default(cuid())
+  to             String
+  redirectedFrom String?
+  subject        String
+  kind           String   @default("")
+  status         String
+  error          String?
+  providerId     String?
+  workspaceId    String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+}
+
+model JobRun {
+  id         String   @id @default(cuid())
+  name       String
+  ok         Boolean
+  summary    Json     @default("{}")
+  durationMs Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([name, createdAt])
+}
+
+model StaffRequest {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  employeeId    String
+  kind          String
+  startDate     DateTime?
+  endDate       DateTime?
+  reason        String    @default("")
+  status        String    @default("PENDING")
+  decidedByName String?
+  decisionNote  String    @default("")
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  subtype   String?
+
+  @@index([workspaceId, status, createdAt])
+  @@index([employeeId])
+}
+
+model UserEmail {
+  id         String    @id @default(cuid())
+  userId     String
+  email      String    @unique
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  userId     String
+  userAgent  String    @default("")
+  device     String    @default("")
+  ip         String    @default("")
+  place      String    @default("")
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model CustomRole {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String   @default("")
+  baseRole    Role     @default(EMPLOYEE)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   WorkspaceMember[]
+
+  @@unique([workspaceId, name])
+}
+
+model CustomField {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  label          String
+  type           String   @default("text")
+  options        String[]
+  orderIndex     Int      @default(0)
+  showToEmployee Boolean  @default(false)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model CaseTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  severity    Severity @default(VERBAL_WARNING)
+  points      Int      @default(0)
+  policy      String
+  summary     String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model DisciplineRule {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  whenSeverity Severity
+  count        Int
+  withinDays   Int
+  escalateTo   Severity
+  enabled      Boolean  @default(true)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model Credential {
+  id          String    @id @default(cuid())
+  workspaceId String
+  employeeId  String
+  name        String
+  number      String    @default("")
+  issuer      String    @default("")
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  fileId      String?
+  remindedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, expiresAt])
+}
+
+model ProfileChangeRequest {
+  id          String    @id @default(cuid())
+  workspaceId String
+  employeeId  String
+  changes     Json
+  status      String    @default("PENDING")
+  decidedBy   String?
+  note        String    @default("")
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+}
+
+model CaseAttachment {
+  id         String   @id @default(cuid())
+  caseId     String
+  kind       String
+  title      String
+  fileId     String?
+  statement  String   @default("")
+  authorName String
+  createdAt  DateTime @default(now())
+
+  case InfractionCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+}
+
+model Appeal {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  caseId           String
+  filedByName      String
+  reason           String
+  status           String    @default("OPEN")
+  reviewerName     String?
+  reviewerMemberId String?
+  decisionNote     String    @default("")
+  createdAt        DateTime  @default(now())
+  decidedAt        DateTime?
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  case      InfractionCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+}
+
+model ChecklistPhoto {
+  id           String   @id @default(cuid())
+  submissionId String
+  fileId       String
+  caption      String   @default("")
+  createdAt    DateTime @default(now())
+
+  submission ShiftChecklistSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+}
+
+model HandoffNote {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  departmentId String?
+  authorName   String
+  body         String
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
+
+model Shift {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  departmentId String?
+  employeeId   String?
+  startsAt     DateTime
+  endsAt       DateTime
+  label        String   @default("")
+  notes        String   @default("")
+  swapStatus   String?
+  swapToId     String?
+  swapNote     String   @default("")
+  createdAt    DateTime @default(now())
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, startsAt])
+  @@index([employeeId, startsAt])
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  workspaceId String
+  employeeId  String
+  clockIn     DateTime
+  clockOut    DateTime?
+  note        String    @default("")
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, clockIn])
+  @@index([employeeId, clockIn])
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  tag         String
+  category    String   @default("Equipment")
+  retired     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  checkouts AssetCheckout[]
+
+  @@unique([workspaceId, tag])
+}
+
+model AssetCheckout {
+  id         String    @id @default(cuid())
+  assetId    String
+  employeeId String
+  outAt      DateTime  @default(now())
+  inAt       DateTime?
+  condition  String    @default("")
+
+  asset    Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, outAt])
+  @@index([employeeId])
+}
