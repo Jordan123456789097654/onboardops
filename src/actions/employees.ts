@@ -22,6 +22,7 @@ const employeeSchema = z.object({
   jobRoleId: z.string().optional().or(z.literal("")),
   hireDate: z.string().optional().or(z.literal("")),
   sendInvite: z.boolean().optional(),
+  accessRole: z.enum(["EMPLOYEE", "SUPERVISOR", "MANAGER", "ADMIN"]).optional().default("EMPLOYEE"),
 });
 
 export async function createEmployeeAction(input: unknown) {
@@ -52,7 +53,7 @@ export async function createEmployeeAction(input: unknown) {
     fx.ops.push({ title: `New hire: ${emp.fullName}`, description: `${emp.staffCode} added by ${ctx.user.name}`, color: COLORS.info });
     await dispatchEffects(ctx, fx);
     let invite: { link?: string; emailed?: boolean } = {};
-    if (d.sendInvite) { const o = await inviteEmployee(ctx, emp.id); invite = { link: o.link, emailed: o.emailed }; }
+    if (d.sendInvite) { const o = await inviteEmployee(ctx, emp.id, d.accessRole); invite = { link: o.link, emailed: o.emailed }; }
     revalidatePath("/app", "layout");
     return { id: emp.id, ...invite };
   });

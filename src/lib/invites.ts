@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import type { Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { hashPassword } from "./auth";
 import { createToken } from "./tokens";
@@ -9,10 +10,11 @@ import type { Ctx } from "./rbac";
 export type InviteOutcome = { employeeId: string; name: string; email: string; result: "invited" | "linked" | "skipped"; reason?: string; link?: string; emailed?: boolean };
 
 /**
- * Gives one employee a login for this workspace (role EMPLOYEE).
+ * Gives one employee a login for this workspace with the specified role (default EMPLOYEE).
  * New people get an email with a one-time link to choose their own password. People who already have an OnboardOps account are simply linked.
  */
-export async function inviteEmployee(ctx: Ctx, employeeId: string): Promise<InviteOutcome> {
+export async function inviteEmployee(ctx: Ctx, employeeId: string, role: Role = "EMPLOYEE"): Promise<InviteOutcome> {
+  const safeRole: Role = role === "OWNER" ? "ADMIN" : role === "ADMIN" && ctx.role !== "OWNER" && ctx.role !== "ADMIN" ? "MANAGER" : role;
   const emp = await prisma.employeeProfile.findFirst({ where: { id: employeeId, workspaceId: ctx.workspaceId } });
   const base = { employeeId, name: emp?.fullName ?? "", email: emp?.email ?? "" };
   if (!emp) return { ...base, result: "skipped", reason: "Employee not found" };
@@ -26,9 +28,13 @@ export async function inviteEmployee(ctx: Ctx, employeeId: string): Promise<Invi
       user = await tx.user.create({ data: { email: emp.email.toLowerCase(), name: emp.fullName, passwordHash: await hashPassword(randomBytes(24).toString("hex")) } });
       created = true;
     }
-    const member = await tx.workspaceMember.upsert({ where: { workspaceId_userId: { workspaceId: ctx.workspaceId, userId: user.id } }, create: { workspaceId: ctx.workspaceId, userId: user.id, role: "EMPLOYEE" }, update: {} });
+    const member = await tx.workspaceMember.upsert({
+      where: { workspaceId_userId: { workspaceId: ctx.workspaceId, userId: user.id } },
+      create: { workspaceId: ctx.workspaceId, userId: user.id, role: safeRole },
+      update: { role: safeRole },
+    });
     await tx.employeeProfile.update({ where: { id: emp.id }, data: { memberId: member.id } });
-    await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "ACCESS_GRANTED", targetType: "Employee", targetId: emp.id, summary: `${emp.staffCode} given EMPLOYEE sign-in access${created ? " (invite link)" : " (existing account linked)"}` });
+    await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "ACCESS_GRANTED", targetType: "Employee", targetId: emp.id, summary: `${emp.staffCode} given ${safeRole} sign-in access${created ? " (invite link)" : " (existing account linked)"}` });
     return { userId: user.id, created };
   });
 

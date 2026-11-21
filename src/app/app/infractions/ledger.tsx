@@ -11,7 +11,9 @@ export type CaseRow = {
   timeline: { id: string; type: string; note: string; actor: string; at: string; confidential: boolean }[];
 };
 
-export function Ledger({ rows, employees, severities, canConfidential, defaultOpen }: { rows: CaseRow[]; employees: { id: string; label: string }[]; severities: string[]; canConfidential: boolean; defaultOpen: boolean }) {
+type TemplateOpt = { id: string; name: string; severity: string; points: number; policy: string; summary: string };
+
+export function Ledger({ rows, employees, templates = [], severities, canConfidential, defaultOpen }: { rows: CaseRow[]; employees: { id: string; label: string }[]; templates?: TemplateOpt[]; severities: string[]; canConfidential: boolean; defaultOpen: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -58,6 +60,25 @@ export function Ledger({ rows, employees, severities, canConfidential, defaultOp
 
       <Modal open={logOpen} onClose={() => setLogOpen(false)} title="Log infraction">
         <div className="space-y-3">
+          {templates.length > 0 && (
+            <Field label="Pre-fill from corrective-action template (optional)">
+              <select
+                className="input"
+                defaultValue=""
+                onChange={(e) => {
+                  const t = templates.find((x) => x.id === e.target.value);
+                  if (t) {
+                    setF({ ...f, severity: severities.includes(t.severity) ? t.severity : f.severity, pointsAdded: t.points, policyViolated: t.policy, summary: t.summary });
+                  }
+                }}
+              >
+                <option value="">Choose a template…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.severity.replace(/_/g, " ")}, +{t.points} pts)</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Employee"><select className="input" value={f.employeeId} onChange={(e) => setF({ ...f, employeeId: e.target.value })}><option value="">Select…</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}</select></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Severity"><select className="input" value={f.severity} onChange={(e) => setF({ ...f, severity: e.target.value })}>{severities.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></Field>

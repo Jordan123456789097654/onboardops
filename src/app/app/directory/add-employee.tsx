@@ -10,7 +10,7 @@ export function AddEmployee({ departments, roles, defaultOpen }: { departments: 
   const [open, setOpen] = useState(!!defaultOpen);
   const router = useRouter();
   const { exec, pending } = useAction();
-  const [f, setF] = useState({ fullName: "", email: "", phone: "", emergencyContact: "", departmentId: "", jobRoleId: "", hireDate: new Date().toISOString().slice(0, 10), sendInvite: true });
+  const [f, setF] = useState({ fullName: "", email: "", phone: "", emergencyContact: "", departmentId: "", jobRoleId: "", hireDate: new Date().toISOString().slice(0, 10), sendInvite: true, accessRole: "EMPLOYEE" as "EMPLOYEE" | "SUPERVISOR" | "MANAGER" | "ADMIN" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +36,14 @@ export function AddEmployee({ departments, roles, defaultOpen }: { departments: 
           </Field>
           <Field label="Job role (assigns required courses)">
             <select className="input" value={f.jobRoleId} onChange={set("jobRoleId")}><option value="">None</option>{roles.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+          </Field>
+          <Field label="Workspace access role (permissions level)">
+            <select className="input" value={f.accessRole} onChange={set("accessRole")}>
+              <option value="EMPLOYEE">Employee (My Portal only)</option>
+              <option value="SUPERVISOR">Supervisor (Verify checklists &amp; log warnings)</option>
+              <option value="MANAGER">Manager (Manage staff, training &amp; infractions)</option>
+              <option value="ADMIN">Admin (Full workspace management &amp; settings)</option>
+            </select>
           </Field>
           <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={f.sendInvite} onChange={(e) => setF({ ...f, sendInvite: e.target.checked })} />Send a sign-in invite so they can create their own login</label>
           <button className="btn-primary w-full" disabled={pending}>{pending ? "Adding…" : "Add employee"}</button>

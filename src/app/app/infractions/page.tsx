@@ -6,9 +6,10 @@ export const metadata = { title: "Infractions" };
 
 export default async function Infractions({ searchParams }: { searchParams: { log?: string } }) {
   const ctx = await requirePageRole(STAFF_ROLES);
-  const [cases, employees] = await Promise.all([
+  const [cases, employees, templates] = await Promise.all([
     prisma.infractionCase.findMany({ where: { workspaceId: ctx.workspaceId }, include: { employee: true, issuedBy: { include: { user: true } }, timeline: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } }),
     prisma.employeeProfile.findMany({ where: { workspaceId: ctx.workspaceId, status: { not: "TERMINATED" } }, orderBy: { staffCode: "asc" } }),
+    prisma.caseTemplate.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { name: "asc" } }),
   ]);
   const rows: CaseRow[] = cases.map((c) => {
     const s = serializeInfraction(ctx.role, c);
@@ -20,5 +21,5 @@ export default async function Infractions({ searchParams }: { searchParams: { lo
     };
   });
   const severities = (["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"] as const).filter((s) => canIssueSeverity(ctx.role, s));
-  return <Ledger rows={rows} employees={employees.map((e) => ({ id: e.id, label: `${e.staffCode} ${e.fullName}` }))} severities={[...severities]} canConfidential={canSeeConfidential(ctx.role)} defaultOpen={searchParams.log === "1"} />;
+  return <Ledger rows={rows} employees={employees.map((e) => ({ id: e.id, label: `${e.staffCode} ${e.fullName}` }))} templates={templates.map((t) => ({ id: t.id, name: t.name, severity: t.severity, points: t.points, policy: t.policy, summary: t.summary }))} severities={[...severities]} canConfidential={canSeeConfidential(ctx.role)} defaultOpen={searchParams.log === "1"} />;
 }
