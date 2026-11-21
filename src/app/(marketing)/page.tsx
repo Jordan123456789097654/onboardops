@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Sandbox } from "@/components/sandbox";
 import { HeroToasts } from "@/components/mocks";
 import { Shot } from "@/components/shot";
@@ -7,6 +7,11 @@ import { Reveal } from "@/components/motion";
 import { CompareToggle, FlowStepper } from "@/components/home-interactive";
 
 const headline = "Staff records, training and discipline in one place.".split(" ");
+const customers = [
+  { name: "RetailNetwork", logo: "/retailnetwork.jpg" },
+  { name: "Roleflow", logo: "/roleflow.png" },
+];
+const marqueeItems = [...customers, ...customers, ...customers, ...customers, ...customers, ...customers];
 const reasons = [
   ["You can prove it", "Server-graded quizzes, signed notices and a tamper-evident audit log."],
   ["Fair to employees", "They see what is written, sign to confirm receipt, and can raise concerns safely."],
@@ -34,69 +39,31 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 pt-20" aria-label="Trusted by">
-        <Reveal className="relative overflow-hidden rounded-2xl border border-line bg-surface/90 p-6 shadow-sm sm:p-8">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
-
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-md space-y-2">
-              <div className="mono inline-flex items-center gap-2 rounded-full border border-line bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Trusted Partners
-              </div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                Trusted by modern operations teams
-              </h2>
-              <p className="text-[13px] leading-relaxed text-soft">
-                High-volume moderation, retail, and live-ops teams run their daily onboarding, shift checklists, and conduct logs on OnboardOps.
-              </p>
-            </div>
-
-            <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
-              <div className="lift group relative flex items-center gap-4 rounded-xl border border-line bg-canvas/80 p-4 transition-all hover:border-accent/50 hover:shadow-md">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/retailnetwork.jpg"
-                  width={52}
-                  height={52}
-                  alt="RetailNetwork logo"
-                  className="h-[52px] w-[52px] shrink-0 rounded-xl border border-line object-cover shadow-sm transition-transform group-hover:scale-105"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">RetailNetwork</span>
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-label="Verified Partner" />
-                  </div>
-                  <p className="mt-0.5 text-xs text-soft">Retail &amp; Live-Ops Moderation</p>
-                  <div className="mono mt-2 inline-flex items-center gap-1.5 rounded-md border border-line bg-muted px-2 py-0.5 text-[10px] text-soft">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Training · Checklists · Conduct
-                  </div>
+      <section className="mx-auto max-w-6xl px-4 pt-20" aria-label="Customers">
+        <Reveal className="py-6">
+          <p className="mb-8 text-center text-sm font-medium tracking-wide text-soft">
+            Customers that trust us
+          </p>
+          <div className="marquee-mask relative overflow-hidden py-2">
+            <div className="marquee-track items-center gap-12 pr-12">
+              {[...marqueeItems, ...marqueeItems].map((c, idx) => (
+                <div
+                  key={`${c.name}-${idx}`}
+                  className="group flex shrink-0 items-center gap-3.5 rounded-2xl border border-line/80 bg-surface/80 px-4 py-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/50"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={c.logo}
+                    width={48}
+                    height={48}
+                    alt={c.name}
+                    className="h-12 w-12 rounded-xl border border-line/60 object-cover transition-transform duration-200 group-hover:scale-105"
+                  />
+                  <span className="font-display text-base font-semibold tracking-[-0.02em] text-ink">
+                    {c.name}
+                  </span>
                 </div>
-              </div>
-
-              <div className="lift group relative flex items-center gap-4 rounded-xl border border-line bg-canvas/80 p-4 transition-all hover:border-accent/50 hover:shadow-md">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/roleflow.png"
-                  width={52}
-                  height={52}
-                  alt="Roleflow logo"
-                  className="h-[52px] w-[52px] shrink-0 rounded-xl border border-line object-cover shadow-sm transition-transform group-hover:scale-105"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">Roleflow</span>
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-label="Verified Partner" />
-                  </div>
-                  <p className="mt-0.5 text-xs text-soft">Team Operations &amp; Role Management</p>
-                  <div className="mono mt-2 inline-flex items-center gap-1.5 rounded-md border border-line bg-muted px-2 py-0.5 text-[10px] text-soft">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Onboarding · Compliance · Audit
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </Reveal>

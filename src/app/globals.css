@@ -171,3 +171,20 @@ h3, h4 { letter-spacing: -0.02em; }
 .step-fill { animation: step-fill 6s linear both; }
 @keyframes step-fill { from { width: 0; } to { width: 100%; } }
 input[type="range"] { accent-color: rgb(var(--accent)); }
+
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-mask {
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 24s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
