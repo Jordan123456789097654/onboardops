@@ -9,6 +9,7 @@ import { emails, sendEmail } from "@/lib/email";
 import { notifyRoles } from "@/lib/notify";
 import { getStaff, requireStaff, staffAudit, SUPPORT_STAFF, OWNER_ONLY } from "@/lib/platform";
 import { PERMANENT_OWNER_EMAILS } from "@/lib/platform-role";
+import { saveMaintenanceState } from "@/lib/maintenance";
 import { connectDomain, removeDomain, validateDomain } from "@/lib/vercel-domains";
 import { run } from "./_util";
 
@@ -274,5 +275,35 @@ export async function adminRemoveDomainAction(workspaceId: string) {
     refresh();
     revalidatePath("/app", "layout");
     return undefined;
+  });
+}
+
+/* ---------------- Website Maintenance Mode (Site Owner) ---------------- */
+export async function setMaintenanceModeAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const d = z
+      .object({
+        enabled: z.boolean(),
+        message: z.string().trim().max(1000).optional(),
+        eta: z.string().trim().max(120).optional(),
+      })
+      .parse(input);
+    const state = await saveMaintenanceState({
+      enabled: d.enabled,
+      message: d.message,
+      eta: d.eta,
+      updatedBy: staff.name,
+    });
+    await prisma.$transaction((tx) =>
+      staffAudit(tx, staff, {
+        action: d.enabled ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
+        targetType: "Platform",
+        targetId: "maintenance",
+        summary: d.enabled ? `Maintenance mode ENABLED (${state.message.slice(0, 80)})` : "Maintenance mode DISABLED (site unlocked)",
+      })
+    );
+    revalidatePath("/", "layout");
+    return state;
   });
 }

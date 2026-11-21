@@ -40,8 +40,8 @@ export async function inviteEmployee(ctx: Ctx, employeeId: string, role: Role = 
 
   if (!r.created) return { ...base, result: "linked" };
   const raw = await createToken(r.userId, "INVITE", 7 * 86400000);
-  const link = `${process.env.APP_URL || "http://localhost:3000"}/reset-password?token=${raw}&invite=1`;
+  const link = `${process.env.APP_URL || "https://onboardops.org"}/reset-password?token=${raw}&invite=1`;
   const m = emails.invite(emp.fullName, ctx.workspace.name, link);
-  const sent = await sendEmail(emp.email, m.subject, m.text, { html: m.html, kind: "invite", workspaceId: ctx.workspaceId });
+  const sent = await sendEmail(emp.email, m.subject, m.text, { html: m.html, kind: "invite", workspaceId: ctx.workspaceId, workspaceName: ctx.workspace.name });
   return { ...base, result: "invited", link, emailed: sent.ok };
 }

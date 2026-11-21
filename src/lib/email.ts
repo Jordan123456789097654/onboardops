@@ -4,26 +4,23 @@ import { buildEmail } from "./email-template";
 
 const appUrl = () => (process.env.APP_URL || "https://onboardops.org").trim().replace(/^["']+|["']+$/g, "").replace(/\/$/, "");
 
-function resolveFromAddress(): string {
-  const fallback = "OnboardOps <notifications@onboardops.org>";
-  const raw = (process.env.EMAIL_FROM || "").trim().replace(/^["']+|["']+$/g, "").trim();
-  if (!raw) return fallback;
-  const simpleEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
-  const namedEmail = /^[^<>]+<\s*[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+\s*>$/;
-  if (simpleEmail.test(raw)) return `OnboardOps <${raw}>`;
-  if (namedEmail.test(raw)) return raw.replace(/<\s*/, "<").replace(/\s*>/, ">");
-  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(raw)) return `OnboardOps <notifications@${raw.toLowerCase()}>`;
-  const match = raw.match(/([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/);
-  if (match) return `OnboardOps <${match[1]}>`;
-  return fallback;
-}
+const FORCED_FROM_EMAIL = "notifications@onboardops.org";
 
-export type SendOpts = { kind?: string; workspaceId?: string | null; html?: string };
+export type SendOpts = { kind?: string; workspaceId?: string | null; workspaceName?: string | null; html?: string };
+
+async function resolveFromHeader(opts: SendOpts): Promise<string> {
+  let wsName = opts.workspaceName?.trim();
+  if (!wsName && opts.workspaceId) {
+    const ws = await prisma.workspace.findUnique({ where: { id: opts.workspaceId }, select: { name: true } }).catch(() => null);
+    wsName = ws?.name?.trim();
+  }
+  const cleanName = wsName ? `${wsName.replace(/[<>"]/g, "").trim()} via OnboardOps` : "OnboardOps";
+  return `${cleanName} <${FORCED_FROM_EMAIL}>`;
+}
 
 /**
  * Best-effort send. Never throws. Every attempt is recorded in EmailLog.
- * Sends HTML with inline (cid) images plus a plain-text alternative.
- * If EMAIL_REDIRECT_TO is set (testing), every message goes to that address instead, with the original recipient in the subject.
+ * Always forces notifications@onboardops.org as the sender address.
  */
 export async function sendEmail(to: string, subject: string, text: string, opts: SendOpts = {}): Promise<{ ok: boolean; error?: string }> {
   const redirect = process.env.EMAIL_REDIRECT_TO?.trim().replace(/^["']+|["']+$/g, "").trim();
@@ -37,34 +34,22 @@ export async function sendEmail(to: string, subject: string, text: string, opts:
   const key = process.env.RESEND_API_KEY?.trim().replace(/^["']+|["']+$/g, "").trim();
   if (!key) { await log("SKIPPED", "RESEND_API_KEY not set"); return { ok: false, error: "RESEND_API_KEY not set" }; }
   try {
+    const fromHeader = await resolveFromHeader(opts);
     const cids = finalHtml ? Array.from(new Set(Array.from(finalHtml.matchAll(/cid:([a-z-]+)/g)).map((m) => m[1]))).filter((id) => EMAIL_IMAGES[id]) : [];
-    const sendWithFrom = async (fromAddr: string) => {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: fromAddr,
-          to: [realTo],
-          subject: finalSubject,
-          text: finalText,
-          ...(finalHtml ? { html: finalHtml } : {}),
-          ...(cids.length ? { attachments: cids.map((id) => ({ filename: `${id}.png`, content: EMAIL_IMAGES[id], content_type: "image/png", content_id: id })) } : {}),
-        }),
-        signal: AbortSignal.timeout(20000),
-      });
-      const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
-      return { res, json };
-    };
-
-    const primaryFrom = resolveFromAddress();
-    let { res, json } = await sendWithFrom(primaryFrom);
-    if (!res.ok && primaryFrom !== "OnboardOps <onboarding@resend.dev>") {
-      const retry = await sendWithFrom("OnboardOps <onboarding@resend.dev>");
-      if (retry.res.ok) {
-        res = retry.res;
-        json = retry.json;
-      }
-    }
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: fromHeader,
+        to: [realTo],
+        subject: finalSubject,
+        text: finalText,
+        ...(finalHtml ? { html: finalHtml } : {}),
+        ...(cids.length ? { attachments: cids.map((id) => ({ filename: `${id}.png`, content: EMAIL_IMAGES[id], content_type: "image/png", content_id: id })) } : {}),
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!res.ok) { const msg = json.message ?? `Resend responded ${res.status}`; await log("FAILED", msg); return { ok: false, error: msg }; }
     await log("SENT", undefined, json.id);
     return { ok: true };

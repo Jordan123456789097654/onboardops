@@ -28,7 +28,7 @@ export async function dispatchEffects(ctx: Ctx, fx: Effects) {
     if (!r.ok && ctx.workspace.confidentialWebhookUrl) failures.push(`confidential webhook: ${r.error}`);
   }
   for (const m of fx.mail) {
-    const r = await sendEmail(m.to, m.subject, m.text, { html: m.html });
+    const r = await sendEmail(m.to, m.subject, m.text, { html: m.html, workspaceId: ctx.workspaceId, workspaceName: ctx.workspace.name });
     if (!r.ok && process.env.RESEND_API_KEY) failures.push(`email to ${m.to}: ${r.error}`);
   }
   if (failures.length) {

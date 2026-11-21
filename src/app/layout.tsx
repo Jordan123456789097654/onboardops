@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui";
+import { MaintenanceGate } from "@/components/maintenance-gate";
+import { getMaintenanceState } from "@/lib/maintenance";
+import { getStaff } from "@/lib/platform";
+
+export const dynamic = "force-dynamic";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const display = Inter_Tight({ subsets: ["latin"], variable: "--font-display", display: "swap" });
@@ -16,14 +21,20 @@ export const metadata: Metadata = {
 
 const themeScript = `document.documentElement.classList.add('js');(function(){try{var t=localStorage.getItem('oo-theme');if(t==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}else if(t!=='dark'){t='light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}})();`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const [maintenance, staff] = await Promise.all([getMaintenanceState(), getStaff()]);
+  const isOwner = staff?.role === "OWNER";
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <MaintenanceGate maintenance={maintenance} isOwner={isOwner}>
+            {children}
+          </MaintenanceGate>
+        </ToastProvider>
       </body>
     </html>
   );

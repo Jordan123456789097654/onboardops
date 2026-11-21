@@ -133,9 +133,9 @@ export async function grantPortalAccessAction(id: string, input: unknown) {
     let emailed = false;
     if (r.needsInvite) {
       const raw = await createToken(r.userId, "INVITE", 7 * 86400000);
-      inviteUrl = `${process.env.APP_URL || "http://localhost:3000"}/reset-password?token=${raw}&invite=1`;
+      inviteUrl = `${process.env.APP_URL || "https://onboardops.org"}/reset-password?token=${raw}&invite=1`;
       const m = emails.invite(r.emp.fullName, ctx.workspace.name, inviteUrl);
-      emailed = (await sendEmail(r.emp.email, m.subject, m.text, { html: m.html })).ok;
+      emailed = (await sendEmail(r.emp.email, m.subject, m.text, { html: m.html, kind: "invite", workspaceId: ctx.workspaceId, workspaceName: ctx.workspace.name })).ok;
     }
     revalidatePath("/app", "layout");
     return { inviteUrl, emailed };
@@ -149,9 +149,9 @@ export async function sendAccessLinkAction(id: string) {
     const emp = await prisma.employeeProfile.findFirst({ where: { id, workspaceId: ctx.workspaceId }, include: { member: true } });
     if (!emp?.member) throw new Error("This employee has no sign-in access yet.");
     const raw = await createToken(emp.member.userId, "RESET", 7 * 86400000);
-    const url = `${process.env.APP_URL || "http://localhost:3000"}/reset-password?token=${raw}&invite=1`;
+    const url = `${process.env.APP_URL || "https://onboardops.org"}/reset-password?token=${raw}&invite=1`;
     const m = emails.invite(emp.fullName, ctx.workspace.name, url);
-    const emailed = (await sendEmail(emp.email, m.subject, m.text, { html: m.html })).ok;
+    const emailed = (await sendEmail(emp.email, m.subject, m.text, { html: m.html, kind: "invite", workspaceId: ctx.workspaceId, workspaceName: ctx.workspace.name })).ok;
     await prisma.$transaction((tx) => writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "ACCESS_LINK_SENT", targetType: "Employee", targetId: id, summary: `Set-password link issued for ${emp.staffCode}` }));
     return { inviteUrl: url, emailed };
   });

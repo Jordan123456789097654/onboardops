@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireStaffPage, ALL_STAFF } from "@/lib/platform";
+import { getMaintenanceState, MAINTENANCE_ROW_ID } from "@/lib/maintenance";
 import { PageHeader, Badge } from "@/components/ui";
 import { CountUp } from "@/components/motion";
 import { StackedBars } from "@/components/charts";
 import { fmtDateTime } from "@/lib/utils";
+import { MaintenancePanel } from "./maintenance-panel";
 
 export const metadata = { title: "Dashboard" };
 
@@ -13,7 +15,7 @@ export default async function AdminHome() {
   const now = Date.now();
   const week = new Date(now - 7 * 86400000);
   const eightWeeks = new Date(now - 56 * 86400000);
-  const [workspaces, newWs, users, employees, active, openReq, privacyOpen, failedEmails, notifyFails, jobs, signups, locked, sentEmails] = await Promise.all([
+  const [workspaces, newWs, users, employees, active, openReq, privacyOpen, failedEmails, notifyFails, jobs, signups, locked, sentEmails, maintenance] = await Promise.all([
     prisma.workspace.count(),
     prisma.workspace.count({ where: { createdAt: { gte: week } } }),
     prisma.user.count(),
@@ -23,10 +25,11 @@ export default async function AdminHome() {
     prisma.supportRequest.count({ where: { status: { not: "SOLVED" }, topic: "Privacy request" } }),
     prisma.emailLog.count({ where: { status: "FAILED", createdAt: { gte: week } } }),
     prisma.auditLog.count({ where: { actionType: "NOTIFY_FAILED", createdAt: { gte: week } } }),
-    prisma.jobRun.findMany({ orderBy: { createdAt: "desc" }, take: 5 }),
+    prisma.jobRun.findMany({ where: { id: { not: MAINTENANCE_ROW_ID } }, orderBy: { createdAt: "desc" }, take: 5 }),
     prisma.workspace.findMany({ where: { createdAt: { gte: eightWeeks } }, select: { createdAt: true } }),
     prisma.workspace.count({ where: { suspendedAt: { not: null } } }),
     prisma.emailLog.count({ where: { status: "SENT", createdAt: { gte: week } } }),
+    getMaintenanceState(),
   ]);
   const buckets = Array.from({ length: 8 }, (_, i) => new Date(now - (7 - i) * 7 * 86400000));
   const weekly = buckets.map((start, i) => signups.filter((s) => s.createdAt >= start && (i === 7 || s.createdAt < buckets[i + 1])).length);
@@ -35,6 +38,7 @@ export default async function AdminHome() {
   return (
     <>
       <PageHeader title="Dashboard" sub="Platform health and usage. Counts only: no customer HR content is shown here." />
+      <MaintenancePanel initial={maintenance} canManage={staff.role === "OWNER"} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map(([l, v, n], i) => <div key={l} style={{ "--i": i } as React.CSSProperties} className="card anim-fade-up p-4"><div className="text-xs text-soft">{l}</div><div className="mono mt-1 text-3xl font-semibold"><CountUp to={v} /></div><div className="mt-1 text-xs text-soft">{n}</div></div>)}
       </div>

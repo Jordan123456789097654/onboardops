@@ -1,10 +1,12 @@
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./prisma";
+import { getMaintenanceState } from "./maintenance";
 
 export type ComponentHealth = {
   service: string;
-  status: "up" | "degraded" | "down";
+  status: "up" | "degraded" | "down" | "maintenance";
   ok: boolean;
+  maintenance?: boolean;
   latencyMs: number;
   message: string;
   timestamp: string;
@@ -12,12 +14,14 @@ export type ComponentHealth = {
 
 export async function checkFrontend(): Promise<ComponentHealth> {
   const start = Date.now();
+  const maint = await getMaintenanceState();
   return {
     service: "frontend",
-    status: "up",
+    status: maint.enabled ? "maintenance" : "up",
     ok: true,
+    maintenance: maint.enabled,
     latencyMs: Date.now() - start,
-    message: "Next.js App Router frontend and SSR operational",
+    message: maint.enabled ? `In maintenance: ${maint.message}` : "Next.js App Router frontend and SSR operational",
     timestamp: new Date().toISOString(),
   };
 }
@@ -135,7 +139,7 @@ export async function checkDomains(): Promise<ComponentHealth> {
 
 export async function checkAllServices() {
   const start = Date.now();
-  const [frontend, database, auth, api, email, storage, domains] = await Promise.all([
+  const [frontend, database, auth, api, email, storage, domains, maint] = await Promise.all([
     checkFrontend(),
     checkDatabase(),
     checkAuth(),
@@ -143,12 +147,16 @@ export async function checkAllServices() {
     checkEmail(),
     checkStorage(),
     checkDomains(),
+    getMaintenanceState(),
   ]);
   const services = { frontend, database, auth, api, email, storage, domains };
   const allOk = Object.values(services).every((s) => s.ok);
   return {
     ok: allOk,
-    status: allOk ? "up" : "degraded",
+    status: !allOk ? "degraded" : maint.enabled ? "maintenance" : "up",
+    maintenance: maint.enabled,
+    maintenanceMessage: maint.enabled ? maint.message : null,
+    maintenanceEta: maint.enabled ? maint.eta : null,
     uptimeSeconds: Math.floor(process.uptime()),
     latencyMs: Date.now() - start,
     timestamp: new Date().toISOString(),

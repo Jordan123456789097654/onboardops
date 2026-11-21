@@ -8,6 +8,7 @@ import { slugify } from "@/lib/utils";
 import { createToken, findValidToken } from "@/lib/tokens";
 import { emailTaken, findUserByAnyEmail } from "@/lib/user-emails";
 import { resolvePlatformRole } from "@/lib/platform-role";
+import { getMaintenanceState } from "@/lib/maintenance";
 import { emails, sendEmail } from "@/lib/email";
 import { run, type Result } from "./_util";
 
@@ -33,17 +34,23 @@ export async function loginAction(input: unknown): Promise<Result<{ to: string }
       }
       throw new Error("Email or password is incorrect.");
     }
+    const maint = await getMaintenanceState();
+    const isOwner = resolvePlatformRole(user) === "OWNER";
+    if (maint.enabled && !isOwner) {
+      throw new Error(maint.message || "OnboardOps is currently undergoing scheduled maintenance.");
+    }
     if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
     await createSession(user.id);
+    if (maint.enabled && isOwner) return { to: "/admin" };
     const ms = await listMemberships();
     if (ms[0]) setActiveWorkspace(ms[0].workspaceId);
-    return { to: !ms[0] ? "/workplaces" : ms[0].role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview" };
+    return { to: !ms[0] ? (isOwner ? "/admin" : "/workplaces") : ms[0].role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview" };
   });
 }
 
 async function sendVerification(userId: string, name: string, email: string) {
   const raw = await createToken(userId, "VERIFY", 24 * 3600_000);
-  const url = `${process.env.APP_URL || "http://localhost:3000"}/verify-email?token=${raw}`;
+  const url = `${process.env.APP_URL || "https://onboardops.org"}/verify-email?token=${raw}`;
   const m = emails.verify(name, url);
   const r = await sendEmail(email, m.subject, m.text, { html: m.html, kind: "verify" });
   return { sent: r.ok, devLink: process.env.NODE_ENV !== "production" ? url : undefined };
@@ -51,6 +58,8 @@ async function sendVerification(userId: string, name: string, email: string) {
 
 export async function registerAction(input: unknown): Promise<Result<{ to: string }>> {
   return run(async () => {
+    const maint = await getMaintenanceState();
+    if (maint.enabled) throw new Error(maint.message || "OnboardOps is currently undergoing scheduled maintenance.");
     const d = registerSchema.parse(input);
     if (d.accountType === "OWNER" && d.workspaceName.length < 2) throw new Error("Enter a company name");
     const email = d.email.toLowerCase();
