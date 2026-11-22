@@ -6,6 +6,7 @@ export const entries: ChangelogEntry[] = [
     date: "2026-11-21",
     highlight: "Stronger encryption, employee portal tabs and free manager tools",
     items: [
+      "Database security improved: the site now locks sensitive records with a separate key per workspace, the keys themselves are locked by a master key kept outside the database, and rows already stored are being re-encrypted. Even a copy of the database alone no longer shows these notes or files in readable form.",
       "Stronger encryption: sensitive notes, case and incident text, injury details, contact numbers and every uploaded file are now encrypted before they are stored, with a separate key for each workspace.",
       "A new, simpler maintenance page that checks on its own and reloads when we are back.",
       "Legal documents are much longer and more detailed, and now say plainly that no system can be guaranteed to be 100% secure.",
