@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui";
+import { PwaRegister } from "@/components/pwa";
 import { MaintenanceGate } from "@/components/maintenance-gate";
 import { getAnnouncementState, getMaintenanceState } from "@/lib/maintenance";
 import { getStaff } from "@/lib/platform";
@@ -15,6 +16,8 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", displ
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_URL || "http://localhost:3000"),
   openGraph: { siteName: "OnboardOps", type: "website", url: "/" },
+  twitter: { card: "summary_large_image" },
+  alternates: { canonical: "/" },
   title: { default: "OnboardOps — staff records, discipline and training in one place", template: "%s · OnboardOps" },
   description: "One employee record from day-one onboarding to disciplinary audit trails. Stop running HR out of spreadsheets and training out of group chats.",
 };
@@ -30,6 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        <PwaRegister />
         <ToastProvider>
           <MaintenanceGate maintenance={maintenance} announcement={announcement} isOwner={isOwner}>
             {children}

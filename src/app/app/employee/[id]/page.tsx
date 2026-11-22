@@ -35,6 +35,8 @@ export default async function EmployeePage({ params }: { params: { id: string } 
   const toReqs = await prisma.staffRequest.findMany({ where: { employeeId: emp.id, kind: "TIMEOFF" }, select: { subtype: true, status: true, startDate: true, endDate: true } });
   const use = usage(toReqs);
   const allow = allowanceOf(emp.timeOffAllowance);
+  const coach = canManage ? await prisma.coachingNote.findMany({ where: { employeeId: emp.id, workspaceId: ctx.workspaceId }, orderBy: { createdAt: "desc" }, take: 30 }) : [];
+  const locs = await prisma.location.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { name: "asc" } });
   const iso = (d: Date | null) => (d ? d.toISOString() : null);
   const data = {
     id: emp.id, staffCode: emp.staffCode, fullName: emp.fullName, email: emp.email, phone: emp.phone, emergencyContact: emp.emergencyContact,
@@ -51,13 +53,16 @@ export default async function EmployeePage({ params }: { params: { id: string } 
       };
     }),
     checklists: emp.submissions.map((s) => ({ id: s.id, title: s.template.title, at: s.submittedAt.toISOString(), verified: !!s.verifiedAt })),
-    documents: docRows.map((d) => ({ id: d.id, title: d.title, category: d.category, restricted: d.restricted, visible: d.visibleToEmployee, expires: iso(d.expiresAt), by: d.uploadedByName, at: d.createdAt.toISOString(), fileId: d.fileId })),
+    documents: docRows.map((d) => ({ id: d.id, title: d.title, category: d.category, restricted: d.restricted, visible: d.visibleToEmployee, expires: iso(d.expiresAt), by: d.uploadedByName, at: d.createdAt.toISOString(), href: d.externalUrl ?? `/api/files/${d.fileId}` })),
     reviews: reviewRows.map((r) => ({ id: r.id, kind: r.kind, period: r.periodLabel, rating: r.rating, summary: r.summary, strengths: r.strengths, improvements: r.improvements, goals: r.goals, privateNotes: r.privateNotes, status: r.status, author: r.authorName, at: (r.sharedAt ?? r.createdAt).toISOString() })),
     audit: audit.map((a) => ({ id: a.id, at: a.createdAt.toISOString(), actor: a.actorName, summary: a.summary, hash: a.hash })),
   };
   return (
     <Dossier
       emp={data}
+      locations={locs.map((l) => ({ id: l.id, name: l.name }))}
+      locationId={emp.locationId ?? ""}
+      coaching={coach.map((n) => ({ id: n.id, author: n.authorName, note: n.note, at: n.createdAt.toISOString() }))}
       balances={TIMEOFF_TYPES.map((t) => ({ type: t, allowance: allow[t], used: use[t].used, pending: use[t].pending }))}
       fields={cfs.map((f) => ({ id: f.id, label: f.label, type: f.type, options: f.options }))}
       customValues={(emp.customValues ?? {}) as Record<string, string>}

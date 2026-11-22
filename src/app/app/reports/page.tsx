@@ -3,6 +3,7 @@ import { Printer } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, MANAGEMENT_ROLES, requirePagePerm } from "@/lib/rbac";
 import { Badge, Empty, PageHeader } from "@/components/ui";
+import { EmailReportButton } from "./email-button";
 import { HBars, StackedBars } from "@/components/charts";
 import { fmtDate } from "@/lib/utils";
 
@@ -48,6 +49,7 @@ export default async function Reports({ searchParams }: { searchParams: { range?
     <>
       <PageHeader title="Reports" sub={`Last ${range} months. Infractions and training by department, plus what needs attention.`}>
         <div className="flex rounded-md border border-line bg-muted p-0.5">{[3, 6, 12].map((r) => <Link key={r} href={`/app/reports?range=${r}`} className={`rounded px-2.5 py-1 text-xs ${r === range ? "bg-surface font-medium shadow-sm" : "text-soft"}`}>{r} mo</Link>)}</div>
+        <EmailReportButton />
         <Link href="/print/compliance-report" target="_blank" className="btn"><Printer className="h-3.5 w-3.5" />Printable compliance report</Link>
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-2">

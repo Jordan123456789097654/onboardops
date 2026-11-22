@@ -3,10 +3,11 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-import { requireWorkspaceRole, requirePerm, requireFeature, ADMIN_ROLES, STAFF_ROLES, MANAGEMENT_ROLES, hasFeature } from "@/lib/rbac";
+import { requireWorkspaceRole, requirePerm, requireFeature, ADMIN_ROLES, STAFF_ROLES, MANAGEMENT_ROLES, ALL_ROLES, hasFeature } from "@/lib/rbac";
 import { getStrikeDecayDays } from "@/lib/workspace-meta";
 import { notifyEmployee, notifyRoles } from "@/lib/notify";
 import { run } from "./_util";
+
 
 const done = () => revalidatePath("/app", "layout");
 const SEV = ["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"] as const;
@@ -167,6 +168,26 @@ export async function updateSafetyDetailsAction(id: string, input: unknown) {
       if (!r) throw new Error("Incident not found.");
       await tx.incidentReport.update({ where: { id }, data: { severity: d.severity, rootCause: d.rootCause, actions: d.actions } });
       await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "SAFETY_DETAILS_UPDATED", targetType: "Incident", targetId: id, summary: `Incident marked ${d.severity}, ${d.actions.length} corrective action(s)` });
+    });
+    done();
+    return undefined;
+  });
+}
+
+/* The employee's own written response to a case */
+export async function addEmployeeResponseAction(caseId: string, input: unknown) {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(ALL_ROLES);
+    const me = ctx.profile;
+    if (!me) throw new Error("No employee profile is linked to your login.");
+    const d = z.object({ statement: z.string().trim().min(10, "Write at least a sentence or two").max(5000) }).parse(input);
+    const c = await prisma.infractionCase.findFirst({ where: { id: caseId, employeeId: me.id, workspaceId: ctx.workspaceId } });
+    if (!c) throw new Error("Case not found.");
+    await prisma.$transaction(async (tx) => {
+      await tx.caseAttachment.create({ data: { caseId, kind: "EMPLOYEE_RESPONSE", title: "Employee response", statement: d.statement, authorName: me.fullName } });
+      await tx.infractionTimelineEvent.create({ data: { caseId, actorMemberId: ctx.id, actorName: me.fullName, eventType: "NOTE_ADDED", note: "Employee added a written response." } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "CASE_RESPONSE_ADDED", targetType: "Infraction", targetId: caseId, summary: `${c.caseNumber}: employee response added` });
+      await notifyRoles(tx, ctx.workspaceId, ["OWNER", "ADMIN", "MANAGER"], { title: `Employee responded to ${c.caseNumber}`, href: "/app/infractions" }, ctx.id);
     });
     done();
     return undefined;

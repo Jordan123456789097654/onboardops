@@ -7,10 +7,10 @@ import { Badge, Empty, Field, Modal, PageHeader, useAction } from "@/components/
 import { Bar } from "@/components/motion";
 import { ACCEPT_ATTR } from "@/lib/files-client";
 
-type Row = { id: string; title: string; description: string; contentMarkdown: string; fileId: string | null; fileName: string | null; version: number; appliesToAll: boolean; requiredJobRoleIds: string[]; isPublished: boolean; total: number; signed: number; unsigned: string[] };
-type Draft = { id?: string; title: string; description: string; contentMarkdown: string; appliesToAll: boolean; requiredJobRoleIds: string[]; publish: boolean; newVersion: boolean; fileName?: string | null };
+type Row = { externalUrl: string; id: string; title: string; description: string; contentMarkdown: string; fileId: string | null; fileName: string | null; version: number; appliesToAll: boolean; requiredJobRoleIds: string[]; isPublished: boolean; total: number; signed: number; unsigned: string[] };
+type Draft = { externalUrl: string; id?: string; title: string; description: string; contentMarkdown: string; appliesToAll: boolean; requiredJobRoleIds: string[]; publish: boolean; newVersion: boolean; fileName?: string | null };
 
-const blank = (): Draft => ({ title: "", description: "", contentMarkdown: "", appliesToAll: true, requiredJobRoleIds: [], publish: true, newVersion: false });
+const blank = (): Draft => ({ title: "", description: "", contentMarkdown: "", appliesToAll: true, requiredJobRoleIds: [], publish: true, newVersion: false, externalUrl: "" });
 
 export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: string; title: string }[]; canEdit: boolean }) {
   const router = useRouter();
@@ -43,9 +43,10 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
                   {p.isPublished ? <Badge value="ACTIVE" label="Published" /> : <Badge value="LOA" label="Draft" />}
                   <span className="ml-auto flex gap-2">
                     <a className="btn" href={`/print/policy/${p.id}`} target="_blank" rel="noreferrer">Sign-off sheet</a>
+                    {p.externalUrl && <a className="btn" href={p.externalUrl} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />Linked file</a>}
                     {p.fileId && <a className="btn" href={`/api/files/${p.fileId}`} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />PDF</a>}
                     <button className="btn" onClick={() => setOpen(open === p.id ? null : p.id)}>{p.unsigned.length} unsigned</button>
-                    {canEdit && <button className="btn" onClick={() => setDraft({ id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, appliesToAll: p.appliesToAll, requiredJobRoleIds: p.requiredJobRoleIds, publish: p.isPublished, newVersion: false, fileName: p.fileName })}>Edit</button>}
+                    {canEdit && <button className="btn" onClick={() => setDraft({ id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, appliesToAll: p.appliesToAll, requiredJobRoleIds: p.requiredJobRoleIds, publish: p.isPublished, newVersion: false, fileName: p.fileName, externalUrl: p.externalUrl })}>Edit</button>}
                   </span>
                 </div>
                 {p.description && <p className="mt-1 text-[13px] text-soft">{p.description}</p>}
@@ -62,6 +63,7 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
             <Field label="Title"><input className="input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
             <Field label="Short description"><input className="input" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></Field>
             <Field label="Policy text (Markdown, optional if you upload a PDF)"><textarea className="textarea" rows={6} value={draft.contentMarkdown} onChange={(e) => setDraft({ ...draft, contentMarkdown: e.target.value })} /></Field>
+            <Field label="Or link a file from Google Drive, SharePoint, Dropbox or Box (optional)"><input className="input mono" placeholder="https://drive.google.com/…" value={draft.externalUrl} onChange={(e) => setDraft({ ...draft, externalUrl: e.target.value })} /></Field>
             <Field label={`PDF or document (max 4 MB)${draft.fileName ? `. Current: ${draft.fileName}` : ""}`}><input type="file" accept={ACCEPT_ATTR} className="text-xs" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
             <div>
               <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={draft.appliesToAll} onChange={(e) => setDraft({ ...draft, appliesToAll: e.target.checked })} />Everyone must sign</label>

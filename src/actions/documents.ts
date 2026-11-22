@@ -7,6 +7,7 @@ import { requireWorkspaceRole, MANAGEMENT_ROLES, ADMIN_ROLES, requirePerm } from
 import { storeUpload } from "@/lib/files";
 import { notifyEmployee } from "@/lib/notify";
 import { DOC_CATEGORIES } from "@/lib/constants";
+import { DOC_LINK_ERROR, validDocLink } from "@/lib/doc-links";
 import { run } from "./_util";
 
 
@@ -50,8 +51,27 @@ export async function deleteDocumentAction(id: string) {
       if (!doc) throw new Error("Document not found.");
       if (doc.restricted && !ADMIN_ROLES.includes(ctx.role)) throw new Error("Only owners and admins can remove restricted documents.");
       await tx.employeeDocument.delete({ where: { id } });
-      await tx.storedFile.deleteMany({ where: { id: doc.fileId, workspaceId: ctx.workspaceId } });
+      if (doc.fileId) await tx.storedFile.deleteMany({ where: { id: doc.fileId, workspaceId: ctx.workspaceId } });
       await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "DOCUMENT_DELETED", targetType: "Employee", targetId: doc.employeeId, summary: `${doc.employee.staffCode} document "${doc.title}" removed` });
+    });
+    revalidatePath("/app", "layout");
+    return undefined;
+  });
+}
+
+/** Attach a document by link (Google Drive, SharePoint, Dropbox, Box). The file stays where it is. */
+export async function addDocumentLinkAction(input: unknown) {
+  return run(async () => {
+    const ctx = await requirePerm("documents.manage", "documents");
+    const d = schema.omit({ expiresAt: true }).extend({ url: z.string().trim().max(1000), expiresAt: z.string().optional().or(z.literal("")) }).parse(input);
+    if (!validDocLink(d.url)) throw new Error(DOC_LINK_ERROR);
+    if (d.restricted && !ADMIN_ROLES.includes(ctx.role)) throw new Error("Only owners and admins can add restricted documents.");
+    const emp = await prisma.employeeProfile.findFirst({ where: { id: d.employeeId, workspaceId: ctx.workspaceId } });
+    if (!emp) throw new Error("Employee not found.");
+    await prisma.$transaction(async (tx) => {
+      const restricted = d.restricted || d.category === "Work authorization (I-9)";
+      await tx.employeeDocument.create({ data: { workspaceId: ctx.workspaceId, employeeId: emp.id, externalUrl: d.url, title: d.title, category: d.category, restricted, visibleToEmployee: restricted ? false : d.visibleToEmployee, expiresAt: d.expiresAt ? new Date(d.expiresAt) : null, uploadedByName: ctx.user.name } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "DOCUMENT_LINKED", targetType: "Employee", targetId: emp.id, summary: `${emp.staffCode} document "${d.title}" linked from ${new URL(d.url).hostname}` });
     });
     revalidatePath("/app", "layout");
     return undefined;

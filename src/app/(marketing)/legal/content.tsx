@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SITE } from "@/lib/site";
 import { extend, employeeNotice, retention } from "./content-extra";
+import { moreSections } from "./more";
 
 export type Section = { title: string; body: React.ReactNode };
 export type Doc = { title: string; summary: string; short?: string; sections: Section[] };
@@ -184,7 +185,7 @@ const privacy: Doc = {
         ["Vercel", "Application hosting and delivery", "All data in transit, request logs"],
         ["Neon", "Database hosting", "Account and Workspace data, support messages"],
         ["Resend", "Sending email notifications", "Recipient email, name and message content of notifications"],
-        ["Discord or Slack (Customer-configured)", "Webhook notifications the Customer's admin chooses to send", "Event summaries. Confidential manager notes are never included."],
+        ["Discord, Slack or Microsoft Teams (Customer-configured)", "Webhook notifications the Customer's admin chooses to send", "Event summaries. Confidential manager notes are never included."],
         ["Professional advisers", "Legal, accounting and security advice", "Only what is needed, under confidentiality"],
         ["Authorities and counterparties", "Legal process, safety, or a merger or asset sale", "Only what is required, with notice where the law allows"],
       ]} />
@@ -387,4 +388,7 @@ const base: Record<string, Doc> = {
   "terms-of-service": tos, "terms-of-use": tou, privacy, "acceptable-use": aup, cookies, "data-processing": dpa, "beta-terms": beta,
 };
 
-export const legalDocs: Record<string, Doc> = { ...extend(base), "employee-notice": employeeNotice, retention };
+const combined: Record<string, Doc> = { ...extend(base), "employee-notice": employeeNotice, retention };
+export const legalDocs: Record<string, Doc> = Object.fromEntries(
+  Object.entries(combined).map(([slug, d]) => [slug, { ...d, sections: [...d.sections, ...(moreSections[slug] ?? [])] }]),
+);

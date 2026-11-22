@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { CtaBand, PageShell } from "@/components/page-shell";
 
-export const metadata = { title: "Pricing" };
+export const metadata = { title: "Pricing", description: "OnboardOps is free during the beta. See what is included.", alternates: { canonical: "/pricing" } };
 
 const included = [
   "Unlimited employees, departments and job roles",
@@ -11,7 +11,7 @@ const included = [
   "Infraction ledger with confidential manager notes and employee acknowledgment",
   "Shift checklists with supervisor verification",
   "Append-only audit log with chained hashes",
-  "Operations and confidential Discord or Slack webhooks",
+  "Operations and confidential Discord, Slack or Teams webhooks",
   "Email notifications for assignments and infractions",
   "Light, dark and system themes",
 ];

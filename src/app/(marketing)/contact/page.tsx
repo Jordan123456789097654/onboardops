@@ -3,7 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { ContactForm } from "@/components/contact-form";
 import { SITE } from "@/lib/site";
 
-export const metadata = { title: "Contact support" };
+export const metadata = { title: "Contact support", description: "Questions, bug reports or privacy requests. Contact the OnboardOps team.", alternates: { canonical: "/contact" } };
 
 export default function Contact() {
   const mail = SITE.contactEmail;

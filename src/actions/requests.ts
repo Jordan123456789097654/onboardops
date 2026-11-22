@@ -8,6 +8,7 @@ import { notifyEmployee, notifyRoles } from "@/lib/notify";
 import { emails, sendEmail } from "@/lib/email";
 import { COLORS, sendEmbed } from "@/lib/webhooks";
 import { allowanceOf, daysBetween, usage } from "@/lib/timeoff";
+import { textEmployee } from "@/lib/sms";
 import { run } from "./_util";
 
 const LABEL: Record<string, string> = { LOA: "leave of absence", RETIREMENT: "retirement", RESIGNATION: "resignation", TIMEOFF: "time-off" };
@@ -114,6 +115,7 @@ export async function decideStaffRequestAction(id: string, input: unknown) {
     });
     const m = emails.requestDecision(out.emp.fullName, LABEL[out.kind], d.decision, d.note);
     await sendEmail(out.emp.email, m.subject, m.text, { html: m.html, kind: "request-decision", workspaceId: ctx.workspaceId });
+    await textEmployee(ctx.workspaceId, out.emp.id, `Your ${LABEL[out.kind]} request was ${d.decision.toLowerCase()}.`);
     revalidatePath("/app", "layout");
     return undefined;
   });

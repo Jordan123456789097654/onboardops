@@ -16,7 +16,7 @@ export default async function PoliciesPage() {
     const scope = employees.filter((e) => p.appliesToAll || (e.jobRoleId && p.requiredJobRoleIds.includes(e.jobRoleId)));
     const signedIds = new Set(p.acks.filter((a) => a.version === p.version).map((a) => a.employeeId));
     return {
-      id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, fileId: p.fileId, fileName: p.fileName, version: p.version, appliesToAll: p.appliesToAll,
+      id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, fileId: p.fileId, externalUrl: p.externalUrl ?? "", fileName: p.fileName, version: p.version, appliesToAll: p.appliesToAll,
       requiredJobRoleIds: p.requiredJobRoleIds, isPublished: p.isPublished,
       total: scope.length, signed: scope.filter((e) => signedIds.has(e.id)).length,
       unsigned: scope.filter((e) => !signedIds.has(e.id)).map((e) => `${e.staffCode} ${e.fullName}`),

@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 import { writeAudit } from "./audit";
 import { sendEmbed, COLORS, type Embed } from "./webhooks";
 import { sendEmail, emails } from "./email";
+import { sendGenericWebhook } from "./generic-webhook";
 import type { Ctx } from "./rbac";
 import { getStrikeDecayDays } from "./workspace-meta";
 import { notifyEmployee, notifyRoles } from "./notify";
@@ -27,6 +28,14 @@ export async function dispatchEffects(ctx: Ctx, fx: Effects) {
   for (const e of fx.confidential) {
     const r = await sendEmbed(ctx.workspace.confidentialWebhookUrl, e);
     if (!r.ok && ctx.workspace.confidentialWebhookUrl) failures.push(`confidential webhook: ${r.error}`);
+  }
+  if (ctx.workspace.genericWebhookUrl) {
+    for (const [channel, list] of [["operations", fx.ops], ["confidential", fx.confidential]] as const) {
+      for (const e of list) {
+        const r = await sendGenericWebhook(ctx.workspace.genericWebhookUrl, ctx.workspace.genericWebhookSecret, "notification", { channel, title: e.title, description: e.description ?? null, fields: e.fields ?? [] });
+        if (!r.ok) failures.push(`json webhook: ${r.error}`);
+      }
+    }
   }
   for (const m of fx.mail) {
     const r = await sendEmail(m.to, m.subject, m.text, { html: m.html, workspaceId: ctx.workspaceId, workspaceName: ctx.workspace.name });

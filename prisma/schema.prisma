@@ -109,40 +109,50 @@ model Workspace {
   suspendedReason                String         @default("")
   createdAt                      DateTime       @default(now())
 
-  members         WorkspaceMember[]
-  departments     Department[]
-  jobRoles        JobRole[]
-  employees       EmployeeProfile[]
-  courses         Course[]
-  enrollments     CourseEnrollment[]
-  infractions     InfractionCase[]
-  templates       ShiftChecklistTemplate[]
-  submissions     ShiftChecklistSubmission[]
-  auditLogs       AuditLog[]
-  files           StoredFile[]
-  policies        Policy[]
-  policyAcks      PolicyAcknowledgment[]
-  documents       EmployeeDocument[]
-  incidents       IncidentReport[]
-  reviews         Review[]
-  notifications   Notification[]
-  features        Json                       @default("{}")
-  rolePerms       Json                       @default("{}")
-  legalHold       Boolean                    @default(false)
-  legalHoldReason String                     @default("")
-  setupDone       Boolean                    @default(false)
-  timezone        String                     @default("America/New_York")
-  customRoles     CustomRole[]
-  customFields    CustomField[]
-  caseTemplates   CaseTemplate[]
-  disciplineRules DisciplineRule[]
-  credentials     Credential[]
-  profileChanges  ProfileChangeRequest[]
-  appeals         Appeal[]
-  handoffNotes    HandoffNote[]
-  shifts          Shift[]
-  timeEntries     TimeEntry[]
-  assets          Asset[]
+  members              WorkspaceMember[]
+  departments          Department[]
+  jobRoles             JobRole[]
+  employees            EmployeeProfile[]
+  courses              Course[]
+  enrollments          CourseEnrollment[]
+  infractions          InfractionCase[]
+  templates            ShiftChecklistTemplate[]
+  submissions          ShiftChecklistSubmission[]
+  auditLogs            AuditLog[]
+  files                StoredFile[]
+  policies             Policy[]
+  policyAcks           PolicyAcknowledgment[]
+  documents            EmployeeDocument[]
+  incidents            IncidentReport[]
+  reviews              Review[]
+  notifications        Notification[]
+  features             Json                       @default("{}")
+  rolePerms            Json                       @default("{}")
+  legalHold            Boolean                    @default(false)
+  legalHoldReason      String                     @default("")
+  setupDone            Boolean                    @default(false)
+  timezone             String                     @default("America/New_York")
+  customRoles          CustomRole[]
+  customFields         CustomField[]
+  caseTemplates        CaseTemplate[]
+  disciplineRules      DisciplineRule[]
+  credentials          Credential[]
+  profileChanges       ProfileChangeRequest[]
+  appeals              Appeal[]
+  handoffNotes         HandoffNote[]
+  shifts               Shift[]
+  timeEntries          TimeEntry[]
+  assets               Asset[]
+  genericWebhookUrl    String?
+  genericWebhookSecret String                     @default("")
+  coachingNotes        CoachingNote[]
+  apiKeys              ApiKey[]
+  locations            Location[]
+  smsAccountSid        String?
+  smsAuthTokenEnc      String?
+  smsFrom              String?
+  bambooSubdomain      String?
+  bambooKeyEnc         String?
 }
 
 model WorkspaceMember {
@@ -229,11 +239,15 @@ model EmployeeProfile {
   shifts           Shift[]
   timeEntries      TimeEntry[]
   assetCheckouts   AssetCheckout[]
+  timeOffAllowance Json                       @default("{}")
+  locationId       String?
+  coachingNotes    CoachingNote[]
+  calendarToken    String?                    @unique
+  smsOptIn         Boolean                    @default(false)
 
   @@unique([workspaceId, staffCode])
   @@index([workspaceId, status])
   @@index([workspaceId, departmentId])
-  timeOffAllowance Json @default("{}")
 }
 
 model Course {
@@ -426,7 +440,9 @@ model SupportRequest {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  messages SupportMessage[]
+  messages     SupportMessage[]
+  roadmapTitle String?
+  roadmapBlurb String?
 
   @@index([email, createdAt])
   @@index([status, createdAt])
@@ -491,9 +507,10 @@ model Policy {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  acks      PolicyAcknowledgment[]
-  reackDays Int?
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  acks        PolicyAcknowledgment[]
+  reackDays   Int?
+  externalUrl String?
 
   @@index([workspaceId])
 }
@@ -519,7 +536,8 @@ model EmployeeDocument {
   id                String    @id @default(cuid())
   workspaceId       String
   employeeId        String
-  fileId            String
+  fileId            String?
+  externalUrl       String?
   title             String
   category          String
   restricted        Boolean   @default(false)
@@ -548,11 +566,17 @@ model IncidentReport {
   convertedCaseNumber String?
   createdAt           DateTime @default(now())
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  reporter  EmployeeProfile? @relation(fields: [reporterEmployeeId], references: [id], onDelete: SetNull)
-  severity  String           @default("LOW")
-  rootCause String           @default("")
-  actions   Json             @default("[]")
+  workspace            Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reporter             EmployeeProfile? @relation(fields: [reporterEmployeeId], references: [id], onDelete: SetNull)
+  severity             String           @default("LOW")
+  rootCause            String           @default("")
+  actions              Json             @default("[]")
+  anonymous            Boolean          @default(false)
+  photoFileIds         String[]
+  investigatorName     String?
+  investigatorMemberId String?
+  investigationDue     DateTime?
+  injury               Json             @default("{}")
 
   @@index([workspaceId, status, createdAt])
 }
@@ -929,4 +953,57 @@ model RateLimit {
   resetAt DateTime
 
   @@index([resetAt])
+}
+
+model CoachingNote {
+  id          String   @id @default(cuid())
+  workspaceId String
+  employeeId  String
+  authorName  String
+  note        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, createdAt])
+}
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  name          String
+  prefix        String
+  keyHash       String    @unique
+  createdByName String
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  address     String   @default("")
+  timezone    String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model RoadmapVote {
+  id        String   @id @default(cuid())
+  requestId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([requestId, userId])
+  @@index([requestId])
 }

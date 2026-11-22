@@ -1,6 +1,6 @@
 import { CtaBand, PageShell } from "@/components/page-shell";
 
-export const metadata = { title: "About" };
+export const metadata = { title: "About", description: "About OnboardOps: who builds it, why, and how we handle employee records. Built in Georgia, USA.", alternates: { canonical: "/about" } };
 
 export default function About() {
   return (

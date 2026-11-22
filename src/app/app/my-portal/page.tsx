@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, ALL_ROLES, serializeInfraction, hasFeature } from "@/lib/rbac";
 import { allowanceOf, usage, TIMEOFF_TYPES } from "@/lib/timeoff";
+import { hasSmsConfig } from "@/lib/sms";
 import { Empty } from "@/components/ui";
 import { Portal } from "./portal";
 
@@ -38,6 +39,8 @@ export default async function MyPortal() {
     : [[], []];
   return (
     <Portal
+      calendarUrl={p.calendarToken ? `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/api/calendar/${p.calendarToken}.ics` : ""}
+      sms={{ configured: hasSmsConfig(ctx.workspace), optIn: p.smsOptIn, phone: p.phone ?? "" }}
       balances={TIMEOFF_TYPES.map((t) => ({ type: t, allowance: allow[t], used: use[t].used, pending: use[t].pending }))}
       shifts={myShifts.map((s) => ({ id: s.id, label: s.label, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString(), swap: s.swapStatus }))}
       coworkers={coworkers.map((c) => ({ id: c.id, name: c.fullName }))}
@@ -50,8 +53,8 @@ export default async function MyPortal() {
         return { id: s.id, caseNumber: s.caseNumber, severity: s.severity, points: s.pointsAdded, policy: s.policyViolated, summary: s.summary, acknowledged: s.employeeAcknowledged, at: s.createdAt.toISOString() };
       })}
       templates={templates.map((t) => ({ id: t.id, title: t.title, shiftType: t.shiftType, items: t.items as { id: string; label: string; required: boolean }[], dueToday: t.scheduleDays.includes(new Date().getDay()), dueTime: t.dueTime ?? "" }))}
-      policies={policies.map((x) => ({ id: x.id, title: x.title, description: x.description, md: x.contentMarkdown, fileId: x.fileId, version: x.version, signed: x.acks.some((a) => a.version === x.version) }))}
-      documents={myDocs.map((d) => ({ id: d.id, title: d.title, category: d.category, fileId: d.fileId, expires: d.expiresAt?.toISOString() ?? null }))}
+      policies={policies.map((x) => ({ id: x.id, title: x.title, description: x.description, md: x.contentMarkdown, fileId: x.fileId, link: x.externalUrl ?? "", version: x.version, signed: x.acks.some((a) => a.version === x.version) }))}
+      documents={myDocs.map((d) => ({ id: d.id, title: d.title, category: d.category, href: d.externalUrl ?? `/api/files/${d.fileId}`, expires: d.expiresAt?.toISOString() ?? null }))}
       requests={myRequests.map((r) => ({ id: r.id, subtype: r.subtype, kind: r.kind, status: r.status, start: r.startDate?.toISOString() ?? null, end: r.endDate?.toISOString() ?? null, note: r.decisionNote, by: r.decidedByName }))}
       incidents={myIncidents.map((i) => ({ id: i.id, type: i.type, status: i.status, at: i.occurredAt.toISOString(), description: i.description }))}
       reviews={sharedReviews.map((r) => ({ id: r.id, kind: r.kind, period: r.periodLabel, rating: r.rating, summary: r.summary, strengths: r.strengths, improvements: r.improvements, goals: r.goals, author: r.authorName, at: (r.sharedAt ?? r.createdAt).toISOString() }))}

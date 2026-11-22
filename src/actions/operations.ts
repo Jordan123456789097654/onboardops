@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { requireWorkspaceRole, STAFF_ROLES, MANAGEMENT_ROLES, ALL_ROLES, requireFeature } from "@/lib/rbac";
+import { textEmployee } from "@/lib/sms";
 import { run } from "./_util";
 
 const done = () => revalidatePath("/app", "layout");
@@ -244,6 +245,8 @@ export async function decideShiftSwapAction(shiftId: string, input: unknown) {
       await tx.shift.update({ where: { id: shiftId }, data: d.decision === "APPROVED" ? { employeeId: s.swapToId, swapStatus: "APPROVED", swapToId: null } : { swapStatus: "DENIED" } });
       await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: `SHIFT_SWAP_${d.decision}`, targetType: "Shift", targetId: shiftId, summary: `Shift swap ${d.decision.toLowerCase()}` });
     });
+    const s3 = await prisma.shift.findUnique({ where: { id: shiftId } });
+    if (s3?.employeeId) await textEmployee(ctx.workspaceId, s3.employeeId, d.decision === "APPROVED" ? "Your shift swap was approved." : "Your shift swap request was denied.");
     done();
     return undefined;
   });
@@ -265,6 +268,10 @@ export async function assignShiftAction(shiftId: string, employeeId: string | nu
       await tx.shift.update({ where: { id: shiftId }, data: { employeeId, swapStatus: null, swapToId: null } });
       await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "SHIFT_ASSIGNED", targetType: "Shift", targetId: shiftId, summary: employeeId ? "Shift assigned" : "Shift set to open" });
     });
+    if (employeeId) {
+      const s2 = await prisma.shift.findUnique({ where: { id: shiftId } });
+      if (s2) await textEmployee(ctx.workspaceId, employeeId, `New shift: ${s2.label || "Shift"} on ${s2.startsAt.toUTCString().slice(0, 22)} UTC.`);
+    }
     done();
     return undefined;
   });

@@ -106,6 +106,9 @@ export const emails = {
   requestDecision: (name: string, kind: string, status: string, note: string) =>
     mail(`Your ${kind} request was ${status.toLowerCase()}`, { icon: "calendar", preheader: `Your ${kind} request was ${status.toLowerCase()}.`, title: `Your request was ${status.toLowerCase()}`, paragraphs: [`Hi ${name}, your ${kind} request was ${status.toLowerCase()}.`], details: note ? [["Note from your manager", note]] : undefined, button: { label: "Open my portal", url: portal() } }),
 
+  report: (name: string, workspace: string, lines: string[]) =>
+    mail(`${workspace}: workforce summary`, { icon: "calendar", preheader: "Your workforce summary.", title: "Workforce summary", paragraphs: [`Hi ${name}, here is where ${workspace} stands right now.`], details: lines.map((l) => { const i = l.indexOf(": "); return [l.slice(0, i), l.slice(i + 2)] as [string, string]; }), button: { label: "Open Command Center", url: `${appUrl()}/app/overview` } }),
+
   supportReply: (name: string, ref: string, body: string) =>
     mail(`Re: your OnboardOps support request (${ref})`, { icon: "chat", preheader: "We replied to your support request.", title: "We replied to your request", paragraphs: [`Hi ${name},`, ...body.split(/\n{2,}/)], details: [["Reference", ref]], button: { label: "Contact support", url: `${appUrl()}/contact` }, note: "You can reply to this email or use the contact form.", align: "left" }),
 

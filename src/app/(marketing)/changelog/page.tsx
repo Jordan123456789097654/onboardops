@@ -1,6 +1,26 @@
-export const metadata = { title: "Changelog" };
+export const metadata = { title: "Changelog", description: "Every OnboardOps release: new features, improvements and fixes.", alternates: { canonical: "/changelog" } };
 
 const entries = [
+  {
+    v: "0.11.0",
+    date: "2026-11-21",
+    items: [
+      "Employees can add a written response to any case, and managers can keep private coaching notes that are never infractions.",
+      "Incident reports can include photos and be filed anonymously. Managers can assign an investigator and due date, and record injury details. Injury log export (CSV) for the year.",
+      "Case trends page: cases by month, severity, policy, department and manager, with appeal overturn rate.",
+      "Read-only API keys with /api/v1/employees and /api/v1/shifts, and a signed JSON webhook for operations and confidential events.",
+      "Payroll hours export (CSV) from timesheets, and an Email me this summary button on Reports.",
+      "Locations: add sites or stores and assign employees to them.",
+      "Installable app (add to home screen) with an offline page. Checklists finished without a connection are saved on the device and sent when you are back online.",
+      "New blog with practical HR guides, a public roadmap where signed-in users can vote, and an upgraded Security page with a printable summary.",
+      "Microsoft Teams webhooks alongside Discord and Slack.",
+      "Attach employee documents and policies by share link from Google Drive, SharePoint or OneDrive, Dropbox or Box, without uploading a copy.",
+      "BambooHR sync: connect your own BambooHR account (key stored encrypted) to add new hires from its directory.",
+      "Private calendar feed link (.ics) so shifts and approved time off appear in Google, Apple or Outlook calendar.",
+      "Optional text messages for new shifts, swap answers and request decisions. Each workspace connects its own Twilio account (token stored encrypted), and employees opt in individually.",
+      "Rate limiting on sign-in, password reset, magic links, contact and search, stricter security headers, and a keyed audit log you can verify.",
+    ],
+  },
   {
     v: "0.10.0",
     date: "2026-11-21",

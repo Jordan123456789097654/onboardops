@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { assignEmployeeRoleAction } from "@/actions/access";
 import { changeStatusAction, grantPortalAccessAction, sendAccessLinkAction, updateEmployeeAction } from "@/actions/employees";
-import { CustomValues, TimeOffBalances, type CField } from "./custom-values";
+import { CoachingNotes, LocationPicker, CustomValues, TimeOffBalances, type Coach, type CField } from "./custom-values";
 import { DocumentsPanel, ReviewsPanel, type Doc, type Rev } from "./extras";
 import { Badge, Empty, Field, Modal, PageHeader, Tabs, useAction } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
@@ -21,7 +21,7 @@ type Emp = {
   reviews: Rev[];
 };
 
-export function Dossier({ emp, departments, roles, perms, fields = [], customValues = {}, balances = [] }: { balances?: { type: string; allowance: number; used: number; pending: number }[]; fields?: CField[]; customValues?: Record<string, string>; emp: Emp; departments: Opt[]; roles: Opt[]; perms: { manage: boolean; admin: boolean; owner: boolean } }) {
+export function Dossier({ emp, departments, roles, perms, fields = [], customValues = {}, balances = [], coaching = [], locations = [], locationId = "" }: { locations?: { id: string; name: string }[]; locationId?: string; coaching?: Coach[]; balances?: { type: string; allowance: number; used: number; pending: number }[]; fields?: CField[]; customValues?: Record<string, string>; emp: Emp; departments: Opt[]; roles: Opt[]; perms: { manage: boolean; admin: boolean; owner: boolean } }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [tab, setTab] = useState("overview");
@@ -102,6 +102,8 @@ export function Dossier({ emp, departments, roles, perms, fields = [], customVal
           </div>
         )}
         {tab === "overview" && balances.length > 0 && <TimeOffBalances employeeId={emp.id} balances={balances} canEdit={perms.manage} />}
+        {tab === "overview" && <LocationPicker employeeId={emp.id} locationId={locationId} locations={locations} canEdit={perms.manage} />}
+        {tab === "overview" && perms.manage && <CoachingNotes employeeId={emp.id} notes={coaching} />}
         {tab === "overview" && <CustomValues employeeId={emp.id} fields={fields} values={customValues} canEdit={perms.manage} />}
         {tab === "training" && (emp.enrollments.length === 0 ? <Empty title="No courses assigned" hint="Assign a job role with required courses, or assign a course from the Training Academy." /> : (
           <div className="card overflow-x-auto"><table className="w-full min-w-[720px] border-collapse"><thead><tr>{["Course", "Status", "Best", "Attempts", "Certificate", "Due", "Why assigned"].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>

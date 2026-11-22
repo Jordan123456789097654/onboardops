@@ -2,14 +2,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Lock, Trash2 } from "lucide-react";
-import { deleteDocumentAction, uploadDocumentAction } from "@/actions/documents";
+import { addDocumentLinkAction, deleteDocumentAction, uploadDocumentAction } from "@/actions/documents";
 import { saveReviewAction } from "@/actions/reviews";
 import { Badge, Empty, Field, Modal, useAction, useToast } from "@/components/ui";
 import { DOC_CATEGORIES } from "@/lib/constants";
 import { ACCEPT_ATTR } from "@/lib/files-client";
 import { fmtDate } from "@/lib/utils";
 
-export type Doc = { id: string; title: string; category: string; restricted: boolean; visible: boolean; expires: string | null; by: string; at: string; fileId: string };
+export type Doc = { id: string; title: string; category: string; restricted: boolean; visible: boolean; expires: string | null; by: string; at: string; href: string };
 export type Rev = { id: string; kind: string; period: string; rating: number | null; summary: string; strengths: string; improvements: string; goals: string; privateNotes: string; status: string; author: string; at: string };
 
 export function DocumentsPanel({ employeeId, docs, isAdmin }: { employeeId: string; docs: Doc[]; isAdmin: boolean }) {
@@ -19,6 +19,8 @@ export function DocumentsPanel({ employeeId, docs, isAdmin }: { employeeId: stri
   const [file, setFile] = useState<File | null>(null);
   const [f, setF] = useState({ title: "", category: DOC_CATEGORIES[5] as string, restricted: false, visibleToEmployee: false, expiresAt: "" });
   const toast = useToast();
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [lk, setLk] = useState({ title: "", url: "", category: DOC_CATEGORIES[5] as string, restricted: false, visibleToEmployee: false });
   const [busy, setBusy] = useState(false);
   const bulk = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -46,16 +48,26 @@ export function DocumentsPanel({ employeeId, docs, isAdmin }: { employeeId: stri
   const soon = (d: string | null) => d && new Date(d).getTime() < Date.now() + 30 * 86400000;
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between"><p className="text-[13px] text-soft">Licenses, signed forms and other records. Restricted documents are visible only to owners and admins.</p><span className="flex gap-2"><label className="btn cursor-pointer">{busy ? "Uploading…" : "Bulk upload"}<input type="file" multiple className="hidden" disabled={busy} onChange={(e) => { bulk(e.target.files); e.target.value = ""; }} /></label><button className="btn-primary" onClick={() => setOpen(true)}>Upload document</button></span></div>
+      <div className="flex items-center justify-between"><p className="text-[13px] text-soft">Licenses, signed forms and other records. Restricted documents are visible only to owners and admins.</p><span className="flex gap-2"><button className="btn" onClick={() => setLinkOpen(true)}>Add link</button><label className="btn cursor-pointer">{busy ? "Uploading…" : "Bulk upload"}<input type="file" multiple className="hidden" disabled={busy} onChange={(e) => { bulk(e.target.files); e.target.value = ""; }} /></label><button className="btn-primary" onClick={() => setOpen(true)}>Upload document</button></span></div>
       {docs.length === 0 ? <Empty title="No documents" hint="Upload a PDF or image (up to 4 MB)." /> : (
         <div className="card divide-y divide-line">{docs.map((d) => (
           <div key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-[13px]">
             {d.restricted ? <Lock className="h-4 w-4 text-amber-600" aria-label="Restricted" /> : <FileText className="h-4 w-4 text-soft" />}
-            <div className="min-w-0 flex-1"><a className="font-medium text-accent" href={`/api/files/${d.fileId}`} target="_blank" rel="noreferrer">{d.title}</a><div className="text-xs text-soft">{d.category} · uploaded {fmtDate(d.at)} by {d.by}{d.visible ? " · employee can see" : ""}</div></div>
+            <div className="min-w-0 flex-1"><a className="font-medium text-accent" href={d.href} target="_blank" rel="noreferrer">{d.title}</a><div className="text-xs text-soft">{d.category} · uploaded {fmtDate(d.at)} by {d.by}{d.visible ? " · employee can see" : ""}</div></div>
             {d.expires && <span className="mono text-xs">{soon(d.expires) ? <Badge value="RETRAINING_REQUIRED" label={`Expires ${fmtDate(d.expires)}`} /> : `Expires ${fmtDate(d.expires)}`}</span>}
             {(!d.restricted || isAdmin) && <button className="btn !px-2" aria-label="Remove document" disabled={pending} onClick={() => { if (confirm(`Remove "${d.title}"? This cannot be undone.`)) exec(() => deleteDocumentAction(d.id), { success: "Document removed", onOk: () => router.refresh() }); }}><Trash2 className="h-3.5 w-3.5" /></button>}
           </div>))}</div>
       )}
+      <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title="Add a document by link">
+        <div className="space-y-3">
+          <p className="text-xs text-soft">Link a file from Google Drive, SharePoint or OneDrive, Dropbox or Box. We store the link, not a copy, so make sure the people who need it can open it.</p>
+          <Field label="Title"><input className="input" value={lk.title} onChange={(e) => setLk({ ...lk, title: e.target.value })} /></Field>
+          <Field label="Share link"><input className="input mono" placeholder="https://drive.google.com/…" value={lk.url} onChange={(e) => setLk({ ...lk, url: e.target.value })} /></Field>
+          <Field label="Category"><select className="input" value={lk.category} onChange={(e) => setLk({ ...lk, category: e.target.value })}>{DOC_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={lk.visibleToEmployee} onChange={(e) => setLk({ ...lk, visibleToEmployee: e.target.checked })} />Employee can see this</label>
+          <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => addDocumentLinkAction({ ...lk, employeeId }), { success: "Link added", onOk: () => { setLinkOpen(false); setLk({ ...lk, title: "", url: "" }); router.refresh(); } })}>Add link</button>
+        </div>
+      </Modal>
       <Modal open={open} onClose={() => setOpen(false)} title="Upload document">
         <div className="space-y-3">
           <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">Only upload what you are legally required or authorized to keep. Never upload Social Security cards, bank details or medical records.</p>

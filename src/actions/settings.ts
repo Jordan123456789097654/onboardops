@@ -7,7 +7,7 @@ import { requireWorkspaceRole, ADMIN_ROLES } from "@/lib/rbac";
 import { sendEmbed, validWebhookUrl, COLORS } from "@/lib/webhooks";
 import { run } from "./_util";
 
-const url = z.string().trim().refine((v) => v === "" || validWebhookUrl(v), "Webhook must be an https Discord or Slack URL").default("");
+const url = z.string().trim().refine((v) => v === "" || validWebhookUrl(v), "Webhook must be an https Discord, Slack or Microsoft Teams URL").default("");
 
 const settingsSchema = z.object({
   name: z.string().trim().min(2, "Workspace name is required"),

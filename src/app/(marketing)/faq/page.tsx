@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CtaBand, PageShell } from "@/components/page-shell";
 
-export const metadata = { title: "FAQ" };
+export const metadata = { title: "FAQ", description: "Answers about pricing, security, roles, notifications, data export and getting started with OnboardOps.", alternates: { canonical: "/faq" } };
 
 const faqs: [string, string][] = [
   ["Is OnboardOps really free?", "Yes. It is in beta and every feature is free for beta testers, with no card on file. Any future paid plan will be announced in the changelog before it applies to you."],
@@ -11,7 +11,7 @@ const faqs: [string, string][] = [
   ["What does an employee signature mean?", "It confirms they received the notice. It is not an admission or agreement, and the signature text says so."],
   ["Do employees need a login?", "Only to use the self-service portal. A manager can send an email invite from the employee's profile so they choose their own password."],
   ["How are quizzes graded?", "On the server. The correct answers are never sent to the browser while the quiz is open."],
-  ["Does it send notifications?", "Yes: Discord or Slack webhooks for operations and for confidential HR events, and email through Resend for new training and infractions."],
+  ["Does it send notifications?", "Yes: Discord, Slack or Microsoft Teams webhooks for operations and for confidential HR events, and email through Resend for new training and infractions."],
   ["Can I export my data?", "Yes. Owners and Admins can download a full JSON export of the workspace from Settings, and anyone who can view the staff directory can export it to CSV. You can also print dossiers and certificates to PDF."],
   ["Is this legal advice or an HR compliance guarantee?", "No. OnboardOps is a record-keeping tool. Employment rules vary, so check with an attorney or HR professional about your obligations."],
   ["How old do I need to be?", "You must be at least 13 to create an account. If you are under 18, you need a parent or guardian's permission, as described in the Terms of Service."],

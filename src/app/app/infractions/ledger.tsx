@@ -48,7 +48,7 @@ export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = 
 
   return (
     <>
-      <PageHeader title="Infractions" sub="Case ledger. Cases and timeline entries are append-only.">{isAdmin && <button className="btn" onClick={() => setRulesOpen(true)}>Discipline rules</button>}<button className="btn-primary" onClick={() => setLogOpen(true)}>Log Infraction</button></PageHeader>
+      <PageHeader title="Infractions" sub="Case ledger. Cases and timeline entries are append-only."><a className="btn" href="/app/infractions/trends">Trends</a>{isAdmin && <button className="btn" onClick={() => setRulesOpen(true)}>Discipline rules</button>}<button className="btn-primary" onClick={() => setLogOpen(true)}>Log Infraction</button></PageHeader>
       <div className="mb-3 flex flex-wrap gap-2">
         <input className="input !w-64" placeholder="Search case, employee, policy" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input !w-48" value={sev} onChange={(e) => setSev(e.target.value)}><option value="">All severities</option>{["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select>

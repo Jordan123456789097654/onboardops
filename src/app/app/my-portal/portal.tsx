@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { fileAppealAction } from "@/actions/discipline2";
+import { sendTestTextAction, setCalendarFeedAction, setSmsOptInAction } from "@/actions/personal";
+import { addEmployeeResponseAction, fileAppealAction } from "@/actions/discipline2";
 import { addChecklistPhotoAction } from "@/actions/checklists";
 import { clockInAction, clockOutAction, requestShiftSwapAction } from "@/actions/operations";
 import { submitProfileChangeAction } from "@/actions/records";
@@ -18,6 +19,7 @@ import { Badge, Empty, Field, Modal, PageHeader, useAction } from "@/components/
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 
 type Props = {
+  calendarUrl: string; sms: { configured: boolean; optIn: boolean; phone: string };
   balances: { type: string; allowance: number; used: number; pending: number }[];
   shifts: { id: string; label: string; startsAt: string; endsAt: string; swap: string | null }[]; coworkers: { id: string; name: string }[];
   phone: string; emergencyContact: string; openEntry: { id: string; since: string } | null; appeals: { caseId: string; status: string; note: string }[];
@@ -26,9 +28,9 @@ type Props = {
   cases: { id: string; caseNumber: string; severity: string; points: number; policy: string; summary: string; acknowledged: boolean; at: string }[];
   templates: { dueToday?: boolean; dueTime?: string; id: string; title: string; shiftType: string; items: { id: string; label: string; required: boolean }[] }[];
   submissions: { id: string; title: string; at: string; verified: boolean }[];
-  policies: { id: string; title: string; description: string; md: string; fileId: string | null; version: number; signed: boolean }[];
+  policies: { id: string; title: string; description: string; md: string; fileId: string | null; link?: string; version: number; signed: boolean }[];
   incidents: { id: string; type: string; status: string; at: string; description: string }[];
-  documents: { id: string; title: string; category: string; fileId: string; expires: string | null }[];
+  documents: { id: string; title: string; category: string; href: string; expires: string | null }[];
   requests: { id: string; subtype?: string | null; kind: string; status: string; start: string | null; end: string | null; note: string; by: string | null }[];
   reviews: { id: string; kind: string; period: string; rating: number | null; summary: string; strengths: string; improvements: string; goals: string; author: string; at: string }[];
 };
@@ -41,7 +43,7 @@ function PolicyCard({ p }: { p: Props["policies"][number] }) {
   return (
     <div className={`card p-4 text-[13px] ${p.signed ? "" : "border-amber-400"}`}>
       <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{p.title}</span><span className="mono text-xs text-soft">v{p.version}</span>{p.signed ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Needs your signature" />}
-        <span className="ml-auto flex gap-2">{p.fileId && <a className="btn" href={`/api/files/${p.fileId}`} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />Open PDF</a>}<button className="btn" onClick={() => setShow(!show)}>{show ? "Hide" : "Read"}</button></span></div>
+        <span className="ml-auto flex gap-2">{p.link && <a className="btn" href={p.link} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />Open link</a>}{p.fileId && <a className="btn" href={`/api/files/${p.fileId}`} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />Open PDF</a>}<button className="btn" onClick={() => setShow(!show)}>{show ? "Hide" : "Read"}</button></span></div>
       {p.description && <p className="mt-1 text-soft">{p.description}</p>}
       {show && p.md && <div className="anim-slide-down mt-3 max-h-64 space-y-2 overflow-y-auto rounded-md border border-line bg-muted p-3 leading-relaxed [&_h1]:text-base [&_h1]:font-semibold [&_h2]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"><ReactMarkdown>{p.md}</ReactMarkdown></div>}
       {!p.signed && (
@@ -96,7 +98,14 @@ function IncidentButton() {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ type: "NEAR_MISS", occurredAt: "", location: "", description: "" });
+  const [f, setF] = useState({ type: "NEAR_MISS", occurredAt: "", location: "", description: "", anonymous: false });
+  const [photos, setPhotos] = useState<File[]>([]);
+  const payload = () => {
+    const fd = new FormData();
+    fd.set("json", JSON.stringify({ ...f, occurredAt: f.occurredAt && !isNaN(new Date(f.occurredAt).getTime()) ? new Date(f.occurredAt).toISOString() : "" }));
+    photos.forEach((p) => fd.append("files", p));
+    return fd;
+  };
   return (
     <>
       <button className="btn" onClick={() => setOpen(true)}>Report an incident</button>
@@ -106,8 +115,10 @@ function IncidentButton() {
           <Field label="Type"><select className="input" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>{INCIDENT_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}</select></Field>
           <div className="grid grid-cols-2 gap-3"><Field label="When"><input className="input mono" type="datetime-local" value={f.occurredAt} onChange={(e) => setF({ ...f, occurredAt: e.target.value })} /></Field><Field label="Where"><input className="input" value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="e.g. Dock 4" /></Field></div>
           <Field label="What happened"><textarea className="textarea" rows={5} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
+          <Field label="Photos (optional, up to 2, 4 MB each)"><input className="text-xs" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(e) => setPhotos(Array.from(e.target.files ?? []).slice(0, 2))} /></Field>
+          <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={f.anonymous} onChange={(e) => setF({ ...f, anonymous: e.target.checked })} />Report anonymously. Your name is not saved with this report, so it will not appear in your list below and managers cannot reply to you.</label>
           <p className="text-xs text-soft">If someone is hurt or in danger right now, get help first and call 911 if needed.</p>
-          <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => fileIncidentAction({ ...f, occurredAt: f.occurredAt && !isNaN(new Date(f.occurredAt).getTime()) ? new Date(f.occurredAt).toISOString() : "" }), { success: "Report filed. A manager will review it.", onOk: () => { setOpen(false); setF({ ...f, description: "", location: "" }); router.refresh(); } })}>Submit report</button>
+          <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => fileIncidentAction(payload()), { success: "Report filed. A manager will review it.", onOk: () => { setOpen(false); setF({ ...f, description: "", location: "" }); setPhotos([]); router.refresh(); } })}>Submit report</button>
         </div>
       </Modal>
     </>
@@ -126,6 +137,49 @@ function SignBox({ caseId }: { caseId: string }) {
   );
 }
 
+const QUEUE = "oo-offline-checklists";
+type Queued = { templateId: string; completedIds: string[]; handoffNotes: string; at: number };
+const readQueue = (): Queued[] => { try { return JSON.parse(localStorage.getItem(QUEUE) ?? "[]"); } catch { return []; } };
+
+/** Offline: keep the finished checklist on this device and send it when the connection returns. */
+async function queueOffline(templateId: string, completedIds: string[], handoffNotes: string): Promise<{ ok: true; data: undefined } | { ok: false; error: string }> {
+  try {
+    localStorage.setItem(QUEUE, JSON.stringify([...readQueue(), { templateId, completedIds, handoffNotes, at: Date.now() }]));
+    return { ok: true, data: undefined };
+  } catch {
+    return { ok: false, error: "Could not save offline on this device." };
+  }
+}
+
+function OfflineSync() {
+  const router = useRouter();
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => {
+    let busy = false;
+    const flush = async () => {
+      if (busy || !navigator.onLine) return;
+      busy = true;
+      let q = readQueue();
+      setWaiting(q.length);
+      while (q.length) {
+        const r = await submitChecklistAction(q[0].templateId, { completedIds: q[0].completedIds, handoffNotes: q[0].handoffNotes });
+        if (!r.ok && !/required items|not found/i.test(r.error)) break;
+        q = q.slice(1);
+        localStorage.setItem(QUEUE, JSON.stringify(q));
+        setWaiting(q.length);
+        if (r.ok) router.refresh();
+      }
+      busy = false;
+    };
+    setWaiting(readQueue().length);
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [router]);
+  if (!waiting) return null;
+  return <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">{waiting} checklist{waiting > 1 ? "s" : ""} saved on this device. {typeof navigator !== "undefined" && navigator.onLine ? "Sending…" : "They will send when you are back online."}</p>;
+}
+
 function Checklist({ t }: { t: Props["templates"][number] }) {
   const router = useRouter();
   const { exec, pending } = useAction();
@@ -136,7 +190,7 @@ function Checklist({ t }: { t: Props["templates"][number] }) {
       <div className="mb-2 flex items-center justify-between"><h3 className="font-medium">{t.title}{t.dueToday && <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs font-normal text-amber-900 dark:bg-amber-900 dark:text-amber-100">Due today{t.dueTime ? ` by ${t.dueTime}` : ""}</span>}</h3><Badge value="LOA" label={t.shiftType.replace("_", " ")} /></div>
       <div className="space-y-1.5">{t.items.map((i) => <label key={i.id} className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={done.includes(i.id)} onChange={() => setDone((d) => (d.includes(i.id) ? d.filter((x) => x !== i.id) : [...d, i.id]))} />{i.label}{i.required && <span className="text-xs text-rose-600">required</span>}</label>)}</div>
       <textarea className="textarea mt-3" rows={2} placeholder="Handoff notes for the next shift" value={notes} onChange={(e) => setNotes(e.target.value)} />
-      <button className="btn-primary mt-2" disabled={pending} onClick={() => exec(() => submitChecklistAction(t.id, { completedIds: done, handoffNotes: notes }), { success: "Checklist submitted", onOk: () => { setDone([]); setNotes(""); router.refresh(); } })}>Submit checklist</button>
+      <button className="btn-primary mt-2" disabled={pending} onClick={() => exec(() => (typeof navigator !== "undefined" && !navigator.onLine ? queueOffline(t.id, done, notes) : submitChecklistAction(t.id, { completedIds: done, handoffNotes: notes })), { success: "Checklist submitted", onOk: () => { setDone([]); setNotes(""); router.refresh(); } })}>Submit checklist</button>
     </div>
   );
 }
@@ -192,6 +246,25 @@ function ProfileChange({ phone, emergencyContact }: { phone: string; emergencyCo
   );
 }
 
+function ResponseBox({ caseId }: { caseId: string }) {
+  const router = useRouter();
+  const { exec, pending } = useAction();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  return (
+    <>
+      <button className="btn" onClick={() => setOpen(true)}>Add my response</button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Your written response">
+        <div className="space-y-3">
+          <p className="text-xs text-soft">Tell your side. This is added to the case record and your manager is notified. You can still sign or appeal separately.</p>
+          <Field label="Your response"><textarea className="textarea" rows={5} value={text} onChange={(e) => setText(e.target.value)} /></Field>
+          <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => addEmployeeResponseAction(caseId, { statement: text }), { success: "Response added", onOk: () => { setOpen(false); setText(""); router.refresh(); } })}>Submit response</button>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
 function AppealBox({ caseId, status }: { caseId: string; status?: string }) {
   const router = useRouter();
   const { exec, pending } = useAction();
@@ -237,6 +310,46 @@ function ShiftsSection({ shifts, coworkers }: { shifts: Props["shifts"]; coworke
   );
 }
 
+function Connections({ calendarUrl, sms }: { calendarUrl: string; sms: Props["sms"] }) {
+  const router = useRouter();
+  const { exec, pending } = useAction();
+  const [phone, setPhone] = useState(sms.phone);
+  const [copied, setCopied] = useState(false);
+  return (
+    <section className="card mb-6 space-y-4 p-4 text-[13px]">
+      <div>
+        <h2 className="text-sm font-semibold">Calendar feed</h2>
+        <p className="text-soft">Add your shifts and approved time off to Google, Apple or Outlook calendar. Anyone with this private link can see them, so do not share it.</p>
+        {calendarUrl ? (
+          <div className="mt-2 space-y-2">
+            <input className="input mono text-xs" readOnly value={calendarUrl} onFocus={(e) => e.currentTarget.select()} />
+            <div className="flex flex-wrap gap-2">
+              <button className="btn" onClick={() => { navigator.clipboard?.writeText(calendarUrl).then(() => setCopied(true)).catch(() => {}); }}>{copied ? "Copied" : "Copy link"}</button>
+              <button className="btn" disabled={pending} onClick={() => { if (confirm("Make a new link? The old one stops working.")) exec(() => setCalendarFeedAction(), { success: "New link created", onOk: () => router.refresh() }); }}>New link</button>
+              <button className="btn" disabled={pending} onClick={() => exec(() => setCalendarFeedAction(true), { success: "Calendar feed turned off", onOk: () => router.refresh() })}>Turn off</button>
+            </div>
+          </div>
+        ) : <button className="btn mt-2" disabled={pending} onClick={() => exec(() => setCalendarFeedAction(), { success: "Calendar link created", onOk: () => router.refresh() })}>Create my calendar link</button>}
+      </div>
+      {sms.configured && (
+        <div className="border-t border-line pt-4">
+          <h2 className="text-sm font-semibold">Text messages</h2>
+          <p className="text-soft">Get a text for new shifts, swap answers and request decisions. Message and data rates may apply. Reply STOP to opt out at any time.</p>
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <div className="min-w-48"><Field label="Mobile number"><input className="input mono" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="404-555-0142" /></Field></div>
+            {sms.optIn ? (
+              <>
+                <button className="btn" disabled={pending} onClick={() => exec(() => sendTestTextAction(), { success: "Test text sent" })}>Send a test</button>
+                <button className="btn" disabled={pending} onClick={() => exec(() => setSmsOptInAction({ optIn: false, phone }), { success: "Texts turned off", onOk: () => router.refresh() })}>Turn off</button>
+              </>
+            ) : <button className="btn-primary" disabled={pending} onClick={() => exec(() => setSmsOptInAction({ optIn: true, phone }), { success: "Texts turned on", onOk: () => router.refresh() })}>I agree, turn on texts</button>}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function Portal(p: Props) {
   const pending = p.cases.filter((c) => !c.acknowledged);
   return (
@@ -244,7 +357,9 @@ export function Portal(p: Props) {
       <PageHeader title={`Hi, ${p.name.split(" ")[0]}`} sub="Your training, shift checklists and notices.">
         <ProfileChange phone={p.phone} emergencyContact={p.emergencyContact} /><span className="mono text-[13px]">{p.staffCode}</span><Badge value={p.status} /><Badge value={p.readiness} />
       </PageHeader>
+      <OfflineSync />
       <ClockWidget openEntry={p.openEntry} />
+      <Connections calendarUrl={p.calendarUrl} sms={p.sms} />
       <ShiftsSection shifts={p.shifts} coworkers={p.coworkers} />
       {pending.length > 0 && (
         <section className="mb-6 space-y-3">
@@ -294,7 +409,7 @@ export function Portal(p: Props) {
       {p.documents.length > 0 && (
         <section className="mb-6">
           <h2 className="mb-2 text-sm font-semibold">My documents</h2>
-          <div className="card divide-y divide-line">{p.documents.map((d) => <div key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><Paperclip className="h-4 w-4 text-soft" /><a className="flex-1 font-medium text-accent" href={`/api/files/${d.fileId}`} target="_blank" rel="noreferrer">{d.title}</a><span className="text-xs text-soft">{d.category}{d.expires ? ` · expires ${fmtDate(d.expires)}` : ""}</span></div>)}</div>
+          <div className="card divide-y divide-line">{p.documents.map((d) => <div key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><Paperclip className="h-4 w-4 text-soft" /><a className="flex-1 font-medium text-accent" href={d.href} target="_blank" rel="noreferrer">{d.title}</a><span className="text-xs text-soft">{d.category}{d.expires ? ` · expires ${fmtDate(d.expires)}` : ""}</span></div>)}</div>
         </section>
       )}
       <RequestsSection items={p.requests} balances={p.balances} />
@@ -304,7 +419,7 @@ export function Portal(p: Props) {
       </section>
       <section>
         <h2 className="mb-2 text-sm font-semibold">My notices</h2>
-        {p.cases.length === 0 ? <Empty title="No infractions on file" /> : <div className="card divide-y divide-line">{p.cases.map((c) => <div key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><span className="mono">{c.caseNumber}</span><Badge value={c.severity} /><span className="flex-1">{c.policy}</span>{c.acknowledged ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Awaiting" />}<AppealBox caseId={c.id} status={p.appeals.find((a) => a.caseId === c.id)?.status} /></div>)}</div>}
+        {p.cases.length === 0 ? <Empty title="No infractions on file" /> : <div className="card divide-y divide-line">{p.cases.map((c) => <div key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><span className="mono">{c.caseNumber}</span><Badge value={c.severity} /><span className="flex-1">{c.policy}</span>{c.acknowledged ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Awaiting" />}<ResponseBox caseId={c.id} /><AppealBox caseId={c.id} status={p.appeals.find((a) => a.caseId === c.id)?.status} /></div>)}</div>}
       </section>
     </>
   );

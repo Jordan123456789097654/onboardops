@@ -26,7 +26,7 @@ const tos: Extra = {
         <li><strong>Policies:</strong> publishing, versioning and tracking employee acknowledgments.</li>
         <li><strong>Requests:</strong> leave of absence, retirement and resignation requests, with manager decisions.</li>
         <li><strong>Accounts and access:</strong> invites, magic-link sign-in, workplace staff sign-in pages, optional custom domains and account settings.</li>
-        <li><strong>Notifications:</strong> in-app alerts, email and webhooks to Discord or Slack that a Customer configures.</li>
+        <li><strong>Notifications:</strong> in-app alerts, email and webhooks to Discord, Slack or Microsoft Teams that a Customer configures.</li>
         <li><strong>Records and audit:</strong> an append-only audit log, exports and printable documents.</li>
       </ul>
       <p>Features are described in the product, in the help center and on our website. Descriptions are summaries, and the Service may behave differently in specific situations. We do not promise that any feature will remain available in its current form.</p>

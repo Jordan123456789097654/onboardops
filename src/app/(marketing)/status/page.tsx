@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui";
 import { checkAllServices } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "System Status" };
+export const metadata = { title: "System Status", description: "Live status of OnboardOps services.", alternates: { canonical: "/status" } };
 
 export default async function StatusPage() {
   const report = await checkAllServices();

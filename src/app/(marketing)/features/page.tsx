@@ -1,7 +1,7 @@
 import { CtaBand, PageShell } from "@/components/page-shell";
 import { RoleExplorer } from "@/components/home-interactive";
 
-export const metadata = { title: "Product" };
+export const metadata = { title: "Product", description: "Staff records, infractions and appeals, training and quizzes, checklists, scheduling, time off and audit logs in one workspace.", alternates: { canonical: "/features" } };
 
 const sections = [
   { id: "directory", t: "Staff directory and dossier", p: "Search and filter by department, status and readiness, then export to CSV. Each employee has one dossier with contact details, shift availability, training, infractions and an audit trail. Change status with a required reason, and print the whole dossier to PDF.", b: ["Staff IDs like EMP-1001, unique per workspace", "Statuses: onboarding, active, leave of absence, suspended, terminated", "Readiness: pending, certified, retraining required"] },
@@ -9,7 +9,7 @@ const sections = [
   { id: "infractions", t: "Infractions and internal affairs", p: "Five severities from verbal warning to termination. Points accumulate on the employee. The employee signs an acknowledgment, which confirms receipt and not agreement. Timeline notes can only be added, never edited or removed.", b: ["Evidence links and confidential manager notes", "Appeals logged on the case timeline", "Supervisors can issue verbal and written warnings only", "Written infractions assign the remedial course automatically"] },
   { id: "automation", t: "Automatic follow-through", p: "Three rules run inside a database transaction so a record is never half-updated: role changes enroll courses, passing every required course certifies the employee, and an infraction can trigger retraining, suspension or termination.", b: ["Suspend automatically at your strike-point limit", "Notifications go out only after the change is saved", "Every automatic action is written to the audit log"] },
   { id: "checklists", t: "Shift checklists", p: "Create opening, mid-shift and closing templates for each department. Employees submit them from their portal with handoff notes. Supervisors verify completed logs.", b: ["Required and optional items", "Verification by name and time", "Logs visible to managers and above"] },
-  { id: "notify", t: "Webhooks and email", p: "Connect two Discord or Slack webhooks: one for operations news and one for confidential HR events. Employees receive email for new training and infractions that need a signature.", b: ["Send a test message from Settings", "Confidential notes are never included in a notification", "Email delivery through Resend"] },
+  { id: "notify", t: "Webhooks and email", p: "Connect two Discord, Slack or Microsoft Teams webhooks: one for operations news and one for confidential HR events. Employees receive email for new training and infractions that need a signature.", b: ["Send a test message from Settings", "Confidential notes are never included in a notification", "Email delivery through Resend"] },
   { id: "audit", t: "Append-only audit log", p: "Every important action is recorded with who did it, what changed and when. Each entry's SHA-256 hash includes the previous entry's hash, so gaps and edits are detectable.", b: ["Searchable by actor, action and target", "No edit or delete actions exist", "Visible to owners and admins"] },
 ];
 

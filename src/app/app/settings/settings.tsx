@@ -5,6 +5,7 @@ import { saveDepartmentAction, saveJobRoleAction, saveSettingsAction, saveWorksp
 import { setMemberRoleAction } from "@/actions/features";
 import { FeaturesPanel } from "./features-panel";
 import { FieldsPanel } from "./fields-panel";
+import { IntegrationsPanel } from "./integrations-panel";
 import { RolesPanel } from "./roles-panel";
 import { closeWorkspaceAction, runRemindersNowAction } from "@/actions/workspace";
 import { DomainPanel } from "./domain-panel";
@@ -14,8 +15,9 @@ import { Badge, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/co
 type Dept = { id?: string; name: string; colorCode: string };
 type JobRole = { id?: string; title: string; description: string; requiredCourseIds: string[] };
 
-export function Settings({ customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
+export function Settings({ integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
   customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
+  integrations: { keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null }[]; webhookUrl: string; locations: { id: string; name: string; address: string; timezone: string }[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } };
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
   domain: { slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
@@ -38,7 +40,7 @@ export function Settings({ customFields, features, rolePerms, customRoles, custo
   return (
     <>
       <PageHeader title="Workspace Settings" sub="Webhooks, automation thresholds, departments, job roles and access." />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: "workspace", label: "Automation & Webhooks" }, { id: "structure", label: "Departments & Job Roles" }, { id: "access", label: "Access" }, { id: "roles", label: "Roles & permissions" }, { id: "features", label: "Features" }, { id: "fields", label: "Custom fields" }, { id: "domain", label: "Sign-in & domain" }, { id: "data", label: "Data & privacy" }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: "workspace", label: "Automation & Webhooks" }, { id: "structure", label: "Departments & Job Roles" }, { id: "access", label: "Access" }, { id: "roles", label: "Roles & permissions" }, { id: "features", label: "Features" }, { id: "fields", label: "Custom fields" }, { id: "integrations", label: "Integrations" }, { id: "domain", label: "Sign-in & domain" }, { id: "data", label: "Data & privacy" }]} />
       <div className={`mt-4 ${tab === "roles" ? "" : "max-w-3xl"}`}>
         {tab === "workspace" && (
           <div className="card space-y-4 p-4">
@@ -50,7 +52,7 @@ export function Settings({ customFields, features, rolePerms, customRoles, custo
             <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={s.remindersEnabled} onChange={(e) => setS({ ...s, remindersEnabled: e.target.checked })} />Send training reminders and expire certifications automatically (runs daily)</label>
             {([["operationsWebhookUrl", "Operations webhook", "operations", "Hires, certifications. Safe for a team channel."], ["confidentialWebhookUrl", "Confidential HR webhook", "confidential", "Infractions, status changes. Point this at a private channel."]] as const).map(([k, label, kind, hint]) => (
               <div key={k}>
-                <Field label={`${label} (Discord or Slack)`}><input className="input mono" placeholder="https://discord.com/api/webhooks/…" value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></Field>
+                <Field label={`${label} (Discord, Slack or Teams)`}><input className="input mono" placeholder="https://discord.com/api/webhooks/…" value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></Field>
                 <div className="mt-1 flex items-center justify-between"><span className="text-xs text-soft">{hint}</span><button className="btn" disabled={pending} onClick={() => exec(() => testWebhookAction(kind, s[k]), { success: "Test embed sent" })}>Send Test Embed</button></div>
               </div>
             ))}
@@ -85,6 +87,7 @@ export function Settings({ customFields, features, rolePerms, customRoles, custo
           </div>
         )}
         {tab === "roles" && <RolesPanel initial={rolePerms} customRoles={customRoles} customEnabled={customRolesOn} />}
+        {tab === "integrations" && <IntegrationsPanel keys={integrations.keys} webhookUrl={integrations.webhookUrl} locations={integrations.locations} sms={integrations.sms} bamboo={integrations.bamboo} />}
         {tab === "fields" && <FieldsPanel initial={customFields} />}
         {tab === "features" && <FeaturesPanel initial={features} />}
         {tab === "access" && (

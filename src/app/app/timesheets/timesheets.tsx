@@ -26,6 +26,7 @@ export function Timesheets({ entries, employees }: { entries: Entry[]; employees
   return (
     <>
       <PageHeader title="Time Clock & Timesheets" sub="Track active clock-ins and shift durations.">
+        <a className="btn" href="/api/export/payroll">Payroll hours (CSV)</a>
         <button className="btn-primary" onClick={() => setOpen(true)}>Clock in staff</button>
       </PageHeader>
       {entries.length === 0 ? (

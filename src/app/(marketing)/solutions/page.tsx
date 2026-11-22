@@ -1,6 +1,6 @@
 import { CtaBand, PageShell } from "@/components/page-shell";
 
-export const metadata = { title: "Solutions" };
+export const metadata = { title: "Solutions", description: "See how warehouses, restaurants, retail and community teams use OnboardOps to onboard, train and document.", alternates: { canonical: "/solutions" } };
 
 const uses = [
   { t: "Warehouses and logistics", d: "Forklift and dock safety training, near-miss write-ups, and opening and closing walk-throughs for every shift. This is the setup our sample workspace uses.", needs: ["Equipment certification with retake cooldowns", "Strike points that suspend at a set limit", "Dock and floor checklists verified by a lead"] },
