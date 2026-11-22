@@ -8,6 +8,9 @@ const items = [
   { id: "course", label: "Course player", url: "/app/training/course", text: "Lessons with a minimum read time, then a quiz graded on the server. Passing issues a certificate code." },
   { id: "checklists", label: "Shift checklists", url: "/app/checklists", text: "Opening, mid-shift and closing checklists per department. Supervisors verify each completed log." },
   { id: "portal", label: "Employee portal", url: "/app/my-portal", text: "What an employee sees: their own courses, notices to sign and checklists. Nothing else." },
+  { id: "schedule", label: "Week schedule", url: "/app/schedule", text: "Drag people onto shifts or move a shift to another day. Employees request swaps, and managers approve them." },
+  { id: "timeoff", label: "Time off", url: "/app/requests", text: "Vacation, sick and personal requests on a team calendar, with a warning when teammates ask for the same days." },
+  { id: "appeals", label: "Appeals", url: "/app/infractions", text: "Witness statements, the employee's own response and appeals sit on the case. Someone other than the issuer decides." },
   { id: "settings", label: "Settings", url: "/app/settings", text: "Strike thresholds, automatic retraining, departments, job roles and the two Discord or Slack webhooks." },
 ];
 

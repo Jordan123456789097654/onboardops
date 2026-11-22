@@ -6,6 +6,7 @@ import { isPartnerWorkspace } from "@/lib/workspace-meta";
 import { Badge, PageHeader } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 import { WorkspaceActions } from "./actions";
+import { ZONE } from "@/lib/spaceship-dns";
 
 export const metadata = { title: "Workspace" };
 
@@ -39,6 +40,7 @@ export default async function WorkspaceDetail({ params }: { params: { id: string
         customDomain={ws.customDomain}
         domainStatus={ws.domainStatus}
         partner={partner}
+        subdomain={ws.subdomain ? `${ws.subdomain}.${ZONE}` : null}
         legalHold={ws.legalHold}
         legalHoldReason={ws.legalHoldReason}
         locked={!!ws.suspendedAt}

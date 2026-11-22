@@ -11,6 +11,7 @@ import { resolvePlatformRole } from "@/lib/platform-role";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { emails, sendEmail } from "@/lib/email";
 import { enforceRate } from "@/lib/rate-limit";
+import { autoClaimSubdomain, subdomainHost } from "@/lib/subdomain";
 import { run, type Result } from "./_util";
 
 const loginSchema = z.object({ email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") });
@@ -89,6 +90,7 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     await sendVerification(userId, d.name, email);
     await createSession(userId);
     setActiveWorkspace(wsId);
+    await autoClaimSubdomain(wsId, slug);
     return { to: "/app/overview" };
   });
 }
@@ -258,8 +260,8 @@ export async function findWorkplaceAction(input: unknown): Promise<Result<{ url:
   return run(async () => {
     await enforceRate("findws", 30, 600);
     const q = z.string().trim().min(2, "Type at least 2 characters").max(100).parse(input).toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    const rows = await prisma.workspace.findMany({ where: { OR: [{ slug: { equals: q } }, { name: { contains: q, mode: "insensitive" } }, { customDomain: q }] }, take: 5, select: { name: true, slug: true, customDomain: true, domainStatus: true } });
-    return rows.map((w) => ({ name: w.name, url: w.customDomain && w.domainStatus === "VERIFIED" ? `https://${w.customDomain}` : `/w/${w.slug}` }));
+    const rows = await prisma.workspace.findMany({ where: { OR: [{ slug: { equals: q } }, { name: { contains: q, mode: "insensitive" } }, { customDomain: q }, { subdomain: q.replace(/\.onboardops\.org$/, "") }] }, take: 5, select: { name: true, slug: true, customDomain: true, domainStatus: true, subdomain: true, subdomainStatus: true } });
+    return rows.map((w) => ({ name: w.name, url: w.customDomain && w.domainStatus === "VERIFIED" ? `https://${w.customDomain}` : w.subdomain && w.subdomainStatus === "ACTIVE" ? `https://${subdomainHost(w.subdomain)}` : `/w/${w.slug}` }));
   });
 }
 

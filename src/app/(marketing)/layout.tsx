@@ -27,7 +27,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <Link href="/" aria-label="OnboardOps home"><Brand /></Link>
-            <p className="mt-3 max-w-xs text-[13px] text-soft">Staff records, discipline and training for shift-based teams. Built in Georgia, USA.</p>
+            <p className="mt-3 max-w-xs text-[13px] text-soft">Write it once. Prove it forever. Staff records, discipline and training for shift-based teams. Built in Georgia, USA.</p>
           </div>
           {cols.map((c) => (
             <div key={c.title}>

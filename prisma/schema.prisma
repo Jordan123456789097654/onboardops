@@ -153,6 +153,8 @@ model Workspace {
   smsFrom              String?
   bambooSubdomain      String?
   bambooKeyEnc         String?
+  subdomain            String?                    @unique
+  subdomainStatus      String                     @default("NONE")
 }
 
 model WorkspaceMember {
@@ -1006,4 +1008,11 @@ model RoadmapVote {
 
   @@unique([requestId, userId])
   @@index([requestId])
+}
+
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String   @default("home")
+  createdAt DateTime @default(now())
 }

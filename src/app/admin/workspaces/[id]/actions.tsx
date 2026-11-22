@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Lock } from "lucide-react";
+import { adminReleaseSubdomainAction, testDnsConnectionAction } from "@/actions/subdomain";
 import {
   adminConnectDomainAction,
   adminRemoveDomainAction,
@@ -14,7 +15,7 @@ import {
   unlockUserAction,
   unsuspendWorkspaceAction,
 } from "@/actions/admin";
-import { Badge, Field, Modal, useAction } from "@/components/ui";
+import { Badge, Field, Modal, useAction, useToast } from "@/components/ui";
 
 type Member = { id: string; userId: string; name: string; email: string; role: string; locked: boolean };
 type Dlg = null | "access" | "lock" | "transfer" | "domain" | "legal";
@@ -26,6 +27,7 @@ export function WorkspaceActions({
   customDomain,
   domainStatus,
   partner,
+  subdomain,
   legalHold,
   legalHoldReason,
   locked,
@@ -38,6 +40,7 @@ export function WorkspaceActions({
   customDomain: string | null;
   domainStatus: string;
   partner: boolean;
+  subdomain: string | null;
   legalHold: boolean;
   legalHoldReason: string;
   locked: boolean;
@@ -46,6 +49,7 @@ export function WorkspaceActions({
 }) {
   const router = useRouter();
   const { exec, pending } = useAction();
+  const toast = useToast();
   const [dlg, setDlg] = useState<Dlg>(null);
   const [reason, setReason] = useState("");
   const [hours, setHours] = useState(1);
@@ -86,6 +90,8 @@ export function WorkspaceActions({
           {isOwner && (locked ? <button className="btn" disabled={pending} onClick={() => exec(() => unsuspendWorkspaceAction(workspaceId), { success: "Workspace unlocked", onOk: () => router.refresh() })}>Unlock workspace</button> : <button className="btn-danger" onClick={() => setDlg("lock")}>Lock workspace…</button>)}
           {isOwner && <button className="btn" onClick={() => setDlg("transfer")}>Transfer ownership…</button>}
           {isOwner && <button className="btn" onClick={() => { setDomainInput(customDomain || ""); setDlg("domain"); }}>Connect custom domain…</button>}
+          {isOwner && <button className="btn" disabled={pending} onClick={() => exec(() => testDnsConnectionAction(), { onOk: (r) => toast("ok", `DNS connection works (${r.total} records in the zone).`) })}>Test DNS connection</button>}
+          {isOwner && subdomain && <button className="btn-danger" disabled={pending} onClick={() => { if (confirm(`Release ${subdomain}? The workspace loses this address.`)) exec(() => adminReleaseSubdomainAction(workspaceId), { success: "Address released", onOk: () => router.refresh() }); }}>Release address ({subdomain})</button>}
         </div>
       )}
 

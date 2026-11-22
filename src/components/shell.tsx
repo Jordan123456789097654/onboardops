@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Inbox, KeyRound, AlertOctagon, BarChart3, FileSignature, BookOpen, CalendarCheck, ClipboardList, LayoutDashboard, LogOut, Menu, Scale, ScrollText, Search, Settings, ShieldAlert, UserCircle, Users, Wrench } from "lucide-react";
+import { Award, CalendarDays, Clock, Library, MessageSquareText, Phone, Package, Inbox, KeyRound, AlertOctagon, BarChart3, FileSignature, BookOpen, CalendarCheck, ClipboardList, LayoutDashboard, LogOut, Menu, Scale, ScrollText, Search, Settings, ShieldAlert, UserCircle, Users, Wrench } from "lucide-react";
 import { Brand, ThemeToggle } from "./ui";
 import { NotificationBell, type Notif } from "./bell";
 import { FeedbackButton } from "./feedback-button";
@@ -15,6 +15,7 @@ export type NavItem = { href: string; label: string; group: string };
 const icons: Record<string, typeof Users> = {
   "/app/overview": LayoutDashboard, "/app/directory": Users, "/app/checklists": ClipboardList, "/app/training": BookOpen, "/app/training/compliance": CalendarCheck,
   "/app/training/builder": Wrench, "/app/infractions": ShieldAlert, "/app/audit": ScrollText, "/app/incidents": AlertOctagon, "/app/requests": Inbox, "/app/access": KeyRound, "/app/policies": FileSignature, "/app/reports": BarChart3, "/app/settings": Settings, "/app/my-portal": UserCircle,
+  "/app/roster": Phone, "/app/credentials": Award, "/app/schedule": CalendarDays, "/app/timesheets": Clock, "/app/assets": Package, "/app/handoff": MessageSquareText, "/app/templates": Library,
 };
 
 export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userName, avatarUrl, role, children }: { notifications: { unread: number; items: Notif[] }; nav: NavItem[]; workspaces: { id: string; name: string }[]; activeWorkspaceId: string; userName: string; avatarUrl?: string | null; role: string; children: React.ReactNode }) {

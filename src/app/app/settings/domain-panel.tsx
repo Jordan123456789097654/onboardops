@@ -5,8 +5,9 @@ import { Copy, Globe } from "lucide-react";
 import { checkDomainAction, connectDomainAction, removeDomainAction } from "@/actions/domain";
 import { Badge, Field, useAction, useToast } from "@/components/ui";
 import type { DomainDetails } from "@/lib/vercel-domains";
+import { AddressCard, type Address } from "./address-card";
 
-export function DomainPanel({ slug, baseUrl, domain, status, details, vercel }: { slug: string; baseUrl: string; domain: string | null; status: string; details: DomainDetails | null; vercel: boolean }) {
+export function DomainPanel({ address, slug, baseUrl, domain, status, details, vercel }: { address: Address; slug: string; baseUrl: string; domain: string | null; status: string; details: DomainDetails | null; vercel: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -20,6 +21,7 @@ export function DomainPanel({ slug, baseUrl, domain, status, details, vercel }: 
   }
   return (
     <div className="space-y-4">
+      <AddressCard a={address} />
       <div className="card p-4 text-[13px]">
         <h2 className="text-sm font-semibold">Staff sign-in link</h2>
         <p className="mt-1 text-soft">Share this with your team. It opens a sign-in page branded with your company name, for employees of {slug}.</p>

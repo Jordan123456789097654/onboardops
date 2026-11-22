@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 
+export const runtime = "edge";
 export const alt = "OnboardOps: staff records, discipline and training in one place";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -13,8 +14,8 @@ export default function OpengraphImage() {
           OnboardOps
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ fontSize: 68, fontWeight: 700, lineHeight: 1.08, maxWidth: 980 }}>Staff records, discipline and training in one place.</div>
-          <div style={{ fontSize: 30, color: "#94a3b8" }}>For shift-based teams. Free during the beta.</div>
+          <div style={{ fontSize: 68, fontWeight: 700, lineHeight: 1.08, maxWidth: 980 }}>Write it once. Prove it forever.</div>
+          <div style={{ fontSize: 30, color: "#94a3b8" }}>Staff records, discipline and training in one place. Free during the beta.</div>
         </div>
         <div style={{ fontSize: 26, color: "#64748b" }}>onboardops.org</div>
       </div>

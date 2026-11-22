@@ -103,6 +103,14 @@ async function manualCheck(domain: string, base: DomainDetails): Promise<DomainD
   }
 }
 
+/** Adds one domain to the Vercel project. Already-added (409) counts as success. */
+export async function addProjectDomain(domain: string): Promise<{ ok: boolean; error?: string }> {
+  if (!vercelConfigured()) return { ok: true };
+  const r = await call("POST", `/v10/projects/${project()}/domains`, { name: domain });
+  if (r.ok || r.status === 409) return { ok: true };
+  return { ok: false, error: (r.json?.error?.message as string | undefined) ?? `Vercel responded ${r.status}` };
+}
+
 export async function removeDomain(domain: string) {
   if (!vercelConfigured()) return { ok: true };
   const r = await call("DELETE", `/v9/projects/${project()}/domains/${encodeURIComponent(domain)}`);

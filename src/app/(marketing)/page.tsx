@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { Sandbox } from "@/components/sandbox";
 import { HeroToasts } from "@/components/mocks";
 import { Shot } from "@/components/shot";
 import { Reveal } from "@/components/motion";
-import { CompareToggle, FlowStepper } from "@/components/home-interactive";
+import dynamic from "next/dynamic";
+import { CompareToggle, FlowStepper, RoleExplorer } from "@/components/home-interactive";
+import { BetaBox, FaqBlock, SecurityStrip, WhatsNew } from "@/components/home-sections";
+import { StickyCta } from "@/components/sticky-cta";
+import { WaitlistForm } from "@/components/waitlist-form";
 
-const headline = "Staff records, training and discipline in one place.".split(" ");
+const Sandbox = dynamic(() => import("@/components/sandbox").then((m) => m.Sandbox), { loading: () => <div className="card h-72 animate-pulse" aria-hidden /> });
+
+const headline = "Write it once. Prove it forever.".split(" ");
 const customers = [
   { name: "RetailNetwork", logo: "/retailnetwork.jpg" },
   { name: "Roleflow", logo: "/roleflow.png" },
@@ -24,13 +29,14 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-4 pt-16 sm:pt-24">
         <div className="max-w-3xl">
           <p className="anim-fade-up mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[13px] text-soft"><span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />Now in beta. Free for early teams.</p>
-          <h1 className="text-[2.6rem] font-semibold leading-[1.05] sm:text-6xl" aria-label="Staff records, training and discipline in one place.">
+          <h1 className="text-[2.6rem] font-semibold leading-[1.05] sm:text-6xl" aria-label="Write it once. Prove it forever.">
             {headline.map((w, i) => <span key={i} aria-hidden className="anim-fade-up inline-block" style={{ "--i": i + 1 } as React.CSSProperties}>{w}&nbsp;</span>)}
           </h1>
-          <p className="lead anim-fade-up mt-6 max-w-2xl" style={{ "--d": "650ms" } as React.CSSProperties}>One employee record from day-one onboarding to disciplinary audit trails. Stop running HR out of spreadsheets and training out of group chats.</p>
+          <p className="lead anim-fade-up mt-6 max-w-2xl" style={{ "--d": "650ms" } as React.CSSProperties}><strong className="font-semibold text-ink">Staff records, training and discipline in one place.</strong> One employee record from day-one onboarding to disciplinary audit trails. Stop running HR out of spreadsheets and training out of group chats.</p>
+          <p className="anim-fade-up mt-2 max-w-2xl text-[13px] text-soft" style={{ "--d": "720ms" } as React.CSSProperties}>A tamper-evident audit log keeps the history honest for as long as you keep your workspace.</p>
           <div className="anim-fade-up mt-8 flex flex-wrap items-center gap-3" style={{ "--d": "800ms" } as React.CSSProperties}>
-            <Link href="/register" className="btn-primary group !h-11 !px-6 !text-sm">Open Web App <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></Link>
-            <Link href="/why" className="btn !h-11 !px-6 !text-sm">Why OnboardOps</Link>
+            <Link href="/register" className="btn-primary group !h-11 !px-6 !text-sm">Create a workspace <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></Link>
+            <a href="#how" className="btn !h-11 !px-6 !text-sm">See how it works</a>
           </div>
         </div>
         <div className="relative mt-14">
@@ -42,7 +48,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-4 pt-20" aria-label="Customers">
         <Reveal className="py-6">
           <p className="mb-8 text-center text-sm font-medium tracking-wide text-soft">
-            Customers that trust us
+            Teams using OnboardOps
           </p>
           <div className="marquee-mask relative overflow-hidden py-2">
             <div className="marquee-track items-center gap-12 pr-12">
@@ -69,7 +75,7 @@ export default function Home() {
         </Reveal>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 pt-24">
+      <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-4 pt-24">
         <Reveal className="max-w-2xl"><p className="eyebrow">How it works</p><h2 className="section-title mt-2">From the first shift to the last write-up</h2><p className="lead mt-3 !text-base">Click through. These are real screens from the app.</p></Reveal>
         <Reveal delay={80} className="mt-8"><FlowStepper /></Reveal>
       </section>
@@ -79,6 +85,13 @@ export default function Home() {
           <Reveal><p className="eyebrow">Why teams switch</p><h2 className="section-title mt-2">Most small operations run on fragile tools</h2><p className="lead mt-3 !text-base">If a manager leaves, so does the history. Flip the switch to compare.</p></Reveal>
           <Reveal delay={80}><CompareToggle /></Reveal>
         </div>
+      </section>
+
+      <WhatsNew />
+
+      <section className="mx-auto max-w-6xl px-4 pt-24">
+        <Reveal className="max-w-2xl"><p className="eyebrow">Who sees what</p><h2 className="section-title mt-2">The right access for every role</h2><p className="lead mt-3 !text-base">Pick a role to see its menu and what it can do.</p></Reveal>
+        <Reveal delay={80} className="mt-8"><RoleExplorer /></Reveal>
       </section>
 
       <section className="mt-24 border-y border-line bg-muted">
@@ -97,6 +110,10 @@ export default function Home() {
         <Reveal delay={120} className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[13px]"><Link href="/why" className="inline-flex items-center gap-1 text-accent">Why OnboardOps <ArrowRight className="h-3.5 w-3.5" /></Link><Link href="/features" className="inline-flex items-center gap-1 text-accent">Everything in the product <ArrowRight className="h-3.5 w-3.5" /></Link></Reveal>
       </section>
 
+      <SecurityStrip />
+      <BetaBox />
+      <FaqBlock />
+
       <section className="mx-auto mt-24 max-w-6xl px-4">
         <Reveal className="rounded-xl border border-line bg-[#0B1220] px-8 py-14 text-white sm:px-14">
           <h2 className="max-w-xl text-3xl font-semibold leading-tight sm:text-4xl">Put your first team on one record.</h2>
@@ -107,6 +124,15 @@ export default function Home() {
           </div>
         </Reveal>
       </section>
+
+      <section className="mx-auto max-w-6xl px-4 pt-14">
+        <Reveal className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line p-6">
+          <div><h2 className="text-lg font-semibold">Not ready yet?</h2><p className="mt-1 text-[13px] text-soft">Leave your email and we will tell you about big releases. No spam, and we use it for nothing else.</p></div>
+          <WaitlistForm />
+        </Reveal>
+      </section>
+      <div className="h-16 sm:hidden" aria-hidden />
+      <StickyCta />
     </>
   );
 }

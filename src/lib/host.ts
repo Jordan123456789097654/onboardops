@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { prisma } from "./prisma";
 import { cleanHost, isMainHost } from "./host-shared";
+import { ZONE } from "./spaceship-dns";
 
 export function requestHost() {
   const h = headers();
@@ -15,6 +16,11 @@ export function onCustomHost() {
 export async function workspaceForHost(host: string) {
   if (!host || isMainHost(host)) return null;
   if (host.endsWith(".localhost")) return prisma.workspace.findUnique({ where: { slug: host.slice(0, -".localhost".length) } });
+  if (host.endsWith(`.${ZONE}`)) {
+    const sub = host.slice(0, -`.${ZONE}`.length);
+    const bySub = sub && !sub.includes(".") ? await prisma.workspace.findUnique({ where: { subdomain: sub } }) : null;
+    if (bySub) return bySub;
+  }
   return prisma.workspace.findFirst({ where: { customDomain: { equals: host, mode: "insensitive" } } });
 }
 

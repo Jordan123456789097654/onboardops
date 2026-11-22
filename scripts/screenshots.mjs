@@ -39,7 +39,10 @@ for (const theme of ["light", "dark"]) {
   await shot(page, "directory", theme, "/app/directory");
   await shot(page, "compliance", theme, "/app/training/compliance");
   await shot(page, "infractions", theme, "/app/infractions", async (p) => { await p.click("tbody tr"); await p.waitForTimeout(600); });
-  await shot(page, "audit", theme, "/app/audit");
+  await shot(page, "audit", theme, "/app/audit", async (p) => { await p.click("text=Verify chain"); await p.waitForTimeout(1500); });
+  await shot(page, "schedule", theme, "/app/schedule");
+  await shot(page, "timeoff", theme, "/app/requests", async (p) => { await p.click("button:has-text('Calendar')"); await p.waitForTimeout(600); });
+  await shot(page, "appeals", theme, "/app/infractions", async (p) => { await p.click("tbody tr"); await p.waitForTimeout(700); await p.evaluate(() => { for (const e of document.querySelectorAll("*")) { if (e.closest("[role=dialog]") && e.scrollHeight > e.clientHeight + 50 && getComputedStyle(e).overflowY !== "visible") e.scrollTop = e.scrollHeight; } }); await p.waitForTimeout(500); });
   await shot(page, "checklists", theme, "/app/checklists");
   await shot(page, "settings", theme, "/app/settings");
   await shot(page, "training", theme, "/app/training");

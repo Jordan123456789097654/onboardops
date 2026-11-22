@@ -19,7 +19,7 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
   customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
   integrations: { keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null }[]; webhookUrl: string; locations: { id: string; name: string; address: string; timezone: string }[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } };
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
-  domain: { slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
+  domain: { address: { enabled: boolean; slug: string; status: string; zone: string; isOwner: boolean }; slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
   ws: { decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
   departments: Required<Dept>[]; roles: Required<JobRole>[]; courses: { id: string; title: string }[]; members: { id: string; name: string; email: string; role: string; customRoleId: string | null }[];
@@ -78,7 +78,7 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
             </section>
           </div>
         )}
-        {tab === "domain" && <DomainPanel slug={domain.slug} baseUrl={domain.baseUrl} domain={domain.name} status={domain.status} details={domain.details} vercel={domain.vercel} />}
+        {tab === "domain" && <DomainPanel address={domain.address} slug={domain.slug} baseUrl={domain.baseUrl} domain={domain.name} status={domain.status} details={domain.details} vercel={domain.vercel} />}
         {tab === "data" && (
           <div className="space-y-4">
             <div className="card p-4 text-[13px]"><h2 className="text-sm font-semibold">Export everything</h2><p className="mt-1 text-soft">A JSON file with employees, courses, enrollments, cases (including confidential notes), checklists, policies, incident reports, reviews and the audit log. Uploaded files are listed but not included. Each export is recorded in the audit log.</p><a className="btn-primary mt-3" href="/api/export/workspace">Download workspace export</a></div>

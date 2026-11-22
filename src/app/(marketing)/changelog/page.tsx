@@ -12,6 +12,8 @@ const entries = [
       "Payroll hours export (CSV) from timesheets, and an Email me this summary button on Reports.",
       "Locations: add sites or stores and assign employees to them.",
       "Installable app (add to home screen) with an offline page. Checklists finished without a connection are saved on the device and sent when you are back online.",
+      "Every workspace can get its own address, like yourcompany.onboardops.org, created automatically. Owners can pick or change the name in Settings.",
+      "New homepage: a new slogan, a security strip, role views, a beta explainer, a short FAQ, a waitlist and a phone-friendly sign-up button.",
       "New blog with practical HR guides, a public roadmap where signed-in users can vote, and an upgraded Security page with a printable summary.",
       "Microsoft Teams webhooks alongside Discord and Slack.",
       "Attach employee documents and policies by share link from Google Drive, SharePoint or OneDrive, Dropbox or Box, without uploading a copy.",
