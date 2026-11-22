@@ -10,7 +10,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
       const last = Number(sessionStorage.getItem(key) || "0");
       if (Date.now() - last > 10000) {
         sessionStorage.setItem(key, String(Date.now()));
-        window.location.reload();
+        window.dispatchEvent(new Event("oo:update"));
       }
     }
   }, [error]);

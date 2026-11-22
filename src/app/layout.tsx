@@ -3,6 +3,7 @@ import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui";
 import { PwaRegister } from "@/components/pwa";
+import { UpdateOverlay } from "@/components/update-overlay";
 import { MaintenanceGate } from "@/components/maintenance-gate";
 import { getAnnouncementState, getMaintenanceState } from "@/lib/maintenance";
 import { getStaff } from "@/lib/platform";
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <PwaRegister />
+        <UpdateOverlay />
         <ToastProvider>
           <MaintenanceGate maintenance={maintenance} announcement={announcement} isOwner={isOwner}>
             {children}

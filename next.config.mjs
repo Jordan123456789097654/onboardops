@@ -1,5 +1,8 @@
 const isDev = process.env.NODE_ENV !== "production";
 
+// A value that is the same for every process of one deployment, so open tabs can tell when a new one is live.
+const BUILD_ID = process.env.BUILD_ID_OVERRIDE || process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || "local";
+
 // Next.js needs inline scripts and styles for hydration, so a nonce-less CSP must allow 'unsafe-inline'.
 // Everything else is locked to this site: no framing, no plugins, no foreign form posts or base tags.
 const csp = [
@@ -30,6 +33,7 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
