@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { ALL_AREAS, type MaintArea } from "./maintenance-areas";
 
 export const MAINTENANCE_ROW_ID = "__platform_maintenance__";
 export const ANNOUNCEMENT_ROW_ID = "__platform_announcement__";
@@ -9,6 +10,12 @@ export type MaintenanceState = {
   enabled: boolean;
   manualEnabled: boolean;
   scheduledActive: boolean;
+  /** Which areas are locked while enabled. */
+  areas: MaintArea[];
+  /** How many minutes before a window starts the notice banner begins (it also shows earlier if a window is scheduled further out, with a longer countdown). */
+  noticeMinutes: number;
+  /** A future window is scheduled and has not started. */
+  upcoming: boolean;
   message: string;
   eta: string | null;
   startsAt: string | null;
@@ -44,7 +51,7 @@ export async function getMaintenanceState(): Promise<MaintenanceState> {
   try {
     const row = await prisma.jobRun.findUnique({ where: { id: MAINTENANCE_ROW_ID } });
     if (!row) {
-      return { enabled: false, manualEnabled: false, scheduledActive: false, message: DEFAULT_MESSAGE, eta: null, startsAt: null, endsAt: null, updatedBy: null, updatedAt: null };
+      return { enabled: false, manualEnabled: false, scheduledActive: false, areas: ALL_AREAS, noticeMinutes: 60, upcoming: false, message: DEFAULT_MESSAGE, eta: null, startsAt: null, endsAt: null, updatedBy: null, updatedAt: null };
     }
     const s = (row.summary ?? {}) as Record<string, unknown>;
     const startsAt = typeof s.startsAt === "string" && s.startsAt.trim() ? s.startsAt.trim() : null;
@@ -68,12 +75,18 @@ export async function getMaintenanceState(): Promise<MaintenanceState> {
     }
 
     const enabled = manualEnabled || scheduledActive;
+    const upcoming = !enabled && !isNaN(startMs) && startMs > now && !(!isNaN(endMs) && now >= endMs);
+    const areas = Array.isArray(s.areas) ? ALL_AREAS.filter((a) => (s.areas as unknown[]).includes(a)) : ALL_AREAS;
+    const noticeMinutes = typeof s.noticeMinutes === "number" && s.noticeMinutes >= 0 && s.noticeMinutes <= 10080 ? Math.round(s.noticeMinutes) : 60;
     const autoEta = !s.eta && endsAt && !isNaN(endMs) && endMs > now ? new Date(endMs).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }) : null;
 
     return {
       enabled,
       manualEnabled,
       scheduledActive,
+      areas: areas.length ? areas : ALL_AREAS,
+      noticeMinutes,
+      upcoming,
       message: typeof s.message === "string" && s.message.trim() ? s.message.trim() : DEFAULT_MESSAGE,
       eta: typeof s.eta === "string" && s.eta.trim() ? s.eta.trim() : autoEta,
       startsAt,
@@ -82,7 +95,7 @@ export async function getMaintenanceState(): Promise<MaintenanceState> {
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : row.createdAt.toISOString(),
     };
   } catch {
-    return { enabled: false, manualEnabled: false, scheduledActive: false, message: DEFAULT_MESSAGE, eta: null, startsAt: null, endsAt: null, updatedBy: null, updatedAt: null };
+    return { enabled: false, manualEnabled: false, scheduledActive: false, areas: ALL_AREAS, noticeMinutes: 60, upcoming: false, message: DEFAULT_MESSAGE, eta: null, startsAt: null, endsAt: null, updatedBy: null, updatedAt: null };
   }
 }
 
@@ -92,6 +105,8 @@ export async function saveMaintenanceState(input: {
   eta?: string | null;
   startsAt?: string | null;
   endsAt?: string | null;
+  areas?: MaintArea[];
+  noticeMinutes?: number;
   updatedBy: string;
 }): Promise<MaintenanceState> {
   const message = input.message?.trim() || DEFAULT_MESSAGE;
@@ -99,13 +114,25 @@ export async function saveMaintenanceState(input: {
   const startsAt = input.startsAt?.trim() || null;
   const endsAt = input.endsAt?.trim() || null;
   const updatedAt = new Date().toISOString();
-  const summary = { enabled: input.enabled, message, eta, startsAt, endsAt, updatedBy: input.updatedBy, updatedAt };
+  const areas = (input.areas ?? ALL_AREAS).filter((a) => ALL_AREAS.includes(a));
+  const noticeMinutes = Math.min(10080, Math.max(0, Math.round(input.noticeMinutes ?? 60)));
+  const summary = { enabled: input.enabled, message, eta, startsAt, endsAt, areas: areas.length ? areas : ALL_AREAS, noticeMinutes, updatedBy: input.updatedBy, updatedAt };
+  cached = null;
   await prisma.jobRun.upsert({
     where: { id: MAINTENANCE_ROW_ID },
     create: { id: MAINTENANCE_ROW_ID, name: "platform:maintenance", ok: input.enabled, summary, durationMs: 0 },
     update: { ok: input.enabled, summary },
   });
   return getMaintenanceState();
+}
+
+let cached: { at: number; v: MaintenanceState } | null = null;
+/** The same state, kept for a few seconds. For guards that run on every request or action. */
+export async function getMaintenanceCached(): Promise<MaintenanceState> {
+  if (cached && Date.now() - cached.at < 5000) return cached.v;
+  const v = await getMaintenanceState();
+  cached = { at: Date.now(), v };
+  return v;
 }
 
 export async function getAnnouncementState(): Promise<AnnouncementState> {

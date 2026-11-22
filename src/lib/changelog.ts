@@ -1,10 +1,30 @@
-export type ChangelogEntry = { v: string; date: string; items: string[]; highlight?: string };
+export type ChangelogEntry = {
+  v: string; date: string; items: string[]; highlight?: string;
+  /** Up to three short lines for the update screen. If left out, they are taken from the first items. */
+  bullets?: string[];
+  /** Set on a release people must not skip, such as a security fix. Open tabs update right away instead of waiting. */
+  required?: boolean;
+};
 
 export const entries: ChangelogEntry[] = [
+  {
+    v: "0.12.0",
+    date: "2026-11-22",
+    highlight: "Maintenance notices, per-area maintenance and release notes in the app",
+    bullets: ["Scheduled maintenance now shows a live countdown banner first", "Maintenance can cover just one area, such as the workspace app or the API", "New versions wait until you finish typing, and a What's new button lists releases"],
+    items: [
+      "Scheduled maintenance now shows a countdown banner to everyone affected, from the moment it is scheduled, and starts and ends on its own. The maintenance page shows a live countdown to the expected return.",
+      "Maintenance can cover a single area: the website, the workspace app, the employee portal or the API. Everything else keeps working. While an area is down, changes made from it are paused and the API answers that it is under maintenance.",
+      "New versions no longer interrupt you. A small Update available bar appears, and the page refreshes by itself only when you have stopped for a moment and have nothing unsaved. Security updates still apply right away.",
+      "The update screen lists a few of the changes, with a link to the full changelog.",
+      "A What's new button in the app header shows the latest releases, with a dot when there is a version you have not opened yet.",
+    ],
+  },
   {
     v: "0.11.1",
     date: "2026-11-22",
     highlight: "New video tutorial for setting up your workspace",
+    bullets: ["A two minute video tutorial for setting up a workspace", "Linked from the help center, every help article and the setup wizard"],
     items: [
       "A two minute video tutorial now walks through setting up a workspace: the setup wizard, inviting staff, your first course, discipline rules, Discord and Teams alerts, features and roles, and your own domain. Chapters are clickable. The video plays from YouTube only when you press play, and it is linked from the help center, every help article, the footer, the launch checklist and the end of the setup wizard.",
     ],
@@ -92,4 +112,16 @@ export function latestHighlight(): string {
   const first = e.items[0] ?? "";
   const cut = first.split(/[:.]/)[0].trim();
   return cut.length > 90 ? `${cut.slice(0, 87)}...` : cut;
+}
+
+const oneLine = (t: string) => {
+  const sentence = t.split(/(?<=[.!?])\s/)[0].trim();
+  return sentence.length > 120 ? `${sentence.slice(0, 117).trimEnd()}...` : sentence;
+};
+
+/** What the update screen, the update bar and the in-app release notes show about the newest release. */
+export function latestRelease() {
+  const e = entries[0];
+  const bullets = (e?.bullets?.length ? e.bullets : (e?.items ?? []).slice(0, 3).map(oneLine)).slice(0, 3);
+  return { version: e?.v ?? "", date: e?.date ?? "", highlight: latestHighlight(), bullets, required: !!e?.required };
 }

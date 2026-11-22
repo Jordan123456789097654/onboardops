@@ -2,8 +2,11 @@ import { getMaintenanceState } from "@/lib/maintenance";
 
 export const dynamic = "force-dynamic";
 
-/** Is the site still in maintenance mode? The maintenance screen polls this and reloads when it turns off. */
+/** Public maintenance status. The lock screen and the notice banner poll this, so the browser can switch on its own. */
 export async function GET() {
   const m = await getMaintenanceState().catch(() => null);
-  return Response.json({ enabled: m ? m.enabled : true }, { headers: { "Cache-Control": "no-store, max-age=0" } });
+  const body = m
+    ? { enabled: m.enabled, upcoming: m.upcoming, areas: m.areas, noticeMinutes: m.noticeMinutes, message: m.message, eta: m.eta, startsAt: m.startsAt, endsAt: m.endsAt, now: Date.now() }
+    : { enabled: false, upcoming: false, areas: [], noticeMinutes: 60, message: "", eta: null, startsAt: null, endsAt: null, now: Date.now() };
+  return Response.json(body, { headers: { "Cache-Control": "no-store, max-age=0" } });
 }

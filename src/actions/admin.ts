@@ -290,9 +290,13 @@ export async function setMaintenanceModeAction(input: unknown) {
         eta: z.string().trim().max(120).optional(),
         startsAt: z.string().trim().max(60).optional().nullable(),
         endsAt: z.string().trim().max(60).optional().nullable(),
+        areas: z.array(z.enum(["site", "app", "portal", "api"])).min(1, "Pick at least one area").optional(),
+        noticeMinutes: z.number().int().min(0).max(10080).optional(),
       })
       .parse(input);
     const state = await saveMaintenanceState({
+      areas: d.areas,
+      noticeMinutes: d.noticeMinutes,
       enabled: d.enabled,
       message: d.message,
       eta: d.eta,
@@ -306,9 +310,9 @@ export async function setMaintenanceModeAction(input: unknown) {
         targetType: "Platform",
         targetId: "maintenance",
         summary: d.enabled
-          ? `Maintenance mode ENABLED (${state.message.slice(0, 80)})`
+          ? `Maintenance mode ENABLED for ${state.areas.join(", ")} (${state.message.slice(0, 80)})`
           : d.startsAt
-            ? `Maintenance scheduled (${d.startsAt}${d.endsAt ? ` → ${d.endsAt}` : ""})`
+            ? `Maintenance scheduled for ${state.areas.join(", ")} (${d.startsAt}${d.endsAt ? ` → ${d.endsAt}` : ""})`
             : "Maintenance mode DISABLED (site unlocked)",
       })
     );

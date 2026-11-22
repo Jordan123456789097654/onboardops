@@ -32,6 +32,12 @@ export function UpdateOverlay() {
   const [mode, setMode] = useState<"off" | "reload" | "preview">("off");
   const [t, setT] = useState(0);
   const [news, setNews] = useState("");
+  const [bullets, setBullets] = useState<string[]>([]);
+  // A newer version is waiting. We show a bar and only reload once the person is idle with nothing unsaved.
+  const [pending, setPending] = useState<{ version: string; news: string; bullets: string[] } | null>(null);
+  const [snoozeUntil, setSnoozeUntil] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const lastAct = useRef(Date.now());
   const running = useRef(false);
   const noPrint = !path?.startsWith("/print");
 
@@ -40,8 +46,9 @@ export function UpdateOverlay() {
     running.current = true;
     setT(0);
     setNews("");
+    setBullets([]);
     setMode(m);
-    fetch("/api/version", { cache: "no-store" }).then((r) => r.json()).then((j: { whatsNew?: string }) => setNews(j.whatsNew ?? "")).catch(() => {});
+    fetch("/api/version", { cache: "no-store" }).then((r) => r.json()).then((j: { whatsNew?: string; bullets?: string[] }) => { setNews(j.whatsNew ?? ""); setBullets(j.bullets ?? []); }).catch(() => {});
     document.body.style.overflow = "hidden";
     const began = Date.now();
     const tick = window.setInterval(() => setT(Math.min(SECONDS, (Date.now() - began) / 1000)), 80);
@@ -58,28 +65,33 @@ export function UpdateOverlay() {
   }, []);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("preview-update")) start("preview");
+    const q = new URLSearchParams(window.location.search);
+    if (q.has("preview-update")) start("preview");
+    if (q.has("preview-update-bar")) setPending({ version: "preview", news: "Stronger encryption and new tools", bullets: ["Sensitive records are encrypted with a key for each workspace", "A What's new button in the app"] });
     const onEvent = () => { if (!window.location.pathname.startsWith("/print")) start("reload"); };
     window.addEventListener("oo:update", onEvent);
     if (process.env.NODE_ENV !== "production" || !noPrint) return () => window.removeEventListener("oo:update", onEvent);
 
     let busy = false;
-    const read = async () => {
+    type V = { id?: string; version?: string; whatsNew?: string; bullets?: string[]; required?: boolean };
+    const read = async (): Promise<V | null> => {
       try {
         const r = await fetch("/api/version", { cache: "no-store" });
-        const j = (await r.json()) as { id?: string };
-        return j.id ?? null;
+        return (await r.json()) as V;
       } catch { return null; }
     };
     const check = async () => {
       if (busy || running.current || document.visibilityState === "hidden") return;
       busy = true;
-      const id = await read();
-      if (id && id !== BAKED) {
+      const v = await read();
+      if (v?.id && v.id !== BAKED) {
         // Confirm once, so a deploy that is still rolling out does not flicker.
         await new Promise((res) => setTimeout(res, 3000));
         const again = await read();
-        if (again && again !== BAKED) start("reload");
+        if (again?.id && again.id !== BAKED) {
+          if (again.required) start("reload");
+          else setPending({ version: again.version ?? "", news: again.whatsNew ?? "", bullets: again.bullets ?? [] });
+        }
       }
       busy = false;
     };
@@ -90,7 +102,51 @@ export function UpdateOverlay() {
     return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", check); window.removeEventListener("oo:update", onEvent); };
   }, [start, noPrint]);
 
-  if (mode === "off") return null;
+  // Track whether the person is active and whether a form has unsaved typing.
+  useEffect(() => {
+    const act = () => { lastAct.current = Date.now(); };
+    const edit = (e: Event) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.matches?.("input, textarea, select") || t.isContentEditable)) setDirty(true);
+    };
+    const sent = () => window.setTimeout(() => setDirty(false), 1500);
+    for (const ev of ["keydown", "pointerdown", "touchstart", "wheel", "scroll"]) window.addEventListener(ev, act, { passive: true, capture: true });
+    document.addEventListener("input", edit, true);
+    document.addEventListener("submit", sent, true);
+    return () => {
+      for (const ev of ["keydown", "pointerdown", "touchstart", "wheel", "scroll"]) window.removeEventListener(ev, act, { capture: true } as EventListenerOptions);
+      document.removeEventListener("input", edit, true);
+      document.removeEventListener("submit", sent, true);
+    };
+  }, []);
+  useEffect(() => { setDirty(false); }, [path]);
+  // Apply the waiting update when the person has been idle for 30 seconds with nothing unsaved.
+  useEffect(() => {
+    if (!pending || pending.version === "preview" || !noPrint) return;
+    const id = window.setInterval(() => {
+      if (running.current || dirty || Date.now() < snoozeUntil) return;
+      if (Date.now() - lastAct.current >= 30000) start("reload");
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [pending, dirty, snoozeUntil, start, noPrint]);
+
+  if (mode === "off") {
+    if (!pending || !noPrint || Date.now() < snoozeUntil) return null;
+    return (
+      <div role="status" aria-live="polite" className="no-print fixed bottom-4 right-4 z-[9990] w-[min(92vw,360px)] rounded-lg border border-line bg-surface p-4 shadow-lg">
+        <div className="flex items-center gap-2"><span className="h-2 w-2 bg-accent" aria-hidden /><span className="text-sm font-semibold">A new version is ready</span>{pending.version && pending.version !== "preview" && <span className="mono ml-auto text-[11px] text-soft">v{pending.version}</span>}</div>
+        {pending.bullets.length > 0 ? (
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13px] text-soft">{pending.bullets.slice(0, 2).map((b) => <li key={b}>{b}</li>)}</ul>
+        ) : pending.news ? <p className="mt-2 text-[13px] text-soft">{pending.news}.</p> : null}
+        <p className="mt-2 text-[12px] text-soft">{dirty ? "You have unsaved changes, so we will wait. Update when you are done." : "This page updates on its own when you stop for a moment."}</p>
+        <div className="mt-3 flex items-center gap-2">
+          <button type="button" className="btn-primary !h-8 !text-xs" onClick={() => { if (pending.version === "preview") { setPending(null); return; } start("reload"); }}>Update now</button>
+          <button type="button" className="btn !h-8 !text-xs" onClick={() => setSnoozeUntil(Date.now() + 15 * 60000)}>Later</button>
+          <a href="/changelog" className="ml-auto text-[12px] text-accent underline underline-offset-2" target="_blank" rel="noopener noreferrer">What&apos;s new</a>
+        </div>
+      </div>
+    );
+  }
   const frac = t / SECONDS;
   const pct = Math.round(frac * 100);
   const stepLen = SECONDS / STEPS.length;
@@ -128,7 +184,12 @@ export function UpdateOverlay() {
             </svg>
             <div className="min-w-0 flex-1">
               <div className="mono text-[11px] uppercase tracking-wider text-soft">What&apos;s new</div>
-              <div className="mt-1 text-[13px] leading-snug">{news ? `New: ${news.charAt(0).toLowerCase()}${news.slice(1)}.` : "Loading the details of this update."}</div>
+              {bullets.length > 0 ? (
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px] leading-snug">{bullets.slice(0, 3).map((b) => <li key={b}>{b}</li>)}</ul>
+              ) : (
+                <div className="mt-1 text-[13px] leading-snug">{news ? `New: ${news.charAt(0).toLowerCase()}${news.slice(1)}.` : "Loading the details of this update."}</div>
+              )}
+              <a href="/changelog" target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-block text-[12px] text-accent underline underline-offset-2">See the full changelog</a>
             </div>
           </div>
 

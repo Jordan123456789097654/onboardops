@@ -7,6 +7,7 @@ import { Award, CalendarDays, Clock, Library, MessageSquareText, Phone, Package,
 import { Brand, ThemeToggle } from "./ui";
 import { NotificationBell, type Notif } from "./bell";
 import { FeedbackButton } from "./feedback-button";
+import { WhatsNewButton } from "./whats-new-button";
 import { logoutAction, switchWorkspaceAction } from "@/actions/auth";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +102,7 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userN
           <button className="btn !px-2 lg:hidden" onClick={() => setMenu(true)} aria-label="Open menu"><Menu className="h-4 w-4" /></button>
           <span className="hidden text-[13px] text-soft sm:block">{current?.group} <span className="mx-1">/</span> <span className="text-ink">{current?.label}</span></span>
           <button onClick={() => setPalette(true)} className="btn ml-auto w-56 justify-between text-soft sm:w-72"><span className="flex items-center gap-2"><Search className="h-3.5 w-3.5" />Jump to…</span><kbd className="mono text-[10px]">Ctrl K</kbd></button>
+          <WhatsNewButton />
           <FeedbackButton />
           <NotificationBell items={notifications.items} unread={notifications.unread} />
           <ThemeToggle />

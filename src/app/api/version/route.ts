@@ -1,8 +1,9 @@
-import { latestHighlight } from "@/lib/changelog";
+import { latestRelease } from "@/lib/changelog";
 
 export const dynamic = "force-dynamic";
 
-/** The deployment serving this request, and a one-line note about its newest release. Open tabs compare the id with the one they loaded. */
+/** The deployment serving this request and a few lines about its newest release. Open tabs compare the id with the one they loaded. */
 export async function GET() {
-  return Response.json({ id: process.env.NEXT_PUBLIC_BUILD_ID ?? "local", whatsNew: latestHighlight() }, { headers: { "Cache-Control": "no-store, max-age=0" } });
+  const r = latestRelease();
+  return Response.json({ id: process.env.NEXT_PUBLIC_BUILD_ID ?? "local", version: r.version, whatsNew: r.highlight, bullets: r.bullets, required: r.required }, { headers: { "Cache-Control": "no-store, max-age=0" } });
 }

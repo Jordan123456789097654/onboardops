@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Brand, ThemeToggle } from "./ui";
 import type { MaintenanceState } from "@/lib/maintenance";
+import { ALL_AREAS, areasSentence, fmtLeft, lockedFor } from "@/lib/maintenance-areas";
 
 const EVERY = 30;
 const fmt = (iso: string | null) => {
@@ -21,9 +22,9 @@ export function MaintenanceScreen({ m, isOwner, onPreview, preview }: { m: Maint
     setChecking(true);
     try {
       const r = await fetch("/api/maintenance", { cache: "no-store" });
-      const j = (await r.json()) as { enabled?: boolean };
+      const j = (await r.json()) as { enabled?: boolean; areas?: MaintenanceState["areas"] };
       setLastCheck(new Date());
-      if (j.enabled === false && !preview) { window.location.reload(); return; }
+      if (!preview && !lockedFor({ enabled: j.enabled !== false, areas: j.areas?.length ? j.areas : ALL_AREAS }, window.location.pathname)) { window.location.reload(); return; }
     } catch { /* offline: try again later */ }
     setChecking(false);
     setLeft(EVERY);
@@ -35,12 +36,18 @@ export function MaintenanceScreen({ m, isOwner, onPreview, preview }: { m: Maint
   }, []);
   useEffect(() => { if (left === 0 && !checking) check(); }, [left, checking, check]);
 
+  const [now, setNow] = useState(() => Date.now());
+  const endMs = m.endsAt ? Date.parse(m.endsAt) : NaN;
+  const counting = !isNaN(endMs) && endMs > now;
+  useEffect(() => { if (!counting) return; const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, [counting]);
+  const partial = m.areas.length < ALL_AREAS.length;
   const started = fmt(m.startsAt ?? m.updatedAt);
   const back = m.eta || fmt(m.endsAt) || "To be announced";
   const rows: [string, string][] = [
     ["Status", "Maintenance in progress"],
     ...(started ? ([["Started", started]] as [string, string][]) : []),
     ["Expected back", back],
+    ...(counting ? ([["Back in", fmtLeft(endMs - now)]] as [string, string][]) : []),
     ["Last checked", lastCheck ? lastCheck.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }) : "Just now"],
   ];
 
@@ -73,8 +80,9 @@ export function MaintenanceScreen({ m, isOwner, onPreview, preview }: { m: Maint
           </div>
 
           <div className="px-5 pb-6 pt-6 sm:px-7">
-            <h1 className="text-[26px] font-semibold leading-tight tracking-tightest sm:text-3xl">We are updating OnboardOps</h1>
+            <h1 className="text-[26px] font-semibold leading-tight tracking-tightest sm:text-3xl">{partial ? `We are updating ${areasSentence(m.areas)}` : "We are updating OnboardOps"}</h1>
             <p className="mt-3 whitespace-pre-wrap text-[14px] leading-relaxed text-soft">{m.message}</p>
+            {partial && <p className="mt-2 text-[13px] text-soft">The rest of OnboardOps is still available.</p>}
 
             <dl className="mono mt-6 divide-y divide-line rounded-md border border-line text-[12.5px]">
               {rows.map(([k, v]) => (
