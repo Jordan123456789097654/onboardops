@@ -10,6 +10,7 @@ import { emailTaken, findUserByAnyEmail } from "@/lib/user-emails";
 import { resolvePlatformRole } from "@/lib/platform-role";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { emails, sendEmail } from "@/lib/email";
+import { enforceRate } from "@/lib/rate-limit";
 import { run, type Result } from "./_util";
 
 const loginSchema = z.object({ email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") });
@@ -24,6 +25,7 @@ const registerSchema = z.object({
 
 export async function loginAction(input: unknown): Promise<Result<{ to: string }>> {
   return run(async () => {
+    await enforceRate("login", 20, 900);
     const d = loginSchema.parse(input);
     const user = await findUserByAnyEmail(d.email);
     if (user?.lockedUntil && user.lockedUntil > new Date()) throw new Error("Too many failed attempts. Try again in a few minutes, or reset your password.");
@@ -58,6 +60,7 @@ async function sendVerification(userId: string, name: string, email: string) {
 
 export async function registerAction(input: unknown): Promise<Result<{ to: string }>> {
   return run(async () => {
+    await enforceRate("register", 10, 3600);
     const maint = await getMaintenanceState();
     if (maint.enabled) throw new Error(maint.message || "OnboardOps is currently undergoing scheduled maintenance.");
     const d = registerSchema.parse(input);
@@ -137,6 +140,7 @@ export async function switchWorkspaceAction(workspaceId: string) {
 
 export async function forgotPasswordAction(input: unknown): Promise<Result<{ devLink?: string }>> {
   return run(async () => {
+    await enforceRate("forgot", 6, 900);
     const { email } = z.object({ email: z.string().email("Enter a valid email") }).parse(input);
     const user = await findUserByAnyEmail(email);
     let devLink: string | undefined;
@@ -157,6 +161,7 @@ export async function forgotPasswordAction(input: unknown): Promise<Result<{ dev
 
 export async function resetPasswordAction(input: unknown): Promise<Result<{ to: string }>> {
   return run(async () => {
+    await enforceRate("reset", 10, 900);
     const d = z.object({ token: z.string().min(10), password: z.string().min(8, "Password must be at least 8 characters") }).parse(input);
     const t = await findValidToken(d.token);
     if (!t) throw new Error("This link is invalid or has expired. Request a new one.");
@@ -180,6 +185,7 @@ export async function resetPasswordAction(input: unknown): Promise<Result<{ to: 
  */
 export async function staffLoginAction(input: unknown): Promise<Result<{ to: string }>> {
   return run(async () => {
+    await enforceRate("stafflogin", 20, 900);
     const d = z.object({ workspaceId: z.string().min(1), email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") }).parse(input);
     const generic = "Email or password is incorrect, or you are not part of this workplace.";
     const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
@@ -250,6 +256,7 @@ export async function staffLoginAction(input: unknown): Promise<Result<{ to: str
 /** Helps someone find their employer's staff login by workspace name, address or custom domain. */
 export async function findWorkplaceAction(input: unknown): Promise<Result<{ url: string; name: string }[]>> {
   return run(async () => {
+    await enforceRate("findws", 30, 600);
     const q = z.string().trim().min(2, "Type at least 2 characters").max(100).parse(input).toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     const rows = await prisma.workspace.findMany({ where: { OR: [{ slug: { equals: q } }, { name: { contains: q, mode: "insensitive" } }, { customDomain: q }] }, take: 5, select: { name: true, slug: true, customDomain: true, domainStatus: true } });
     return rows.map((w) => ({ name: w.name, url: w.customDomain && w.domainStatus === "VERIFIED" ? `https://${w.customDomain}` : `/w/${w.slug}` }));
@@ -262,6 +269,7 @@ export async function findWorkplaceAction(input: unknown): Promise<Result<{ url:
  */
 export async function requestMagicLinkAction(input: unknown): Promise<Result<{ devLink?: string }>> {
   return run(async () => {
+    await enforceRate("magic", 6, 900);
     const d = z.object({ email: z.string().email("Enter a valid email"), workspaceId: z.string().optional() }).parse(input);
     const user = await prisma.user.findUnique({ where: { email: d.email.toLowerCase() } });
     let devLink: string | undefined;
@@ -286,6 +294,7 @@ export async function requestMagicLinkAction(input: unknown): Promise<Result<{ d
 /** Called when the person presses the button on the /magic page. A button (not a GET) keeps email scanners from using up the link. */
 export async function magicSignInAction(input: unknown): Promise<Result<{ to: string }>> {
   return run(async () => {
+    await enforceRate("magicin", 20, 900);
     const d = z.object({ token: z.string().min(10), ws: z.string().optional() }).parse(input);
     const t = await findValidToken(d.token);
     if (!t || t.kind !== "MAGIC") throw new Error("This sign-in link is invalid or has expired. Request a new one.");

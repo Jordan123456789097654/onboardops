@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import type { Prisma, Role } from "@prisma/client";
@@ -14,8 +14,44 @@ const secret = () => new TextEncoder().encode(process.env.SESSION_SECRET || "dev
 export const hashPassword = (p: string) => bcrypt.hash(p, 10);
 export const verifyPassword = (p: string, h: string) => bcrypt.compare(p, h);
 
+function describeDevice(ua: string) {
+  const browser = /Edg\//.test(ua) ? "Edge" : /OPR\/|Opera/.test(ua) ? "Opera" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
+  const os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad|iOS/.test(ua) ? "iOS" : /Mac OS X|Macintosh/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "unknown system";
+  return `${browser} on ${os}`;
+}
+
+/** Records the sign-in as a session row (so it can be listed and ended) and emails the user if the device is new. */
+async function recordSession(userId: string): Promise<string | null> {
+  try {
+    const h = headers();
+    const ua = (h.get("user-agent") ?? "").slice(0, 300);
+    const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 64);
+    const device = describeDevice(ua);
+    const prior = await prisma.userSession.count({ where: { userId } });
+    const known = prior === 0 ? true : (await prisma.userSession.count({ where: { userId, device, ip } })) > 0;
+    const row = await prisma.userSession.create({ data: { userId, userAgent: ua, device, ip } });
+    if (!known) {
+      const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+      if (u) {
+        const { sendEmail } = await import("./email");
+        await sendEmail(u.email, "New sign-in to your OnboardOps account", `Hi ${u.name},\n\nYour account was just signed in to from ${device}${ip ? ` (IP ${ip})` : ""}.\n\nIf this was you, no action is needed. If not, change your password and use "Sign out other devices" in Account settings.`, { kind: "security" });
+      }
+    }
+    return row.id;
+  } catch {
+    return null;
+  }
+}
+
+export async function currentSessionId(): Promise<string | null> {
+  const t = cookies().get(SESSION)?.value;
+  if (!t) return null;
+  try { const { payload } = await jwtVerify(t, secret()); return typeof payload.sid === "string" ? payload.sid : null; } catch { return null; }
+}
+
 export async function createSession(userId: string) {
-  const token = await new SignJWT({ uid: userId })
+  const sid = await recordSession(userId);
+  const token = await new SignJWT({ uid: userId, ...(sid ? { sid } : {}) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("14d")
@@ -44,6 +80,11 @@ export async function getSessionUserId(checkRevocation = true): Promise<string |
       const u = await prisma.user.findUnique({ where: { id: payload.uid }, select: { passwordChangedAt: true } });
       if (!u) return null;
       if (u.passwordChangedAt && payload.iat * 1000 < u.passwordChangedAt.getTime() - 1000) return null;
+    }
+    if (checkRevocation && typeof payload.sid === "string") {
+      const s = await prisma.userSession.findUnique({ where: { id: payload.sid }, select: { revokedAt: true, lastSeenAt: true } });
+      if (s?.revokedAt) return null;
+      if (s && Date.now() - s.lastSeenAt.getTime() > 10 * 60_000) await prisma.userSession.update({ where: { id: payload.sid }, data: { lastSeenAt: new Date() } }).catch(() => {});
     }
     return payload.uid;
   } catch {

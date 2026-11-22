@@ -22,6 +22,26 @@ export default async function Overview() {
     prisma.employeeProfile.findMany({ where: { workspaceId: w, OR: [{ readiness: "RETRAINING_REQUIRED" }, { status: "SUSPENDED" }] }, orderBy: { staffCode: "asc" }, take: 6 }),
     prisma.courseEnrollment.count({ where: { workspaceId: w, status: { not: "PASSED" }, dueDate: { lt: new Date() } } }),
   ]);
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const soon = new Date(Date.now() + 30 * 86400000);
+  const [templatesToday, expiringCreds, expiringDocs] = await Promise.all([
+    prisma.shiftChecklistTemplate.findMany({ where: { workspaceId: w }, include: { submissions: { where: { submittedAt: { gte: dayStart } }, select: { id: true }, take: 1 } } }),
+    prisma.credential.findMany({ where: { workspaceId: w, expiresAt: { not: null, lte: soon } }, include: { employee: true }, orderBy: { expiresAt: "asc" }, take: 5 }),
+    prisma.employeeDocument.findMany({ where: { workspaceId: w, expiresAt: { not: null, lte: soon } }, include: { employee: true }, orderBy: { expiresAt: "asc" }, take: 5 }),
+  ]);
+  const nowD = new Date();
+  const dueNow = (t: { scheduleDays: number[]; dueTime: string | null }) => {
+    if (!t.scheduleDays.includes(nowD.getDay())) return false;
+    if (!t.dueTime) return true;
+    const [h, m] = t.dueTime.split(":").map(Number);
+    return nowD.getHours() * 60 + nowD.getMinutes() >= h * 60 + m;
+  };
+  const missed = templatesToday.filter((t) => t.submissions.length === 0 && dueNow(t));
+  const alerts: { text: string; href: string }[] = [
+    ...(missed.length ? [{ text: `${missed.length} checklist${missed.length > 1 ? "s" : ""} overdue today: ${missed.slice(0, 3).map((t) => t.title).join(", ")}`, href: "/app/checklists" }] : []),
+    ...expiringCreds.map((c) => ({ text: `${c.employee.fullName}: ${c.name} ${c.expiresAt! < new Date() ? "expired" : "expires"} ${fmtDateTime(c.expiresAt!)}`, href: "/app/credentials" })),
+    ...expiringDocs.map((d) => ({ text: `${d.employee.fullName}: ${d.title} ${d.expiresAt! < new Date() ? "expired" : "expires"} ${fmtDateTime(d.expiresAt!)}`, href: `/app/employee/${d.employeeId}` })),
+  ];
   const compliance = enrollTotal ? Math.round((enrollPassed / enrollTotal) * 100) : 100;
   const kpis = [
     { label: "Active staff", value: active, suffix: "", href: "/app/directory?status=ACTIVE", note: "currently working" },
@@ -39,6 +59,12 @@ export default async function Overview() {
       <PageHeader title="Command Center" sub={ctx.workspace.name}>
         {actions.map(({ href, label, Icon }, i) => <Link key={href} href={href} className={i === 0 ? "btn-primary" : "btn"}><Icon className="h-3.5 w-3.5" />{label}</Link>)}
       </PageHeader>
+      {alerts.length > 0 && (
+        <section className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="h-3.5 w-3.5" />Needs attention</div>
+          <ul className="space-y-0.5">{alerts.map((a, i) => <li key={i}><Link className="underline" href={a.href}>{a.text}</Link></li>)}</ul>
+        </section>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((k, i) => (
           <Link key={k.label} href={k.href} style={{ "--i": i } as React.CSSProperties} className="card lift anim-fade-up block p-4">

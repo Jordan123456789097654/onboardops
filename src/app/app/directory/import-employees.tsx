@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileUp } from "lucide-react";
 import { importEmployeesAction, type ImportResult } from "@/actions/import";
-import { mapEmployeeCsv, EMPLOYEE_CSV_TEMPLATE, type ParsedImport } from "@/lib/csv";
+import { mapEmployeeCsv, csvHeaders, IMPORT_FIELDS, EMPLOYEE_CSV_TEMPLATE, type ParsedImport } from "@/lib/csv";
 import { Modal, useAction } from "@/components/ui";
 
 export function ImportEmployees() {
@@ -12,6 +12,8 @@ export function ImportEmployees() {
   const [open, setOpen] = useState(false);
   const [parsed, setParsed] = useState<ParsedImport | null>(null);
   const [fileName, setFileName] = useState("");
+  const [raw, setRaw] = useState("");
+  const [cols, setCols] = useState<{ headers: string[]; map: string[] }>({ headers: [], map: [] });
   const [createMissing, setCreateMissing] = useState(false);
   const [sendWelcome, setSendWelcome] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -22,7 +24,11 @@ export function ImportEmployees() {
     if (!f) return;
     setResult(null);
     setFileName(f.name);
-    setParsed(mapEmployeeCsv(await f.text()));
+    const text = await f.text();
+    const h = csvHeaders(text);
+    setRaw(text);
+    setCols({ headers: h.headers, map: h.auto });
+    setParsed(mapEmployeeCsv(text));
   };
   const template = () => {
     const url = URL.createObjectURL(new Blob([EMPLOYEE_CSV_TEMPLATE], { type: "text/csv" }));
@@ -52,6 +58,17 @@ export function ImportEmployees() {
               <input ref={input} type="file" accept=".csv,text/csv" className="text-xs" onChange={(e) => onFile(e.target.files?.[0])} />
               <button className="btn" type="button" onClick={template}><Download className="h-3.5 w-3.5" />Template</button>
             </div>
+            {parsed && cols.headers.length > 0 && (
+              <details className="rounded-md border border-line p-2" open={parsed.missingRequired.length > 0}>
+                <summary className="cursor-pointer text-xs font-medium">Match columns ({cols.headers.length} found)</summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">{cols.headers.map((h, i) => (
+                  <label key={i} className="flex items-center gap-2 text-xs"><span className="w-32 truncate" title={h}>{h || `Column ${i + 1}`}</span>
+                    <select className="input !h-8" value={cols.map[i] ?? ""} onChange={(e) => { const map = cols.map.slice(); map[i] = e.target.value; setCols({ ...cols, map }); setParsed(mapEmployeeCsv(raw, map)); }}>
+                      <option value="">Ignore</option>{IMPORT_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </select></label>
+                ))}</div>
+              </details>
+            )}
             {parsed && (
               <div className="space-y-2">
                 {parsed.missingRequired.length > 0 && <p className="rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">Missing required column(s): {parsed.missingRequired.join(", ")}.</p>}

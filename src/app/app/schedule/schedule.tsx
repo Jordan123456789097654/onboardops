@@ -2,11 +2,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { createShiftAction, deleteShiftAction } from "@/actions/operations";
+import { createShiftAction, decideShiftSwapAction, deleteShiftAction } from "@/actions/operations";
+import { WeekGrid } from "./week-grid";
 import { Empty, Field, Modal, PageHeader, useAction } from "@/components/ui";
 import { fmtDateTime } from "@/lib/utils";
 
-type ShiftRow = { id: string; employee: string; department: string | null; startsAt: string; endsAt: string; label: string; notes: string };
+type ShiftRow = { employeeId?: string | null; id: string; employee: string; department: string | null; startsAt: string; endsAt: string; label: string; notes: string; swap?: string | null };
 
 export function Schedule({
   shifts,
@@ -20,6 +21,7 @@ export function Schedule({
   const router = useRouter();
   const { exec, pending } = useAction();
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"week" | "table">("week");
   const [f, setF] = useState({ employeeId: "", departmentId: "", startsAt: "", endsAt: "", label: "Morning Shift", notes: "" });
 
   return (
@@ -27,7 +29,8 @@ export function Schedule({
       <PageHeader title="Shift Schedule" sub="Schedule shifts across departments and staff.">
         <button className="btn-primary" onClick={() => setOpen(true)}>Add shift</button>
       </PageHeader>
-      {shifts.length === 0 ? (
+      <div className="mb-3 flex gap-2"><button className={`btn ${view === "week" ? "!border-accent text-accent" : ""}`} onClick={() => setView("week")}>Week</button><button className={`btn ${view === "table" ? "!border-accent text-accent" : ""}`} onClick={() => setView("table")}>Table</button></div>
+      {view === "week" ? <WeekGrid shifts={shifts.map((s) => ({ id: s.id, employeeId: s.employeeId ?? null, employee: s.employee, label: s.label, startsAt: s.startsAt, endsAt: s.endsAt, swap: s.swap ? "PENDING" : null }))} employees={employees} /> : shifts.length === 0 ? (
         <Empty title="No shifts scheduled" hint="Click 'Add shift' to create your team's schedule." />
       ) : (
         <div className="card overflow-x-auto">
@@ -47,7 +50,7 @@ export function Schedule({
                   <td className="td">{s.department ?? "—"}</td>
                   <td className="td mono text-xs">{fmtDateTime(s.startsAt)}</td>
                   <td className="td mono text-xs">{fmtDateTime(s.endsAt)}</td>
-                  <td className="td text-soft">{s.notes || "—"}</td>
+                  <td className="td text-soft">{s.notes || "—"}{s.swap && <div className="mt-1 text-amber-700 dark:text-amber-300">{s.swap}<span className="ml-2 inline-flex gap-1">{(["APPROVED", "DENIED"] as const).map((d) => <button key={d} className="btn !h-6 !px-2 !text-xs" disabled={pending} onClick={() => exec(() => decideShiftSwapAction(s.id, { decision: d }), { success: `Swap ${d.toLowerCase()}`, onOk: () => router.refresh() })}>{d === "APPROVED" ? "Approve" : "Deny"}</button>)}</span></div>}</td>
                   <td className="td text-right">
                     <button
                       className="btn !px-2"

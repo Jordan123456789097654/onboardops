@@ -3,7 +3,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-import { requireWorkspaceRole, requirePerm, requireFeature, ADMIN_ROLES, hasFeature } from "@/lib/rbac";
+import { requireWorkspaceRole, requirePerm, requireFeature, ADMIN_ROLES, STAFF_ROLES, MANAGEMENT_ROLES, hasFeature } from "@/lib/rbac";
+import { getStrikeDecayDays } from "@/lib/workspace-meta";
 import { notifyEmployee, notifyRoles } from "@/lib/notify";
 import { run } from "./_util";
 
@@ -30,7 +31,6 @@ export async function saveCaseTemplateAction(input: unknown) {
 export async function saveDisciplineRuleAction(input: unknown) {
   return run(async () => {
     const ctx = await requireWorkspaceRole(ADMIN_ROLES);
-    if (!hasFeature(ctx, "progressive")) throw new Error("Progressive discipline is turned off.");
     const d = z.object({ whenSeverity: z.enum(SEV), count: z.coerce.number().int().min(2).max(10), withinDays: z.coerce.number().int().min(7).max(730), escalateTo: z.enum(SEV), enabled: z.boolean().default(true) }).parse(input);
     if (SEV.indexOf(d.escalateTo) <= SEV.indexOf(d.whenSeverity)) throw new Error("The escalation must be more serious than the trigger.");
     await prisma.$transaction(async (tx) => {
@@ -54,7 +54,8 @@ export async function deleteDisciplineRuleAction(id: string) {
 /* Witness statements and evidence on cases */
 export async function addCaseAttachmentAction(caseId: string, input: unknown) {
   return run(async () => {
-    const ctx = await requirePerm("training.build", "evidence");
+    const ctx = await requireWorkspaceRole(STAFF_ROLES);
+    if (!hasFeature(ctx, "evidence")) throw new Error("Witness statements and evidence are turned off for this workspace.");
     const d = z.object({ kind: z.enum(["WITNESS", "EVIDENCE"]), title: z.string().trim().min(2).max(120), statement: z.string().trim().max(5000).default("") }).parse(input);
     const c = await prisma.infractionCase.findFirst({ where: { id: caseId, workspaceId: ctx.workspaceId } });
     if (!c) throw new Error("Case not found.");
@@ -89,19 +90,70 @@ export async function fileAppealAction(caseId: string, input: unknown) {
 
 export async function decideAppealAction(appealId: string, input: unknown) {
   return run(async () => {
-    const ctx = await requirePerm("requests.decide", "appeals");
+    const ctx = await requireWorkspaceRole(MANAGEMENT_ROLES);
     const d = z.object({ decision: z.enum(["UPHELD", "OVERTURNED"]), note: z.string().trim().min(5, "Explain the decision").max(3000) }).parse(input);
     await prisma.$transaction(async (tx) => {
-      const a = await tx.appeal.findFirst({ where: { id: appealId, workspaceId: ctx.workspaceId, status: "OPEN" }, include: { case: true } });
+      const a = await tx.appeal.findFirst({ where: { id: appealId, workspaceId: ctx.workspaceId, status: "OPEN" }, include: { case: { include: { employee: true } } } });
       if (!a) throw new Error("Appeal not found or already decided.");
       if (a.case.issuedByMemberId === ctx.id) throw new Error("The person who issued the case cannot decide its appeal.");
       await tx.appeal.update({ where: { id: appealId }, data: { status: d.decision, reviewerName: ctx.user.name, reviewerMemberId: ctx.id, decisionNote: d.note, decidedAt: new Date() } });
-      await tx.infractionTimelineEvent.create({ data: { caseId: a.caseId, actorMemberId: ctx.id, actorName: ctx.user.name, eventType: "NOTE_ADDED", note: `Appeal ${d.decision.toLowerCase()}: ${d.note}` } });
-      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "APPEAL_DECIDED", targetType: "Infraction", targetId: a.caseId, summary: `${a.case.caseNumber} appeal ${d.decision.toLowerCase()} by ${ctx.user.name}` });
-      await notifyEmployee(tx, ctx.workspaceId, a.case.employeeId, { title: `Your appeal was ${d.decision.toLowerCase()}`, body: d.note.slice(0, 120), href: "/app/my-portal" });
+
+      let pointNote = "";
+      if (d.decision === "OVERTURNED" && a.case.pointsAdded > 0) {
+        const nextPoints = Math.max(0, a.case.employee.strikePoints - a.case.pointsAdded);
+        await tx.employeeProfile.update({
+          where: { id: a.case.employeeId },
+          data: {
+            strikePoints: nextPoints,
+            ...(a.case.employee.status === "SUSPENDED" && nextPoints < ctx.workspace.autoSuspendStrikeThreshold ? { status: "ACTIVE" } : {}),
+          },
+        });
+        pointNote = ` (-${a.case.pointsAdded} strike pts restored; total ${nextPoints})`;
+      }
+
+      await tx.infractionTimelineEvent.create({ data: { caseId: a.caseId, actorMemberId: ctx.id, actorName: ctx.user.name, eventType: "NOTE_ADDED", note: `Appeal ${d.decision.toLowerCase()}${pointNote}: ${d.note}` } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "APPEAL_DECIDED", targetType: "Infraction", targetId: a.caseId, summary: `${a.case.caseNumber} appeal ${d.decision.toLowerCase()} by ${ctx.user.name}${pointNote}` });
+      await notifyEmployee(tx, ctx.workspaceId, a.case.employeeId, { title: `Your appeal was ${d.decision.toLowerCase()}`, body: `${d.note.slice(0, 120)}${pointNote}`, href: "/app/my-portal" });
     });
     done();
     return undefined;
+  });
+}
+
+/* Recalculate & apply strike point decay across workspace */
+export async function applyStrikeDecayAction() {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(ADMIN_ROLES);
+    const decayDays = getStrikeDecayDays(ctx.workspace.features);
+    if (!decayDays) throw new Error("Enable Strike Point Decay in Settings → Automation & Webhooks first.");
+    const cutoff = new Date(Date.now() - decayDays * 86400000);
+    const emps = await prisma.employeeProfile.findMany({
+      where: { workspaceId: ctx.workspaceId, strikePoints: { gt: 0 }, status: { not: "TERMINATED" } },
+      include: { infractions: { include: { appeals: true } } },
+    });
+    let updated = 0;
+    await prisma.$transaction(async (tx) => {
+      for (const e of emps) {
+        const activePoints = e.infractions
+          .filter((c) => c.createdAt >= cutoff && !c.appeals.some((a) => a.status === "OVERTURNED"))
+          .reduce((sum, c) => sum + c.pointsAdded, 0);
+        if (activePoints < e.strikePoints) {
+          await tx.employeeProfile.update({ where: { id: e.id }, data: { strikePoints: activePoints } });
+          await writeAudit(tx, {
+            workspaceId: ctx.workspaceId,
+            actorMemberId: ctx.id,
+            actorName: ctx.user.name,
+            actionType: "STRIKE_POINTS_DECAYED",
+            targetType: "Employee",
+            targetId: e.id,
+            summary: `${e.staffCode} strike points decayed (${e.strikePoints} → ${activePoints}, ${decayDays}-day rolling window)`,
+          });
+          updated++;
+        }
+      }
+    });
+    done();
+    return { updated, decayDays };
   });
 }
 

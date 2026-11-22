@@ -3,7 +3,7 @@ import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui";
 import { MaintenanceGate } from "@/components/maintenance-gate";
-import { getMaintenanceState } from "@/lib/maintenance";
+import { getAnnouncementState, getMaintenanceState } from "@/lib/maintenance";
 import { getStaff } from "@/lib/platform";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 const themeScript = `document.documentElement.classList.add('js');(function(){try{var t=localStorage.getItem('oo-theme');if(t==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}else if(t!=='dark'){t='light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [maintenance, staff] = await Promise.all([getMaintenanceState(), getStaff()]);
+  const [maintenance, announcement, staff] = await Promise.all([getMaintenanceState(), getAnnouncementState(), getStaff()]);
   const isOwner = staff?.role === "OWNER";
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <ToastProvider>
-          <MaintenanceGate maintenance={maintenance} isOwner={isOwner}>
+          <MaintenanceGate maintenance={maintenance} announcement={announcement} isOwner={isOwner}>
             {children}
           </MaintenanceGate>
         </ToastProvider>

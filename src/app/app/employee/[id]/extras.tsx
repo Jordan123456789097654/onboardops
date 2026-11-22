@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { FileText, Lock, Trash2 } from "lucide-react";
 import { deleteDocumentAction, uploadDocumentAction } from "@/actions/documents";
 import { saveReviewAction } from "@/actions/reviews";
-import { Badge, Empty, Field, Modal, useAction } from "@/components/ui";
+import { Badge, Empty, Field, Modal, useAction, useToast } from "@/components/ui";
 import { DOC_CATEGORIES } from "@/lib/constants";
 import { ACCEPT_ATTR } from "@/lib/files-client";
 import { fmtDate } from "@/lib/utils";
@@ -18,6 +18,24 @@ export function DocumentsPanel({ employeeId, docs, isAdmin }: { employeeId: stri
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [f, setF] = useState({ title: "", category: DOC_CATEGORIES[5] as string, restricted: false, visibleToEmployee: false, expiresAt: "" });
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const bulk = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    let ok = 0;
+    let lastErr = "";
+    for (const file of Array.from(files)) {
+      const fd = new FormData();
+      fd.set("json", JSON.stringify({ employeeId, title: file.name.replace(/\.[^.]+$/, "").slice(0, 150) || "Document", category: f.category, restricted: false, visibleToEmployee: false, expiresAt: "" }));
+      fd.set("file", file);
+      const r = await uploadDocumentAction(fd);
+      if (r.ok) ok++; else lastErr = r.error;
+    }
+    setBusy(false);
+    toast(ok ? "ok" : "error", `${ok} of ${files.length} uploaded${lastErr ? `. ${lastErr}` : ""}`);
+    router.refresh();
+  };
   const upload = () => {
     if (!file) return;
     const fd = new FormData();
@@ -28,7 +46,7 @@ export function DocumentsPanel({ employeeId, docs, isAdmin }: { employeeId: stri
   const soon = (d: string | null) => d && new Date(d).getTime() < Date.now() + 30 * 86400000;
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between"><p className="text-[13px] text-soft">Licenses, signed forms and other records. Restricted documents are visible only to owners and admins.</p><button className="btn-primary" onClick={() => setOpen(true)}>Upload document</button></div>
+      <div className="flex items-center justify-between"><p className="text-[13px] text-soft">Licenses, signed forms and other records. Restricted documents are visible only to owners and admins.</p><span className="flex gap-2"><label className="btn cursor-pointer">{busy ? "Uploading…" : "Bulk upload"}<input type="file" multiple className="hidden" disabled={busy} onChange={(e) => { bulk(e.target.files); e.target.value = ""; }} /></label><button className="btn-primary" onClick={() => setOpen(true)}>Upload document</button></span></div>
       {docs.length === 0 ? <Empty title="No documents" hint="Upload a PDF or image (up to 4 MB)." /> : (
         <div className="card divide-y divide-line">{docs.map((d) => (
           <div key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-[13px]">

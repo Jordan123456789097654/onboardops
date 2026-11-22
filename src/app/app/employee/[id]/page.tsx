@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, STAFF_ROLES, ADMIN_ROLES, MANAGEMENT_ROLES, serializeInfraction } from "@/lib/rbac";
+import { allowanceOf, usage, TIMEOFF_TYPES } from "@/lib/timeoff";
 import { Dossier } from "./dossier";
 
 export const metadata = { title: "Employee dossier" };
@@ -30,6 +31,10 @@ export default async function EmployeePage({ params }: { params: { id: string } 
     prisma.department.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { name: "asc" } }),
     prisma.jobRole.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { title: "asc" } }),
   ]);
+  const cfs = await prisma.customField.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { orderIndex: "asc" } });
+  const toReqs = await prisma.staffRequest.findMany({ where: { employeeId: emp.id, kind: "TIMEOFF" }, select: { subtype: true, status: true, startDate: true, endDate: true } });
+  const use = usage(toReqs);
+  const allow = allowanceOf(emp.timeOffAllowance);
   const iso = (d: Date | null) => (d ? d.toISOString() : null);
   const data = {
     id: emp.id, staffCode: emp.staffCode, fullName: emp.fullName, email: emp.email, phone: emp.phone, emergencyContact: emp.emergencyContact,
@@ -53,6 +58,9 @@ export default async function EmployeePage({ params }: { params: { id: string } 
   return (
     <Dossier
       emp={data}
+      balances={TIMEOFF_TYPES.map((t) => ({ type: t, allowance: allow[t], used: use[t].used, pending: use[t].pending }))}
+      fields={cfs.map((f) => ({ id: f.id, label: f.label, type: f.type, options: f.options }))}
+      customValues={(emp.customValues ?? {}) as Record<string, string>}
       departments={departments.map((d) => ({ id: d.id, name: d.name }))}
       roles={roles.map((r) => ({ id: r.id, name: r.title }))}
       perms={{ manage: MANAGEMENT_ROLES.includes(ctx.role), admin: isAdmin, owner: ctx.role === "OWNER" }}

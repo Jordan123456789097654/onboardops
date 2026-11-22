@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, ADMIN_ROLES } from "@/lib/rbac";
 import { Empty, PageHeader } from "@/components/ui";
+import { AuditTools } from "./audit-tools";
 import { fmtDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Audit Log" };
@@ -24,6 +25,7 @@ export default async function Audit({ searchParams }: { searchParams: { q?: stri
   return (
     <>
       <PageHeader title="Audit Log" sub={`${total} entries. Append-only: no edit or delete exists. Each hash chains over the previous entry.`} />
+      <AuditTools />
       <form className="mb-3 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} className="input !w-64" placeholder="Search summary, actor or target ID" />
         <select name="type" defaultValue={type} className="input !w-56"><option value="">All actions</option>{types.map((t) => <option key={t.actionType}>{t.actionType}</option>)}</select>

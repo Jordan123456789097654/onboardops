@@ -1,25 +1,97 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Eye, ShieldAlert, ShieldCheck, Wrench } from "lucide-react";
+import { Eye, Megaphone, ShieldAlert, ShieldCheck, Wrench, X } from "lucide-react";
 import { Brand, ThemeToggle } from "./ui";
-import type { MaintenanceState } from "@/lib/maintenance";
+import type { AnnouncementState, MaintenanceState } from "@/lib/maintenance";
 
 export function MaintenanceGate({
   maintenance,
+  announcement,
   isOwner,
   children,
 }: {
   maintenance: MaintenanceState;
+  announcement: AnnouncementState;
   isOwner: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() || "/";
   const [ownerBypass, setOwnerBypass] = useState(false);
+  const [dismissedAt, setDismissedAt] = useState<string | null>(null);
+  const lastTracked = useRef<string>("");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("oo_ann_dismissed");
+      if (saved) setDismissedAt(saved);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!pathname || pathname === lastTracked.current || pathname.startsWith("/admin")) return;
+    lastTracked.current = pathname;
+    fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: pathname }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [pathname]);
+
+  const showAnnouncement =
+    announcement.enabled &&
+    announcement.message.trim().length > 0 &&
+    (!announcement.dismissible || dismissedAt !== (announcement.updatedAt ?? "1"));
+
+  const toneClass =
+    announcement.tone === "warning"
+      ? "border-amber-400/50 bg-amber-500/15 text-amber-950 dark:text-amber-200"
+      : announcement.tone === "success"
+        ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-950 dark:text-emerald-200"
+        : "border-accent/40 bg-accent/10 text-ink";
+
+  const banner = showAnnouncement ? (
+    <div className={`no-print sticky top-0 z-40 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b px-4 py-2 text-xs font-medium backdrop-blur ${toneClass}`}>
+      <Megaphone className="h-3.5 w-3.5 shrink-0" />
+      <span>{announcement.message}</span>
+      {announcement.linkUrl && (
+        <a
+          href={announcement.linkUrl}
+          target={announcement.linkUrl.startsWith("http") ? "_blank" : undefined}
+          rel={announcement.linkUrl.startsWith("http") ? "noreferrer" : undefined}
+          className="font-semibold underline underline-offset-2"
+        >
+          {announcement.linkLabel || "Learn more"} →
+        </a>
+      )}
+      {announcement.dismissible && (
+        <button
+          type="button"
+          aria-label="Dismiss announcement"
+          className="ml-2 rounded p-0.5 opacity-70 hover:opacity-100"
+          onClick={() => {
+            const stamp = announcement.updatedAt ?? "1";
+            setDismissedAt(stamp);
+            try {
+              localStorage.setItem("oo_ann_dismissed", stamp);
+            } catch {}
+          }}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  ) : null;
 
   if (!maintenance.enabled) {
-    return <>{children}</>;
+    return (
+      <>
+        {banner}
+        {children}
+      </>
+    );
   }
 
   // Always allow the Site Owner to use the /admin Staff Console
@@ -54,6 +126,7 @@ export function MaintenanceGate({
             <Link href="/admin" className="mono font-semibold underline">Access Admin Panel →</Link>
           </div>
         </div>
+        {banner}
         {children}
       </>
     );
@@ -71,7 +144,7 @@ export function MaintenanceGate({
     );
   }
 
-  // Show the Maintenance Lock Screen (both to regular visitors and to the Site Owner, with an Owner-only Admin Panel button)
+  // Show the Maintenance Lock Screen
   return (
     <div className="flex min-h-screen flex-col justify-between bg-canvas px-4 py-6 text-ink">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between">

@@ -23,6 +23,7 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userN
   const [palette, setPalette] = useState(false);
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState(false);
+  const [remote, setRemote] = useState<{ label: string; href: string; group: string }[]>([]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -32,8 +33,15 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userN
     return () => window.removeEventListener("keydown", h);
   }, []);
   useEffect(() => { setMenu(false); }, [path]);
+  useEffect(() => {
+    if (!palette || q.trim().length < 2) { setRemote([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q.trim())}`).then((r) => r.json()).then((d) => setRemote(d.results ?? [])).catch(() => setRemote([]));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q, palette]);
 
-  const results = useMemo(() => nav.filter((n) => n.label.toLowerCase().includes(q.toLowerCase())), [nav, q]);
+  const results = useMemo(() => [...nav.filter((n) => n.label.toLowerCase().includes(q.toLowerCase())), ...remote], [nav, q, remote]);
   const groups = Array.from(new Set(nav.map((n) => n.group)));
   const activeHref = [...nav].sort((a, b) => b.href.length - a.href.length).find((n) => path === n.href || path.startsWith(n.href + "/"))?.href;
   const initials = userName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -103,11 +111,11 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userN
           <Dialog.Overlay className="dlg-overlay no-print fixed inset-0 z-[60] bg-black/40" />
           <Dialog.Content aria-describedby={undefined} className="dlg-palette no-print fixed left-1/2 top-[15vh] z-[61] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
             <Dialog.Title className="sr-only">Command palette</Dialog.Title>
-            <input autoFocus className="h-12 w-full border-b border-line bg-surface px-4 text-sm outline-none" placeholder="Go to…" value={q} onChange={(e) => setQ(e.target.value)}
+            <input autoFocus className="h-12 w-full border-b border-line bg-surface px-4 text-sm outline-none" placeholder="Go to, or search people and cases…" value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && results[0]) { router.push(results[0].href); setPalette(false); } }} />
             <ul className="max-h-72 overflow-y-auto p-1">
               {results.length === 0 && <li className="px-3 py-2 text-[13px] text-soft">No matches</li>}
-              {results.map((r) => (<li key={r.href}><button className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13px] hover:bg-muted" onClick={() => { router.push(r.href); setPalette(false); }}>{r.label}<span className="text-xs text-soft">{r.group}</span></button></li>))}
+              {results.map((r) => (<li key={r.href + r.label}><button className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13px] hover:bg-muted" onClick={() => { router.push(r.href); setPalette(false); }}>{r.label}<span className="text-xs text-soft">{r.group}</span></button></li>))}
             </ul>
           </Dialog.Content>
         </Dialog.Portal>

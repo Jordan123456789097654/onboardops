@@ -1,3 +1,4 @@
+import { getStrikeDecayDays, getWorkspaceBranding } from "@/lib/workspace-meta";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, ADMIN_ROLES } from "@/lib/rbac";
 import { Settings } from "./settings";
@@ -17,16 +18,18 @@ export default async function SettingsPage() {
     prisma.workspaceMember.findMany({ where: { workspaceId: ctx.workspaceId }, include: { user: true }, orderBy: { createdAt: "asc" } }),
   ]);
   const w = ctx.workspace;
+  const cf = await prisma.customField.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { orderIndex: "asc" } });
   return (
     <Settings
       isOwner={ctx.role === "OWNER"}
       domain={{ slug: w.slug, baseUrl: SITE.url, name: w.customDomain, status: w.domainStatus, details: (w.domainDetails as DomainDetails | null) ?? null, vercel: vercelConfigured() }}
-      ws={{ name: w.name, ops: w.operationsWebhookUrl ?? "", conf: w.confidentialWebhookUrl ?? "", threshold: w.autoSuspendStrikeThreshold, retrain: w.autoRetrainOnWrittenInfraction, reminders: w.remindersEnabled }}
+      ws={{ decayDays: getStrikeDecayDays(w.features), accent: getWorkspaceBranding(w.features).accentColor, tagline: getWorkspaceBranding(w.features).tagline, name: w.name, ops: w.operationsWebhookUrl ?? "", conf: w.confidentialWebhookUrl ?? "", threshold: w.autoSuspendStrikeThreshold, retrain: w.autoRetrainOnWrittenInfraction, reminders: w.remindersEnabled }}
       departments={departments.map((d) => ({ id: d.id, name: d.name, colorCode: d.colorCode }))}
       roles={roles.map((r) => ({ id: r.id, title: r.title, description: r.description, requiredCourseIds: r.requiredCourseIds }))}
       courses={courses}
       members={members.map((m) => ({ id: m.id, name: m.user.name, email: m.user.email, role: m.role, customRoleId: m.customRoleId }))}
       customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, description: r.description, baseRole: r.baseRole, members: r._count.members }))}
+      customFields={cf.map((f) => ({ id: f.id, label: f.label, type: f.type as "text" | "date" | "select" | "yesno", options: f.options, showToEmployee: f.showToEmployee }))}
       features={(w.features as Record<string, boolean>) ?? {}}
       rolePerms={(w.rolePerms as Record<string, string[]>) ?? {}}
       customRolesOn={featureOn(w.features, "customRoles")}

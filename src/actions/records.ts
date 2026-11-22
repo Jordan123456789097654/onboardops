@@ -141,3 +141,18 @@ export async function saveEmployeeCustomValuesAction(employeeId: string, input: 
     return undefined;
   });
 }
+
+export async function saveTimeOffAllowanceAction(employeeId: string, input: unknown) {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(MANAGEMENT_ROLES);
+    const d = z.object({ VACATION: z.coerce.number().min(0).max(365), SICK: z.coerce.number().min(0).max(365), PERSONAL: z.coerce.number().min(0).max(365) }).parse(input);
+    await prisma.$transaction(async (tx) => {
+      const emp = await tx.employeeProfile.findFirst({ where: { id: employeeId, workspaceId: ctx.workspaceId } });
+      if (!emp) throw new Error("Employee not found.");
+      await tx.employeeProfile.update({ where: { id: employeeId }, data: { timeOffAllowance: d } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "TIMEOFF_ALLOWANCE_SET", targetType: "Employee", targetId: employeeId, summary: `${emp.staffCode} yearly time off: ${d.VACATION} vacation, ${d.SICK} sick, ${d.PERSONAL} personal` });
+    });
+    done();
+    return undefined;
+  });
+}

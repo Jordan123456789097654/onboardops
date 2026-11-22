@@ -36,10 +36,22 @@ const aliases: Record<string, string> = {
 
 export type ParsedImport = { rows: Record<string, string>[]; unmapped: string[]; missingRequired: string[] };
 
-export function mapEmployeeCsv(text: string): ParsedImport {
+export const IMPORT_FIELDS: { key: string; label: string }[] = [
+  { key: "fullName", label: "Full name" }, { key: "email", label: "Email" }, { key: "phone", label: "Phone" }, { key: "department", label: "Department" },
+  { key: "jobRole", label: "Job role" }, { key: "hireDate", label: "Hire date" }, { key: "emergencyContact", label: "Emergency contact" },
+];
+
+/** Header cells and the field each one maps to automatically ("" = ignored). */
+export function csvHeaders(text: string): { headers: string[]; auto: string[] } {
+  const grid = parseCsv(text);
+  const headers = (grid[0] ?? []).map((h) => h.trim());
+  return { headers, auto: headers.map((h) => aliases[h.toLowerCase()] ?? "") };
+}
+
+export function mapEmployeeCsv(text: string, override?: string[]): ParsedImport {
   const grid = parseCsv(text);
   if (grid.length < 2) return { rows: [], unmapped: [], missingRequired: ["fullName", "email"] };
-  const head = grid[0].map((h) => aliases[h.trim().toLowerCase()] ?? "");
+  const head = grid[0].map((h, i) => (override ? override[i] ?? "" : aliases[h.trim().toLowerCase()] ?? ""));
   const unmapped = grid[0].filter((_, i) => !head[i]).map((h) => h.trim()).filter(Boolean);
   const missingRequired = ["fullName", "email"].filter((k) => !head.includes(k));
   const rows = grid.slice(1).map((cells) => {

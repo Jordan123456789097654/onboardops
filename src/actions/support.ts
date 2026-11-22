@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { getActiveMembership } from "@/lib/auth";
+import { enforceRate } from "@/lib/rate-limit";
 import { run } from "./_util";
 
 const schema = z.object({
@@ -15,6 +16,7 @@ const schema = z.object({
 
 export async function submitSupportRequestAction(input: unknown) {
   return run(async () => {
+    await enforceRate("support", 8, 3600);
     const d = schema.parse(input);
     const recent = await prisma.supportRequest.count({ where: { email: d.email.toLowerCase(), createdAt: { gt: new Date(Date.now() - 3600_000) } } });
     if (recent >= 5) throw new Error("You have sent several requests in the last hour. Please wait and try again.");
@@ -28,6 +30,7 @@ export async function submitSupportRequestAction(input: unknown) {
 /** Feedback, bug reports and questions sent from inside the app. Linked to the sender's workspace. */
 export async function submitFeedbackAction(input: unknown) {
   return run(async () => {
+    await enforceRate("feedback", 20, 3600);
     const m = await getActiveMembership();
     if (!m || m.support) throw new Error("Sign in to send feedback.");
     const d = z.object({ topic: z.enum(["Feedback", "Bug", "Question"]), message: z.string().trim().min(10, "Tell us a bit more (10+ characters)").max(5000) }).parse(input);

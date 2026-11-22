@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaffPage, SUPPORT_STAFF } from "@/lib/platform";
 import { Empty, PageHeader } from "@/components/ui";
+import { VerifyButton } from "./verify-button";
 import { fmtDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Staff activity" };
@@ -12,6 +13,7 @@ export default async function Activity({ searchParams }: { searchParams: { q?: s
   return (
     <>
       <PageHeader title="Staff activity" sub="Every action taken in this console. Append-only, with each entry's hash chained to the one before it." />
+      <VerifyButton />
       <form className="mb-3"><input name="q" defaultValue={q} className="input !w-72" placeholder="Search staff, action or summary" /></form>
       {rows.length === 0 ? <Empty title="No staff activity yet" /> : (
         <div className="card max-h-[72vh] overflow-auto"><table className="w-full min-w-[860px] border-collapse"><thead><tr>{["Time (UTC)", "Staff", "Action", "Summary", "Hash"].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>

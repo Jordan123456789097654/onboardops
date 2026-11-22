@@ -2,10 +2,11 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { createSession, getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
+import { createSession, currentSessionId, getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
 import { createToken } from "@/lib/tokens";
 import { emails, sendEmail } from "@/lib/email";
 import { emailTaken, norm } from "@/lib/user-emails";
+import { OPTIONAL_EMAIL_KINDS } from "@/lib/notify-prefs";
 import { run } from "./_util";
 
 async function me() {
@@ -76,7 +77,19 @@ export async function signOutOtherDevicesAction() {
   return run(async () => {
     const u = await me();
     await prisma.user.update({ where: { id: u.id }, data: { passwordChangedAt: new Date() } });
+    await prisma.userSession.updateMany({ where: { userId: u.id, revokedAt: null }, data: { revokedAt: new Date() } });
     await createSession(u.id);
+    done();
+    return undefined;
+  });
+}
+
+export async function revokeSessionAction(id: string) {
+  return run(async () => {
+    const u = await me();
+    if ((await currentSessionId()) === id) throw new Error("That is the device you are using now.");
+    await prisma.userSession.updateMany({ where: { id, userId: u.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    done();
     return undefined;
   });
 }
@@ -140,6 +153,30 @@ export async function makePrimaryEmailAction(id: string) {
       await tx.userEmail.update({ where: { id: row.id }, data: { email: oldEmail, verifiedAt: oldVerified } });
       await tx.user.update({ where: { id: u.id }, data: { email: row.email, emailVerifiedAt: row.verifiedAt } });
     });
+    done();
+    return undefined;
+  });
+}
+
+/* ---------------- Notification preferences ---------------- */
+export async function saveEmailPrefsAction(input: unknown) {
+  return run(async () => {
+    const u = await me();
+    const d = z.record(z.boolean()).parse(input);
+    const clean = Object.fromEntries(Object.entries(d).filter(([k]) => OPTIONAL_EMAIL_KINDS.some((o) => o.kind === k)));
+    await prisma.user.update({ where: { id: u.id }, data: { emailPrefs: clean } });
+    done();
+    return undefined;
+  });
+}
+
+export async function saveNotificationPrefsAction(input: unknown) {
+  return run(async () => {
+    const u = await me();
+    const hour = z.coerce.number().int().min(0).max(23);
+    const d = z.object({ quietStart: hour.nullable(), quietEnd: hour.nullable(), timezone: z.string().trim().max(60).default("") }).parse(input);
+    const both = d.quietStart !== null && d.quietEnd !== null;
+    await prisma.user.update({ where: { id: u.id }, data: { quietStart: both ? d.quietStart : null, quietEnd: both ? d.quietEnd : null, timezone: d.timezone || null } });
     done();
     return undefined;
   });

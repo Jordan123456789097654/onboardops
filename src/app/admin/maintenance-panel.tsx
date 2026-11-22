@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Wrench } from "lucide-react";
+import { CalendarClock, Wrench } from "lucide-react";
 import { setMaintenanceModeAction } from "@/actions/admin";
 import { Badge, Field, Modal, useAction } from "@/components/ui";
 import type { MaintenanceState } from "@/lib/maintenance";
@@ -40,54 +40,82 @@ const PRESETS: { label: string; message: string; eta: string }[] = [
   },
 ];
 
+function toLocalInput(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceState; canManage: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState(initial.message);
   const [eta, setEta] = useState(initial.eta ?? "");
+  const [startsAt, setStartsAt] = useState(toLocalInput(initial.startsAt));
+  const [endsAt, setEndsAt] = useState(toLocalInput(initial.endsAt));
+
+  const save = (lockNow: boolean) => {
+    const startIso = startsAt ? new Date(startsAt).toISOString() : null;
+    const endIso = endsAt ? new Date(endsAt).toISOString() : null;
+    exec(() => setMaintenanceModeAction({ enabled: lockNow, message, eta, startsAt: startIso, endsAt: endIso }), {
+      success: lockNow ? "Website is now in maintenance mode" : startIso ? "Maintenance window scheduled" : "Maintenance mode disabled",
+      onOk: () => {
+        setOpen(false);
+        router.refresh();
+      },
+    });
+  };
+
+  const hasFutureSchedule = !initial.enabled && !!initial.startsAt && Date.parse(initial.startsAt) > Date.now();
 
   return (
     <>
-      <section className={`card mb-6 p-4 ${initial.enabled ? "border-amber-400 bg-amber-500/5" : ""}`}>
+      <section className={`card mb-4 p-4 ${initial.enabled ? "border-amber-400 bg-amber-500/5" : ""}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${initial.enabled ? "border-amber-400/50 bg-amber-500/15 text-amber-600 dark:text-amber-400" : "border-line bg-muted text-soft"}`}>
               <Wrench className="h-4 w-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold">Website Maintenance Mode</h2>
                 {initial.enabled ? (
                   <Badge value="SUSPENDED" label="LOCKED (IN MAINTENANCE)" />
+                ) : hasFutureSchedule ? (
+                  <Badge value="PENDING" label="SCHEDULED" />
                 ) : (
                   <Badge value="ACTIVE" label="LIVE" />
                 )}
               </div>
               <p className="mt-0.5 text-xs text-soft">
                 {initial.enabled
-                  ? `Entire website is locked with the maintenance screen.${initial.eta ? ` ETA: ${initial.eta}.` : ""}${initial.updatedAt ? ` Updated ${fmtDateTime(initial.updatedAt)} by ${initial.updatedBy ?? "Owner"}.` : ""}`
-                  : "Put the entire website into maintenance mode. Locks all pages and workspaces with a maintenance screen."}
+                  ? `Entire website is locked.${initial.endsAt ? ` Auto-unlocks ${fmtDateTime(initial.endsAt)}.` : initial.eta ? ` ETA: ${initial.eta}.` : ""}${initial.updatedAt ? ` Updated ${fmtDateTime(initial.updatedAt)} by ${initial.updatedBy ?? "Owner"}.` : ""}`
+                  : hasFutureSchedule
+                    ? `Scheduled to auto-lock ${fmtDateTime(initial.startsAt!)}${initial.endsAt ? ` until ${fmtDateTime(initial.endsAt)}` : ""}.`
+                    : "Lock the entire website immediately or schedule an auto-start / auto-end maintenance window."}
               </p>
             </div>
           </div>
 
           {canManage && (
-            <div className="flex items-center gap-2">
-              {initial.enabled ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {initial.enabled || hasFutureSchedule ? (
                 <>
-                  <button className="btn" onClick={() => setOpen(true)}>Edit reason / ETA</button>
+                  <button className="btn" onClick={() => setOpen(true)}>Edit reason / timer</button>
                   <button
                     className="btn-primary"
                     disabled={pending}
                     onClick={() =>
-                      exec(() => setMaintenanceModeAction({ enabled: false, message, eta }), {
-                        success: "Maintenance mode disabled — website is live",
+                      exec(() => setMaintenanceModeAction({ enabled: false, message, eta, startsAt: null, endsAt: null }), {
+                        success: "Maintenance cleared — website is live",
                         onOk: () => router.refresh(),
                       })
                     }
                   >
-                    Turn off maintenance (Unlock site)
+                    {initial.enabled ? "Turn off maintenance (Unlock site)" : "Cancel schedule"}
                   </button>
                 </>
               ) : (
@@ -100,10 +128,10 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
         </div>
       </section>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={initial.enabled ? "Update maintenance details" : "Put website in maintenance"}>
+      <Modal open={open} onClose={() => setOpen(false)} title={initial.enabled ? "Update maintenance details" : "Website maintenance & schedule"}>
         <div className="space-y-3 text-[13px]">
           <p className="text-soft">
-            Pick a premade maintenance reason below or write a custom message. Everyone (including you on regular pages) will see the maintenance lock screen, with an Owner-only button for you to jump back into the Admin Panel.
+            Pick a premade reason or enter a custom message. You can lock the site immediately or set optional Auto-Start / Auto-End timestamps.
           </p>
           <div>
             <div className="mb-1.5 text-xs font-medium text-soft">Premade reasons (click to fill)</div>
@@ -132,7 +160,7 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
               placeholder="OnboardOps is currently undergoing scheduled maintenance and upgrades..."
             />
           </Field>
-          <Field label="Estimated return / ETA (optional)">
+          <Field label="Estimated return label / ETA (optional)">
             <input
               className="input mono"
               value={eta}
@@ -140,22 +168,29 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
               placeholder="e.g. ~30 minutes or Today at 8:00 PM EST"
             />
           </Field>
-          <div className="flex gap-2">
-            <button
-              className={initial.enabled ? "btn-primary w-full" : "btn-danger w-full"}
-              disabled={pending}
-              onClick={() =>
-                exec(() => setMaintenanceModeAction({ enabled: true, message, eta }), {
-                  success: "Website is now in maintenance mode",
-                  onOk: () => {
-                    setOpen(false);
-                    router.refresh();
-                  },
-                })
-              }
-            >
-              {initial.enabled ? "Save maintenance message" : "Enable maintenance mode & lock site"}
+          <div className="rounded-md border border-line bg-muted/50 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
+              <CalendarClock className="h-3.5 w-3.5 text-accent" />
+              Auto-Start / Auto-End Timer (optional)
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Auto-start at">
+                <input className="input mono text-xs" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+              </Field>
+              <Field label="Auto-end (unlock) at">
+                <input className="input mono text-xs" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+              </Field>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-danger flex-1" disabled={pending} onClick={() => save(true)}>
+              {initial.enabled ? "Save & keep locked" : "Lock site now"}
             </button>
+            {startsAt && !initial.enabled && (
+              <button className="btn-primary flex-1" disabled={pending} onClick={() => save(false)}>
+                Schedule for timer
+              </button>
+            )}
           </div>
         </div>
       </Modal>

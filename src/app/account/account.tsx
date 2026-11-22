@@ -3,10 +3,10 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Camera, Mail, ShieldCheck, Star, Trash2 } from "lucide-react";
-import { addEmailAction, changePasswordAction, makePrimaryEmailAction, removeAvatarAction, removeEmailAction, resendEmailVerificationAction, signOutOtherDevicesAction, updateProfileAction, uploadAvatarAction } from "@/actions/account";
+import { addEmailAction, changePasswordAction, makePrimaryEmailAction, removeAvatarAction, removeEmailAction, resendEmailVerificationAction, signOutOtherDevicesAction, revokeSessionAction, updateProfileAction, uploadAvatarAction } from "@/actions/account";
 import { resendVerificationAction } from "@/actions/auth";
 import { Badge, Field, useAction, useToast } from "@/components/ui";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, fmtDateTime } from "@/lib/utils";
 
 type Me = { id: string; name: string; nickname: string; email: string; verified: boolean; avatarUrl: string | null; hasPassword: boolean; createdAt: string };
 type Extra = { id: string; email: string; verified: boolean };
@@ -26,7 +26,7 @@ async function toAvatar(file: File): Promise<File> {
   return new File([blob], "avatar.jpg", { type: "image/jpeg" });
 }
 
-export function Account({ me, extras }: { me: Me; extras: Extra[] }) {
+export function Account({ me, extras, sessions = [] }: { me: Me; extras: Extra[]; sessions?: { id: string; device: string; ip: string; at: string; current: boolean }[] }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -100,6 +100,10 @@ export function Account({ me, extras }: { me: Me; extras: Extra[] }) {
 
       <Card title="Sessions" sub="Signed in somewhere you do not recognize? End every other session.">
         <button className="btn" disabled={pending} onClick={() => { if (confirm("Sign out of every other device? You will stay signed in here.")) exec(() => signOutOtherDevicesAction(), { success: "Signed out everywhere else" }); }}><ShieldCheck className="h-3.5 w-3.5" />Sign out of other devices</button>
+        {sessions.length > 0 && <ul className="mt-3 divide-y divide-line text-[13px]">{sessions.map((s) => (
+          <li key={s.id} className="flex items-center gap-3 py-2"><div className="min-w-0 flex-1"><div className="font-medium">{s.device || "Unknown device"}{s.current && <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-300">this device</span>}</div><div className="mono text-xs text-soft">{s.ip || "IP unknown"} · active {fmtDateTime(s.at)}</div></div>
+            {!s.current && <button className="btn" disabled={pending} onClick={() => exec(() => revokeSessionAction(s.id), { success: "Session ended" })}>End</button>}</li>
+        ))}</ul>}
         <p className="mt-3 text-xs text-soft">Account created {fmtDate(me.createdAt)}. Sessions last up to 14 days.</p>
       </Card>
 

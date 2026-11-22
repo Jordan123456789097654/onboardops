@@ -14,12 +14,16 @@ export async function saveFeaturesAction(input: unknown) {
   return run(async () => {
     const ctx = await requireWorkspaceRole(ADMIN_ROLES);
     const raw = z.record(z.boolean()).parse(input);
-    const clean: Record<string, boolean> = {};
+    const prev = (ctx.workspace.features && typeof ctx.workspace.features === "object" && !Array.isArray(ctx.workspace.features) ? ctx.workspace.features : {}) as Record<string, unknown>;
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(prev)) {
+      if (k.startsWith("__")) clean[k] = v;
+    }
     for (const f of FEATURES) if (typeof raw[f.key] === "boolean") clean[f.key] = raw[f.key];
     await prisma.$transaction(async (tx) => {
-      await tx.workspace.update({ where: { id: ctx.workspaceId }, data: { features: clean } });
-      const on = FEATURES.filter((f) => (clean[f.key] ?? f.defaultOn)).length;
-      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "FEATURES_UPDATED", targetType: "Workspace", targetId: ctx.workspaceId, summary: `Feature toggles updated (${on} of ${FEATURES.length} on)`, metadata: clean });
+      await tx.workspace.update({ where: { id: ctx.workspaceId }, data: { features: clean as object } });
+      const on = FEATURES.filter((f) => (typeof clean[f.key] === "boolean" ? (clean[f.key] as boolean) : f.defaultOn)).length;
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "FEATURES_UPDATED", targetType: "Workspace", targetId: ctx.workspaceId, summary: `Feature toggles updated (${on} of ${FEATURES.length} on)`, metadata: clean as object });
     });
     done();
     return undefined;

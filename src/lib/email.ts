@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { EMAIL_IMAGES } from "./email-assets";
 import { buildEmail } from "./email-template";
+import { emailOptedOut } from "./notify-prefs";
 
 const appUrl = () => (process.env.APP_URL || "https://onboardops.org").trim().replace(/^["']+|["']+$/g, "").replace(/\/$/, "");
 
@@ -31,6 +32,10 @@ export async function sendEmail(to: string, subject: string, text: string, opts:
   const log = (status: "SENT" | "FAILED" | "SKIPPED", error?: string, providerId?: string) =>
     prisma.emailLog.create({ data: { to: realTo, redirectedFrom: redirect ? to : null, subject: finalSubject, kind: opts.kind ?? "", status, error: error?.slice(0, 500), providerId, workspaceId: opts.workspaceId ?? null } }).catch(() => {});
 
+  if (opts.kind) {
+    const u = await prisma.user.findFirst({ where: { OR: [{ email: to.toLowerCase() }, { extraEmails: { some: { email: to.toLowerCase() } } }] }, select: { emailPrefs: true } }).catch(() => null);
+    if (u && emailOptedOut(u.emailPrefs, opts.kind)) { await log("SKIPPED", "Recipient turned this email type off"); return { ok: false, error: "Recipient opted out" }; }
+  }
   const key = process.env.RESEND_API_KEY?.trim().replace(/^["']+|["']+$/g, "").trim();
   if (!key) { await log("SKIPPED", "RESEND_API_KEY not set"); return { ok: false, error: "RESEND_API_KEY not set" }; }
   try {

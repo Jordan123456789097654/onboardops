@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { keyedHash } from "./audit-hash";
 import type { Prisma } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -18,9 +18,7 @@ export type AuditInput = {
 export async function writeAudit(tx: Tx, a: AuditInput) {
   const prev = await tx.auditLog.findFirst({ where: { workspaceId: a.workspaceId }, orderBy: { createdAt: "desc" }, select: { hash: true } });
   const createdAt = new Date();
-  const hash = createHash("sha256")
-    .update([prev?.hash ?? "GENESIS", a.workspaceId, a.actionType, a.targetType, a.targetId, a.summary, createdAt.toISOString()].join("|"))
-    .digest("hex");
+  const hash = keyedHash({ prev: prev?.hash ?? "GENESIS", workspaceId: a.workspaceId, actionType: a.actionType, targetType: a.targetType, targetId: a.targetId, summary: a.summary, createdAt });
   return tx.auditLog.create({
     data: {
       workspaceId: a.workspaceId,

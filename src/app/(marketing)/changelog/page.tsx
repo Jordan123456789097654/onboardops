@@ -2,6 +2,24 @@ export const metadata = { title: "Changelog" };
 
 const entries = [
   {
+    v: "0.10.0",
+    date: "2026-11-21",
+    items: [
+      "Appeals and evidence: employees can file an appeal from My Portal, reviewers uphold or overturn it from the case drawer (overturning restores strike points), and cases can hold witness statements and evidence.",
+      "Progressive discipline rules and strike point decay: owners and admins can set escalation rules and apply a rolling decay window, configured under Settings.",
+      "Time off: vacation, sick and personal requests with yearly allowances, days-left balances, a team calendar, and warnings when teammates request the same days.",
+      "Shift schedule week view with drag-to-assign and drag-to-move, and shift swap requests that managers approve or deny. Employees see their upcoming shifts in My Portal.",
+      "My Portal: time clock widget, profile update requests (with a manager approval queue), checklist photo uploads and a Due today badge on recurring checklists.",
+      "Checklists can repeat on chosen weekdays with a due time. Templates can be duplicated or deleted, and submission photos show as a gallery.",
+      "Policy editor shows what changed from the saved version, and each policy has a printable sign-off sheet.",
+      "Audit log: Verify chain re-checks the hash chain, and Export CSV downloads the full log.",
+      "Account: per-type email notification toggles, quiet hours settings, and a list of signed-in devices you can end individually, with an email when a new device signs in.",
+      "Custom employee fields (Settings) with values editable on each employee record, bulk document upload, and manual column matching when importing employees from CSV.",
+      "Command Center alerts for overdue checklists and expiring credentials or documents, and Ctrl+K now searches people and cases.",
+      "Workspace branding (accent color and tagline) and a strike decay window in Settings.",
+    ],
+  },
+  {
     v: "0.9.0",
     date: "2026-11-21",
     items: [

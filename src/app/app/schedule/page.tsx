@@ -16,12 +16,14 @@ export default async function SchedulePage() {
     <Schedule
       shifts={shifts.map((s) => ({
         id: s.id,
+        employeeId: s.employeeId,
         employee: s.employee ? `${s.employee.staffCode} ${s.employee.fullName}` : "Open shift",
         department: s.departmentId ? deptMap[s.departmentId] ?? null : null,
         startsAt: s.startsAt.toISOString(),
         endsAt: s.endsAt.toISOString(),
         label: s.label,
         notes: s.notes,
+        swap: s.swapStatus === "PENDING" ? `Swap requested${s.swapToId ? ` with ${employees.find((e) => e.id === s.swapToId)?.fullName ?? "coworker"}` : " (give up shift)"}${s.swapNote ? `: ${s.swapNote}` : ""}` : null,
       }))}
       employees={employees.map((e) => ({ id: e.id, label: `${e.staffCode} ${e.fullName}` }))}
       departments={departments.map((d) => ({ id: d.id, name: d.name }))}

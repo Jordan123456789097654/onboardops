@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveDepartmentAction, saveJobRoleAction, saveSettingsAction, testWebhookAction } from "@/actions/settings";
+import { saveDepartmentAction, saveJobRoleAction, saveSettingsAction, saveWorkspaceMetaAction, testWebhookAction } from "@/actions/settings";
 import { setMemberRoleAction } from "@/actions/features";
 import { FeaturesPanel } from "./features-panel";
+import { FieldsPanel } from "./fields-panel";
 import { RolesPanel } from "./roles-panel";
 import { closeWorkspaceAction, runRemindersNowAction } from "@/actions/workspace";
 import { DomainPanel } from "./domain-panel";
@@ -13,11 +14,12 @@ import { Badge, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/co
 type Dept = { id?: string; name: string; colorCode: string };
 type JobRole = { id?: string; title: string; description: string; requiredCourseIds: string[] };
 
-export function Settings({ features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
+export function Settings({ customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
+  customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
   domain: { slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
-  ws: { name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
+  ws: { decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
   departments: Required<Dept>[]; roles: Required<JobRole>[]; courses: { id: string; title: string }[]; members: { id: string; name: string; email: string; role: string; customRoleId: string | null }[];
 }) {
   const router = useRouter();
@@ -25,6 +27,7 @@ export function Settings({ features, rolePerms, customRoles, customRolesOn, doma
   const toast = useToast();
   const [tab, setTab] = useState("workspace");
   const [s, setS] = useState({ name: ws.name, operationsWebhookUrl: ws.ops, confidentialWebhookUrl: ws.conf, autoSuspendStrikeThreshold: ws.threshold, autoRetrainOnWrittenInfraction: ws.retrain, remindersEnabled: ws.reminders });
+  const [meta, setMeta] = useState({ strikeDecayDays: ws.decayDays, accentColor: ws.accent, tagline: ws.tagline });
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeName, setCloseName] = useState("");
   const [closePw, setClosePw] = useState("");
@@ -35,7 +38,7 @@ export function Settings({ features, rolePerms, customRoles, customRolesOn, doma
   return (
     <>
       <PageHeader title="Workspace Settings" sub="Webhooks, automation thresholds, departments, job roles and access." />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: "workspace", label: "Automation & Webhooks" }, { id: "structure", label: "Departments & Job Roles" }, { id: "access", label: "Access" }, { id: "roles", label: "Roles & permissions" }, { id: "features", label: "Features" }, { id: "domain", label: "Sign-in & domain" }, { id: "data", label: "Data & privacy" }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: "workspace", label: "Automation & Webhooks" }, { id: "structure", label: "Departments & Job Roles" }, { id: "access", label: "Access" }, { id: "roles", label: "Roles & permissions" }, { id: "features", label: "Features" }, { id: "fields", label: "Custom fields" }, { id: "domain", label: "Sign-in & domain" }, { id: "data", label: "Data & privacy" }]} />
       <div className={`mt-4 ${tab === "roles" ? "" : "max-w-3xl"}`}>
         {tab === "workspace" && (
           <div className="card space-y-4 p-4">
@@ -51,6 +54,12 @@ export function Settings({ features, rolePerms, customRoles, customRolesOn, doma
                 <div className="mt-1 flex items-center justify-between"><span className="text-xs text-soft">{hint}</span><button className="btn" disabled={pending} onClick={() => exec(() => testWebhookAction(kind, s[k]), { success: "Test embed sent" })}>Send Test Embed</button></div>
               </div>
             ))}
+            <div className="grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
+              <Field label="Strike decay window (days, 0 = off)"><input className="input mono" type="number" min={0} max={730} value={meta.strikeDecayDays} onChange={(e) => setMeta({ ...meta, strikeDecayDays: Number(e.target.value) })} /></Field>
+              <Field label="Brand color (#RRGGBB)"><input className="input mono" placeholder="#1D4ED8" value={meta.accentColor} onChange={(e) => setMeta({ ...meta, accentColor: e.target.value })} /></Field>
+              <Field label="Tagline"><input className="input" maxLength={140} value={meta.tagline} onChange={(e) => setMeta({ ...meta, tagline: e.target.value })} /></Field>
+            </div>
+            <button className="btn" disabled={pending} onClick={() => exec(() => saveWorkspaceMetaAction(meta), { success: "Decay and branding saved", onOk: done })}>Save decay and branding</button>
             <button className="btn-primary" disabled={pending} onClick={() => exec(() => saveSettingsAction(s), { success: "Settings saved", onOk: done })}>Save settings</button>
           </div>
         )}
@@ -76,6 +85,7 @@ export function Settings({ features, rolePerms, customRoles, customRolesOn, doma
           </div>
         )}
         {tab === "roles" && <RolesPanel initial={rolePerms} customRoles={customRoles} customEnabled={customRolesOn} />}
+        {tab === "fields" && <FieldsPanel initial={customFields} />}
         {tab === "features" && <FeaturesPanel initial={features} />}
         {tab === "access" && (
           <div className="card divide-y divide-line">{members.map((m) => (

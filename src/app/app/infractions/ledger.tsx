@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { addCaseAttachmentAction, applyStrikeDecayAction, decideAppealAction, deleteDisciplineRuleAction, saveDisciplineRuleAction } from "@/actions/discipline2";
 import { addCaseNoteAction, issueInfractionAction, logAppealAction } from "@/actions/infractions";
 import { Badge, Drawer, Empty, Field, Modal, PageHeader, useAction, useToast } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
@@ -8,12 +9,15 @@ import { fmtDate, fmtDateTime } from "@/lib/utils";
 export type CaseRow = {
   id: string; caseNumber: string; employeeId: string; employee: string; severity: string; points: number; policy: string; summary: string; evidence: string[]; confidential: string;
   acknowledged: boolean; signedBy: string | null; acknowledgedAt: string | null; issuedBy: string; createdAt: string;
+  attachments: { id: string; kind: string; title: string; statement: string; author: string; at: string }[];
+  appeals: { id: string; status: string; reason: string; by: string; reviewer: string | null; decision: string; at: string }[];
   timeline: { id: string; type: string; note: string; actor: string; at: string; confidential: boolean }[];
 };
 
+type RuleRow = { id: string; whenSeverity: string; count: number; withinDays: number; escalateTo: string };
 type TemplateOpt = { id: string; name: string; severity: string; points: number; policy: string; summary: string };
 
-export function Ledger({ rows, employees, templates = [], severities, canConfidential, defaultOpen }: { rows: CaseRow[]; employees: { id: string; label: string }[]; templates?: TemplateOpt[]; severities: string[]; canConfidential: boolean; defaultOpen: boolean }) {
+export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = false, severities, canConfidential, defaultOpen }: { rules?: RuleRow[]; isAdmin?: boolean; rows: CaseRow[]; employees: { id: string; label: string }[]; templates?: TemplateOpt[]; severities: string[]; canConfidential: boolean; defaultOpen: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -25,6 +29,11 @@ export function Ledger({ rows, employees, templates = [], severities, canConfide
   const [note, setNote] = useState("");
   const [noteConf, setNoteConf] = useState(false);
   const [appeal, setAppeal] = useState("");
+  const [att, setAtt] = useState({ kind: "WITNESS", title: "", statement: "" });
+  const [dec, setDec] = useState<Record<string, string>>({});
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rule, setRule] = useState({ whenSeverity: "VERBAL_WARNING", count: 3, withinDays: 90, escalateTo: "WRITTEN_INFRACTION" });
+  const SEVS = ["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"];
   const [f, setF] = useState({ employeeId: "", severity: severities[0] ?? "VERBAL_WARNING", pointsAdded: 0, policyViolated: "", summary: "", evidence: "", confidentialManagerNotes: "" });
 
   const shown = useMemo(() => rows.filter((r) => (!q || (r.caseNumber + r.employee + r.policy).toLowerCase().includes(q.toLowerCase())) && (!sev || r.severity === sev) && (!ack || (ack === "yes") === r.acknowledged)), [rows, q, sev, ack]);
@@ -39,7 +48,7 @@ export function Ledger({ rows, employees, templates = [], severities, canConfide
 
   return (
     <>
-      <PageHeader title="Infractions" sub="Case ledger. Cases and timeline entries are append-only."><button className="btn-primary" onClick={() => setLogOpen(true)}>Log Infraction</button></PageHeader>
+      <PageHeader title="Infractions" sub="Case ledger. Cases and timeline entries are append-only.">{isAdmin && <button className="btn" onClick={() => setRulesOpen(true)}>Discipline rules</button>}<button className="btn-primary" onClick={() => setLogOpen(true)}>Log Infraction</button></PageHeader>
       <div className="mb-3 flex flex-wrap gap-2">
         <input className="input !w-64" placeholder="Search case, employee, policy" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input !w-48" value={sev} onChange={(e) => setSev(e.target.value)}><option value="">All severities</option>{["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select>
@@ -92,6 +101,20 @@ export function Ledger({ rows, employees, templates = [], severities, canConfide
         </div>
       </Modal>
 
+      <Modal open={rulesOpen} onClose={() => setRulesOpen(false)} title="Progressive discipline rules">
+        <div className="space-y-3 text-[13px]">
+          {rules.length === 0 ? <p className="text-soft">No rules yet.</p> : <ul className="divide-y divide-line">{rules.map((r) => <li key={r.id} className="flex items-center justify-between gap-2 py-2"><span>{r.count} x {r.whenSeverity.replace(/_/g, " ")} within {r.withinDays} days, then <b>{r.escalateTo.replace(/_/g, " ")}</b></span><button className="btn-danger" disabled={pending} onClick={() => exec(() => deleteDisciplineRuleAction(r.id), { success: "Rule removed", onOk: () => router.refresh() })}>Delete</button></li>)}</ul>}
+          <div className="grid grid-cols-2 gap-2 border-t border-line pt-3">
+            <Field label="When severity"><select className="input" value={rule.whenSeverity} onChange={(e) => setRule({ ...rule, whenSeverity: e.target.value })}>{SEVS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></Field>
+            <Field label="Escalate to"><select className="input" value={rule.escalateTo} onChange={(e) => setRule({ ...rule, escalateTo: e.target.value })}>{SEVS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></Field>
+            <Field label="Count"><input className="input mono" type="number" min={2} max={10} value={rule.count} onChange={(e) => setRule({ ...rule, count: Number(e.target.value) })} /></Field>
+            <Field label="Within days"><input className="input mono" type="number" min={7} max={730} value={rule.withinDays} onChange={(e) => setRule({ ...rule, withinDays: Number(e.target.value) })} /></Field>
+          </div>
+          <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => saveDisciplineRuleAction({ ...rule, enabled: true }), { success: "Rule added", onOk: () => router.refresh() })}>Add rule</button>
+          <button className="btn w-full" disabled={pending} onClick={() => exec(() => applyStrikeDecayAction(), { onOk: (d) => { toast("ok", `Decay applied: ${d.updated} employee(s) updated (${d.decayDays}-day window)`); router.refresh(); } })}>Apply strike decay now</button>
+        </div>
+      </Modal>
+
       <Drawer open={!!open} onClose={() => setOpenId(null)} title={open ? `${open.caseNumber} · case dossier` : ""} wide>
         {open && (
           <div className="space-y-4 text-[13px]">
@@ -111,6 +134,21 @@ export function Ledger({ rows, employees, templates = [], severities, canConfide
               {canConfidential && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={noteConf} onChange={(e) => setNoteConf(e.target.checked)} />Confidential (hidden from supervisors and the employee)</label>}
               <button className="btn" disabled={pending} onClick={() => exec(() => addCaseNoteAction(open.id, { note, isConfidential: noteConf }), { success: "Note added", onOk: () => { setNote(""); router.refresh(); } })}>Add note</button>
             </div>
+            <div className="space-y-2 border-t border-line pt-4">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-soft">Witness statements and evidence</h3>
+              {open.attachments.length === 0 && <p className="text-soft">None attached.</p>}
+              {open.attachments.map((a) => <div key={a.id} className="rounded-md border border-line p-2"><div className="mono text-[11px] text-soft">{a.kind} · {a.author} · {fmtDateTime(a.at)}</div><div className="font-medium">{a.title}</div>{a.statement && <div className="whitespace-pre-wrap">{a.statement}</div>}</div>)}
+              <div className="grid grid-cols-3 gap-2"><select className="input" value={att.kind} onChange={(e) => setAtt({ ...att, kind: e.target.value })}><option value="WITNESS">Witness</option><option value="EVIDENCE">Evidence</option></select><input className="input col-span-2" placeholder="Title / witness name" value={att.title} onChange={(e) => setAtt({ ...att, title: e.target.value })} /></div>
+              <textarea className="textarea" rows={3} placeholder="Statement or description" value={att.statement} onChange={(e) => setAtt({ ...att, statement: e.target.value })} />
+              <button className="btn" disabled={pending} onClick={() => exec(() => addCaseAttachmentAction(open.id, att), { success: "Added", onOk: () => { setAtt({ ...att, title: "", statement: "" }); router.refresh(); } })}>Add to case</button>
+            </div>
+            {open.appeals.length > 0 && <div className="space-y-2 border-t border-line pt-4">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-soft">Appeals</h3>
+              {open.appeals.map((a) => <div key={a.id} className="rounded-md border border-line p-2"><div className="flex items-center gap-2"><Badge value={a.status === "OPEN" ? "PENDING" : a.status === "UPHELD" ? "FAILED" : "PASSED"} label={a.status} /><span className="mono text-[11px] text-soft">{a.by} · {fmtDateTime(a.at)}</span></div><div className="mt-1">{a.reason}</div>
+                {a.status !== "OPEN" && <div className="mt-1 text-soft">{a.reviewer}: {a.decision}</div>}
+                {a.status === "OPEN" && <div className="mt-2 space-y-2"><textarea className="textarea" rows={2} placeholder="Decision note" value={dec[a.id] ?? ""} onChange={(e) => setDec({ ...dec, [a.id]: e.target.value })} /><div className="flex gap-2">{(["UPHELD", "OVERTURNED"] as const).map((d) => <button key={d} className="btn" disabled={pending} onClick={() => exec(() => decideAppealAction(a.id, { decision: d, note: dec[a.id] ?? "" }), { success: `Appeal ${d.toLowerCase()}`, onOk: () => router.refresh() })}>{d === "UPHELD" ? "Uphold" : "Overturn"}</button>)}</div></div>}
+              </div>)}
+            </div>}
             <div className="space-y-2">
               <Field label="Log an appeal"><textarea className="textarea" rows={2} value={appeal} onChange={(e) => setAppeal(e.target.value)} /></Field>
               <button className="btn" disabled={pending} onClick={() => exec(() => logAppealAction(open.id, { note: appeal }), { success: "Appeal logged", onOk: () => { setAppeal(""); router.refresh(); } })}>Log appeal</button>

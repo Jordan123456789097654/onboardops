@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { keyedHash } from "./audit-hash";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
@@ -40,6 +40,6 @@ type Db = Prisma.TransactionClient | typeof prisma;
 export async function staffAudit(db: Db, s: Staff, a: { action: string; targetType: string; targetId: string; workspaceId?: string | null; summary: string; metadata?: Prisma.InputJsonValue }) {
   const prev = await db.staffAudit.findFirst({ orderBy: { createdAt: "desc" }, select: { hash: true } });
   const createdAt = new Date();
-  const hash = createHash("sha256").update([prev?.hash ?? "GENESIS", s.id, a.action, a.targetType, a.targetId, a.summary, createdAt.toISOString()].join("|")).digest("hex");
+  const hash = keyedHash({ prev: prev?.hash ?? "GENESIS", workspaceId: s.id, actionType: a.action, targetType: a.targetType, targetId: a.targetId, summary: a.summary, createdAt });
   return db.staffAudit.create({ data: { staffUserId: s.id, staffName: s.name, action: a.action, targetType: a.targetType, targetId: a.targetId, workspaceId: a.workspaceId ?? null, summary: a.summary, metadata: a.metadata ?? {}, hash, createdAt } });
 }

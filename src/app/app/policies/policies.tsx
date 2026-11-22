@@ -42,6 +42,7 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
                   <FileText className="h-4 w-4 text-soft" /><h2 className="font-medium">{p.title}</h2><span className="mono text-xs text-soft">v{p.version}</span>
                   {p.isPublished ? <Badge value="ACTIVE" label="Published" /> : <Badge value="LOA" label="Draft" />}
                   <span className="ml-auto flex gap-2">
+                    <a className="btn" href={`/print/policy/${p.id}`} target="_blank" rel="noreferrer">Sign-off sheet</a>
                     {p.fileId && <a className="btn" href={`/api/files/${p.fileId}`} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />PDF</a>}
                     <button className="btn" onClick={() => setOpen(open === p.id ? null : p.id)}>{p.unsigned.length} unsigned</button>
                     {canEdit && <button className="btn" onClick={() => setDraft({ id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, appliesToAll: p.appliesToAll, requiredJobRoleIds: p.requiredJobRoleIds, publish: p.isPublished, newVersion: false, fileName: p.fileName })}>Edit</button>}
@@ -67,6 +68,20 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
               {!draft.appliesToAll && <div className="mt-2 space-y-1 rounded-md border border-line p-2">{roles.map((r) => <label key={r.id} className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={draft.requiredJobRoleIds.includes(r.id)} onChange={() => setDraft({ ...draft, requiredJobRoleIds: draft.requiredJobRoleIds.includes(r.id) ? draft.requiredJobRoleIds.filter((x) => x !== r.id) : [...draft.requiredJobRoleIds, r.id] })} />{r.title}</label>)}</div>}
             </div>
             <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={draft.publish} onChange={(e) => setDraft({ ...draft, publish: e.target.checked })} />Published (visible to employees)</label>
+            {draft.id && (() => {
+              const orig = rows.find((r) => r.id === draft.id)?.contentMarkdown ?? "";
+              const lines = (t: string) => t.split(String.fromCharCode(10));
+              const oldL = lines(orig), newL = lines(draft.contentMarkdown);
+              const removed = oldL.filter((l) => l.trim() && !newL.includes(l)), added = newL.filter((l) => l.trim() && !oldL.includes(l));
+              if (!removed.length && !added.length) return null;
+              return (
+                <div className="rounded-md border border-line bg-muted p-2 text-xs">
+                  <div className="mb-1 font-medium">Changes from the saved version ({removed.length} removed, {added.length} added)</div>
+                  <div className="max-h-40 space-y-0.5 overflow-y-auto mono">{removed.map((l, i) => <div key={`r${i}`} className="text-rose-700 dark:text-rose-300">- {l}</div>)}{added.map((l, i) => <div key={`a${i}`} className="text-emerald-700 dark:text-emerald-300">+ {l}</div>)}</div>
+                  {!draft.newVersion && <p className="mt-1 text-soft">The text changed. Tick &quot;new version&quot; below if employees must sign again.</p>}
+                </div>
+              );
+            })()}
             {draft.id && <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={draft.newVersion} onChange={(e) => setDraft({ ...draft, newVersion: e.target.checked })} />This is a new version. Everyone in scope must sign again and is notified.</label>}
             <button className="btn-primary w-full" disabled={pending} onClick={save}>{pending ? "Saving…" : "Save policy"}</button>
           </div>

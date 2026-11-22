@@ -83,3 +83,24 @@ export async function saveJobRoleAction(input: unknown) {
     return undefined;
   });
 }
+
+export async function saveWorkspaceMetaAction(input: unknown) {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(ADMIN_ROLES);
+    const d = z.object({
+      strikeDecayDays: z.coerce.number().int().min(0).max(730).refine((n) => n === 0 || n >= 7, "Use 0 (off) or at least 7 days"),
+      accentColor: z.string().trim().regex(/^(#[0-9a-fA-F]{6})?$/, "Use a #RRGGBB color").default(""),
+      tagline: z.string().trim().max(140).default(""),
+    }).parse(input);
+    const ws = await prisma.workspace.findUnique({ where: { id: ctx.workspaceId }, select: { features: true } });
+    const prev = ((ws?.features ?? {}) as Record<string, unknown>);
+    const prevBrand = ((prev.__branding ?? {}) as Record<string, unknown>);
+    const next = { ...prev, __strikeDecayDays: d.strikeDecayDays, __branding: { ...prevBrand, accentColor: d.accentColor, tagline: d.tagline } };
+    await prisma.$transaction(async (tx) => {
+      await tx.workspace.update({ where: { id: ctx.workspaceId }, data: { features: next as never } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "SETTINGS_UPDATED", targetType: "Workspace", targetId: ctx.workspaceId, summary: `Strike decay ${d.strikeDecayDays || "off"} days; branding updated` });
+    });
+    revalidatePath("/app", "layout");
+    return undefined;
+  });
+}

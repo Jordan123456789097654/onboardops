@@ -9,7 +9,8 @@ import { emails, sendEmail } from "@/lib/email";
 import { notifyRoles } from "@/lib/notify";
 import { getStaff, requireStaff, staffAudit, SUPPORT_STAFF, OWNER_ONLY } from "@/lib/platform";
 import { PERMANENT_OWNER_EMAILS } from "@/lib/platform-role";
-import { saveMaintenanceState } from "@/lib/maintenance";
+import { saveAnnouncementState, saveMaintenanceState } from "@/lib/maintenance";
+import { mergeWorkspaceMeta } from "@/lib/workspace-meta";
 import { connectDomain, removeDomain, validateDomain } from "@/lib/vercel-domains";
 import { run } from "./_util";
 
@@ -287,23 +288,179 @@ export async function setMaintenanceModeAction(input: unknown) {
         enabled: z.boolean(),
         message: z.string().trim().max(1000).optional(),
         eta: z.string().trim().max(120).optional(),
+        startsAt: z.string().trim().max(60).optional().nullable(),
+        endsAt: z.string().trim().max(60).optional().nullable(),
       })
       .parse(input);
     const state = await saveMaintenanceState({
       enabled: d.enabled,
       message: d.message,
       eta: d.eta,
+      startsAt: d.startsAt || null,
+      endsAt: d.endsAt || null,
       updatedBy: staff.name,
     });
     await prisma.$transaction((tx) =>
       staffAudit(tx, staff, {
-        action: d.enabled ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
+        action: d.enabled || d.startsAt ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
         targetType: "Platform",
         targetId: "maintenance",
-        summary: d.enabled ? `Maintenance mode ENABLED (${state.message.slice(0, 80)})` : "Maintenance mode DISABLED (site unlocked)",
+        summary: d.enabled
+          ? `Maintenance mode ENABLED (${state.message.slice(0, 80)})`
+          : d.startsAt
+            ? `Maintenance scheduled (${d.startsAt}${d.endsAt ? ` → ${d.endsAt}` : ""})`
+            : "Maintenance mode DISABLED (site unlocked)",
       })
     );
     revalidatePath("/", "layout");
     return state;
+  });
+}
+
+/* ---------------- Global Announcement Banner (Site Owner) ---------------- */
+export async function setAnnouncementAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const d = z
+      .object({
+        enabled: z.boolean(),
+        message: z.string().trim().max(400).default(""),
+        tone: z.enum(["info", "warning", "success"]).default("info"),
+        linkUrl: z.string().trim().max(300).optional().nullable(),
+        linkLabel: z.string().trim().max(60).optional().nullable(),
+        dismissible: z.boolean().default(true),
+      })
+      .parse(input);
+    if (d.enabled && d.message.length < 3) throw new Error("Enter an announcement message.");
+    const state = await saveAnnouncementState({ ...d, updatedBy: staff.name });
+    await prisma.$transaction((tx) =>
+      staffAudit(tx, staff, {
+        action: d.enabled ? "ANNOUNCEMENT_ENABLED" : "ANNOUNCEMENT_DISABLED",
+        targetType: "Platform",
+        targetId: "announcement",
+        summary: d.enabled ? `Global announcement posted: "${d.message.slice(0, 80)}"` : "Global announcement cleared",
+      })
+    );
+    revalidatePath("/", "layout");
+    return state;
+  });
+}
+
+/* ---------------- Partner Workspace Badge & Legal Hold ---------------- */
+export async function setPartnerStatusAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const d = z.object({ workspaceId: z.string(), partner: z.boolean() }).parse(input);
+    const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
+    if (!ws) throw new Error("Workspace not found.");
+    const nextFeatures = mergeWorkspaceMeta(ws.features, { __partner: d.partner });
+    await prisma.$transaction(async (tx) => {
+      await tx.workspace.update({ where: { id: d.workspaceId }, data: { features: nextFeatures as object } });
+      await staffAudit(tx, staff, {
+        action: d.partner ? "PARTNER_ENABLED" : "PARTNER_DISABLED",
+        targetType: "Workspace",
+        targetId: d.workspaceId,
+        workspaceId: d.workspaceId,
+        summary: `${ws.name} ${d.partner ? "marked as Official Partner" : "partner badge removed"}`,
+      });
+    });
+    refresh();
+    revalidatePath("/app", "layout");
+    return undefined;
+  });
+}
+
+export async function adminToggleLegalHoldAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const d = z.object({ workspaceId: z.string(), legalHold: z.boolean(), reason: z.string().trim().max(500).default("") }).parse(input);
+    const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
+    if (!ws) throw new Error("Workspace not found.");
+    await prisma.$transaction(async (tx) => {
+      await tx.workspace.update({ where: { id: d.workspaceId }, data: { legalHold: d.legalHold, legalHoldReason: d.legalHold ? d.reason : "" } });
+      await writeAudit(tx, { workspaceId: d.workspaceId, actorName: "OnboardOps", actionType: d.legalHold ? "LEGAL_HOLD_ENABLED" : "LEGAL_HOLD_DISABLED", targetType: "Workspace", targetId: d.workspaceId, summary: d.legalHold ? `Legal Hold placed by OnboardOps${d.reason ? `: ${d.reason}` : ""}` : "Legal Hold lifted by OnboardOps" });
+      await staffAudit(tx, staff, { action: d.legalHold ? "LEGAL_HOLD_ON" : "LEGAL_HOLD_OFF", targetType: "Workspace", targetId: d.workspaceId, workspaceId: d.workspaceId, summary: `${ws.name} legal hold ${d.legalHold ? "enabled" : "lifted"}` });
+    });
+    refresh();
+    revalidatePath("/app", "layout");
+    return undefined;
+  });
+}
+
+/* ---------------- Admin Email Log: Retry Failed & Send Test ---------------- */
+export async function sendTestEmailAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(SUPPORT_STAFF);
+    const d = z
+      .object({
+        to: z.string().trim().email("Enter a valid recipient email"),
+        subject: z.string().trim().min(2).max(150).default("OnboardOps test email"),
+        message: z.string().trim().min(2).max(2000).default("This is a test message from the OnboardOps Staff Console verifying delivery from notifications@onboardops.org."),
+      })
+      .parse(input);
+    const r = await sendEmail(d.to, d.subject, d.message, { kind: "admin-test" });
+    await prisma.$transaction((tx) =>
+      staffAudit(tx, staff, {
+        action: "TEST_EMAIL_SENT",
+        targetType: "Email",
+        targetId: d.to,
+        summary: `Test email to ${d.to} (${r.ok ? "sent" : `failed: ${r.error ?? "unknown"}`})`,
+      })
+    );
+    refresh();
+    if (!r.ok) throw new Error(r.error ?? "Failed to send test email.");
+    return undefined;
+  });
+}
+
+export async function retryEmailAction(emailLogId: string) {
+  return run(async () => {
+    const staff = await requireStaff(SUPPORT_STAFF);
+    const logRow = await prisma.emailLog.findUnique({ where: { id: emailLogId } });
+    if (!logRow) throw new Error("Email log entry not found.");
+    const recipient = logRow.redirectedFrom || logRow.to;
+    // Re-send a fresh notification or invite/recovery notice depending on kind
+    const ws = logRow.workspaceId ? await prisma.workspace.findUnique({ where: { id: logRow.workspaceId } }) : null;
+    let r: { ok: boolean; error?: string };
+    if (logRow.kind === "invite" && ws) {
+      const user = await prisma.user.findUnique({ where: { email: recipient.toLowerCase() } });
+      if (user) {
+        const raw = await createToken(user.id, "INVITE", 7 * 86400000);
+        const link = `${process.env.APP_URL || "https://onboardops.org"}/reset-password?token=${raw}&invite=1`;
+        const m = emails.invite(user.name, ws.name, link);
+        r = await sendEmail(recipient, m.subject, m.text, { html: m.html, kind: "invite-retry", workspaceId: ws.id, workspaceName: ws.name });
+      } else {
+        r = await sendEmail(recipient, logRow.subject, `Re-sending notification from ${ws.name} on OnboardOps: ${logRow.subject}`, { kind: `${logRow.kind || "retry"}-retry`, workspaceId: ws.id, workspaceName: ws.name });
+      }
+    } else if (logRow.kind === "verify") {
+      const user = await prisma.user.findUnique({ where: { email: recipient.toLowerCase() } });
+      if (user) {
+        const raw = await createToken(user.id, "VERIFY", 24 * 3600_000);
+        const link = `${process.env.APP_URL || "https://onboardops.org"}/verify-email?token=${raw}`;
+        const m = emails.verify(user.name, link);
+        r = await sendEmail(recipient, m.subject, m.text, { html: m.html, kind: "verify-retry" });
+      } else {
+        r = await sendEmail(recipient, logRow.subject, `Re-sending verification email from OnboardOps.`, { kind: "verify-retry" });
+      }
+    } else {
+      r = await sendEmail(
+        recipient,
+        logRow.subject,
+        `This is a re-sent copy of your OnboardOps notification ("${logRow.subject}"). Sign in at ${process.env.APP_URL || "https://onboardops.org"} to view full details.`,
+        { kind: `${logRow.kind || "email"}-retry`, workspaceId: ws?.id ?? null, workspaceName: ws?.name ?? null }
+      );
+    }
+    await prisma.$transaction((tx) =>
+      staffAudit(tx, staff, {
+        action: "EMAIL_RETRIED",
+        targetType: "EmailLog",
+        targetId: emailLogId,
+        workspaceId: logRow.workspaceId,
+        summary: `Retried email "${logRow.subject}" to ${recipient} (${r.ok ? "sent" : `failed: ${r.error ?? "unknown"}`})`,
+      })
+    );
+    refresh();
+    if (!r.ok) throw new Error(r.error ?? "Retry failed.");
+    return undefined;
   });
 }

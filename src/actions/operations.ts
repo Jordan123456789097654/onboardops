@@ -210,3 +210,84 @@ export async function deleteAssetAction(id: string) {
     return undefined;
   });
 }
+
+/* Employee asks to swap or give up one of their shifts; managers approve or deny. */
+export async function requestShiftSwapAction(shiftId: string, input: unknown) {
+  return run(async () => {
+    const ctx = await requireFeature("scheduling");
+    const me = ctx.profile;
+    if (!me) throw new Error("No employee profile is linked to your login.");
+    const d = z.object({ toId: z.string().optional().or(z.literal("")), note: z.string().trim().max(500).default("") }).parse(input);
+    const s = await prisma.shift.findFirst({ where: { id: shiftId, workspaceId: ctx.workspaceId, employeeId: me.id, startsAt: { gt: new Date() } } });
+    if (!s) throw new Error("Shift not found or already started.");
+    if (s.swapStatus === "PENDING") throw new Error("A swap is already pending for this shift.");
+    if (d.toId) {
+      const t = await prisma.employeeProfile.findFirst({ where: { id: d.toId, workspaceId: ctx.workspaceId, status: "ACTIVE" } });
+      if (!t) throw new Error("Choose an active coworker.");
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.shift.update({ where: { id: shiftId }, data: { swapStatus: "PENDING", swapToId: d.toId || null, swapNote: d.note } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "SHIFT_SWAP_REQUESTED", targetType: "Shift", targetId: shiftId, summary: `${me.staffCode} requested a shift swap` });
+    });
+    done();
+    return undefined;
+  });
+}
+
+export async function decideShiftSwapAction(shiftId: string, input: unknown) {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(MANAGEMENT_ROLES);
+    const d = z.object({ decision: z.enum(["APPROVED", "DENIED"]) }).parse(input);
+    await prisma.$transaction(async (tx) => {
+      const s = await tx.shift.findFirst({ where: { id: shiftId, workspaceId: ctx.workspaceId, swapStatus: "PENDING" } });
+      if (!s) throw new Error("No pending swap on this shift.");
+      await tx.shift.update({ where: { id: shiftId }, data: d.decision === "APPROVED" ? { employeeId: s.swapToId, swapStatus: "APPROVED", swapToId: null } : { swapStatus: "DENIED" } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: `SHIFT_SWAP_${d.decision}`, targetType: "Shift", targetId: shiftId, summary: `Shift swap ${d.decision.toLowerCase()}` });
+    });
+    done();
+    return undefined;
+  });
+}
+
+/* Drag-and-drop scheduling */
+export async function assignShiftAction(shiftId: string, employeeId: string | null) {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(MANAGEMENT_ROLES);
+    await prisma.$transaction(async (tx) => {
+      const s = await tx.shift.findFirst({ where: { id: shiftId, workspaceId: ctx.workspaceId } });
+      if (!s) throw new Error("Shift not found.");
+      if (employeeId) {
+        const e = await tx.employeeProfile.findFirst({ where: { id: employeeId, workspaceId: ctx.workspaceId, status: { not: "TERMINATED" } } });
+        if (!e) throw new Error("Employee not found.");
+        const clash = await tx.shift.findFirst({ where: { workspaceId: ctx.workspaceId, employeeId, id: { not: shiftId }, startsAt: { lt: s.endsAt }, endsAt: { gt: s.startsAt } } });
+        if (clash) throw new Error(`${e.fullName} already has a shift at that time.`);
+      }
+      await tx.shift.update({ where: { id: shiftId }, data: { employeeId, swapStatus: null, swapToId: null } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "SHIFT_ASSIGNED", targetType: "Shift", targetId: shiftId, summary: employeeId ? "Shift assigned" : "Shift set to open" });
+    });
+    done();
+    return undefined;
+  });
+}
+
+export async function moveShiftAction(shiftId: string, dayDelta: number) {
+  return run(async () => {
+    const ctx = await requireWorkspaceRole(MANAGEMENT_ROLES);
+    const delta = z.number().int().min(-60).max(60).parse(dayDelta);
+    if (delta === 0) return undefined;
+    await prisma.$transaction(async (tx) => {
+      const s = await tx.shift.findFirst({ where: { id: shiftId, workspaceId: ctx.workspaceId } });
+      if (!s) throw new Error("Shift not found.");
+      const startsAt = new Date(s.startsAt.getTime() + delta * 86400000);
+      const endsAt = new Date(s.endsAt.getTime() + delta * 86400000);
+      if (s.employeeId) {
+        const clash = await tx.shift.findFirst({ where: { workspaceId: ctx.workspaceId, employeeId: s.employeeId, id: { not: shiftId }, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } });
+        if (clash) throw new Error("That would double-book the employee.");
+      }
+      await tx.shift.update({ where: { id: shiftId }, data: { startsAt, endsAt } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "SHIFT_MOVED", targetType: "Shift", targetId: shiftId, summary: `Shift moved ${delta > 0 ? "+" : ""}${delta} day(s)` });
+    });
+    done();
+    return undefined;
+  });
+}

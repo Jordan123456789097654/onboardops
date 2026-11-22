@@ -5,6 +5,7 @@ import { writeAudit } from "./audit";
 import { sendEmbed, COLORS, type Embed } from "./webhooks";
 import { sendEmail, emails } from "./email";
 import type { Ctx } from "./rbac";
+import { getStrikeDecayDays } from "./workspace-meta";
 import { notifyEmployee, notifyRoles } from "./notify";
 
 type Tx = Prisma.TransactionClient;
@@ -198,17 +199,58 @@ export type IssueInput = {
   confidentialManagerNotes: string;
 };
 
-/** Automation 3: infraction escalation, auto-retraining, auto-suspend/terminate. */
+/** Automation 3: progressive discipline escalation, strike point decay, auto-retraining, auto-suspend/terminate. */
 export async function issueInfraction(ctx: Ctx, input: IssueInput) {
   const fx = newEffects();
+  const SEV_ORDER: Severity[] = ["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"];
   const out = await prisma.$transaction(async (tx) => {
     const emp = await tx.employeeProfile.findFirst({ where: { id: input.employeeId, workspaceId: ctx.workspaceId } });
     if (!emp) throw new Error("Employee not found.");
     const ws = ctx.workspace;
-    const newPoints = emp.strikePoints + input.pointsAdded;
+    const effects: string[] = [];
+
+    // Apply strike point decay if configured on the workspace
+    let basePoints = emp.strikePoints;
+    const decayDays = getStrikeDecayDays(ws.features);
+    if (decayDays > 0 && basePoints > 0) {
+      const cutoff = new Date(Date.now() - decayDays * 86400000);
+      const recentCases = await tx.infractionCase.findMany({
+        where: { employeeId: emp.id, workspaceId: ws.id, createdAt: { gte: cutoff } },
+        include: { appeals: true },
+      });
+      const activePts = recentCases
+        .filter((c) => !c.appeals.some((a) => a.status === "OVERTURNED"))
+        .reduce((s, c) => s + c.pointsAdded, 0);
+      if (activePts < basePoints) {
+        effects.push(`strike decay applied (${basePoints} → ${activePts})`);
+        basePoints = activePts;
+      }
+    }
+
+    // Evaluate progressive discipline rules (auto-escalate repeated patterns)
+    let finalSeverity: Severity = input.severity;
+    const rules = await tx.disciplineRule.findMany({ where: { workspaceId: ws.id, enabled: true, whenSeverity: input.severity } });
+    for (const r of rules) {
+      const since = new Date(Date.now() - r.withinDays * 86400000);
+      const priorCount = await tx.infractionCase.count({
+        where: {
+          employeeId: emp.id,
+          workspaceId: ws.id,
+          severity: r.whenSeverity,
+          createdAt: { gte: since },
+          appeals: { none: { status: "OVERTURNED" } },
+        },
+      });
+      if (priorCount + 1 >= r.count && SEV_ORDER.indexOf(r.escalateTo) > SEV_ORDER.indexOf(finalSeverity)) {
+        finalSeverity = r.escalateTo;
+        effects.push(`auto-escalated to ${finalSeverity.replace(/_/g, " ")} (${priorCount + 1}x ${r.whenSeverity.replace(/_/g, " ")} in ${r.withinDays}d)`);
+      }
+    }
+
+    const newPoints = basePoints + input.pointsAdded;
     const caseNumber = await nextCaseNumber(tx, ws.id);
 
-    const retrain = (input.severity === "WRITTEN_INFRACTION" || input.pointsAdded >= 2) && ws.autoRetrainOnWrittenInfraction;
+    const retrain = (finalSeverity === "WRITTEN_INFRACTION" || input.pointsAdded >= 2) && ws.autoRetrainOnWrittenInfraction;
     let remedialId: string | null = null;
     if (retrain) {
       const remedial = await tx.course.findFirst({ where: { workspaceId: ws.id, isRemedial: true, isPublished: true }, orderBy: { createdAt: "asc" } });
@@ -221,7 +263,7 @@ export async function issueInfraction(ctx: Ctx, input: IssueInput) {
         caseNumber,
         employeeId: emp.id,
         issuedByMemberId: ctx.id,
-        severity: input.severity,
+        severity: finalSeverity,
         pointsAdded: input.pointsAdded,
         policyViolated: input.policyViolated,
         summary: input.summary,
@@ -231,11 +273,16 @@ export async function issueInfraction(ctx: Ctx, input: IssueInput) {
       },
     });
     await tx.infractionTimelineEvent.create({
-      data: { caseId: created.id, actorMemberId: ctx.id, actorName: ctx.user.name, eventType: "CREATED", note: `${input.severity.replace(/_/g, " ")} issued for ${input.policyViolated}` },
+      data: {
+        caseId: created.id,
+        actorMemberId: ctx.id,
+        actorName: ctx.user.name,
+        eventType: "CREATED",
+        note: `${finalSeverity.replace(/_/g, " ")} issued for ${input.policyViolated}${finalSeverity !== input.severity ? ` (auto-escalated from ${input.severity.replace(/_/g, " ")})` : ""}`,
+      },
     });
 
     const update: Prisma.EmployeeProfileUpdateInput = { strikePoints: newPoints };
-    const effects: string[] = [];
     if (retrain) {
       update.readiness = "RETRAINING_REQUIRED";
       effects.push("readiness → RETRAINING_REQUIRED");
@@ -256,10 +303,10 @@ export async function issueInfraction(ctx: Ctx, input: IssueInput) {
         await notifyEmployee(tx, ws.id, emp.id, { title: `Retraining assigned: ${rc?.title ?? "Remedial course"}`, body: reason, href: `/app/training/course/${remedialId}` });
       }
     }
-    if (input.severity === "TERMINATION") {
+    if (finalSeverity === "TERMINATION") {
       update.status = "TERMINATED";
       effects.push("status → TERMINATED");
-    } else if (input.severity === "SUSPENSION" || newPoints >= ws.autoSuspendStrikeThreshold) {
+    } else if (finalSeverity === "SUSPENSION" || newPoints >= ws.autoSuspendStrikeThreshold) {
       if (emp.status !== "TERMINATED") {
         update.status = "SUSPENDED";
         effects.push("status → SUSPENDED");
@@ -274,14 +321,14 @@ export async function issueInfraction(ctx: Ctx, input: IssueInput) {
       actionType: "INFRACTION_ISSUED",
       targetType: "Employee",
       targetId: emp.id,
-      summary: `${caseNumber}: ${input.severity.replace(/_/g, " ")} for ${emp.staffCode} (+${input.pointsAdded} pts, total ${newPoints})${effects.length ? ` — ${effects.join("; ")}` : ""}`,
-      metadata: { caseId: created.id, severity: input.severity, pointsAdded: input.pointsAdded, effects },
+      summary: `${caseNumber}: ${finalSeverity.replace(/_/g, " ")} for ${emp.staffCode} (+${input.pointsAdded} pts, total ${newPoints})${effects.length ? ` — ${effects.join("; ")}` : ""}`,
+      metadata: { caseId: created.id, severity: finalSeverity, pointsAdded: input.pointsAdded, effects },
     });
 
     fx.confidential.push({
-      title: `${caseNumber} — ${input.severity.replace(/_/g, " ")}`,
+      title: `${caseNumber} — ${finalSeverity.replace(/_/g, " ")}`,
       description: `${emp.fullName} (${emp.staffCode}) · ${input.policyViolated}`,
-      color: input.severity === "VERBAL_WARNING" ? COLORS.warn : COLORS.danger,
+      color: finalSeverity === "VERBAL_WARNING" ? COLORS.warn : COLORS.danger,
       fields: [
         { name: "Points", value: `+${input.pointsAdded} (total ${newPoints})`, inline: true },
         { name: "Issued by", value: ctx.user.name, inline: true },
@@ -289,8 +336,8 @@ export async function issueInfraction(ctx: Ctx, input: IssueInput) {
       ],
     });
     await notifyEmployee(tx, ws.id, emp.id, { title: `${caseNumber} needs your signature`, body: input.policyViolated, href: "/app/my-portal" });
-    if (input.severity !== "VERBAL_WARNING") {
-      fx.mail.push({ to: emp.email, ...emails.infraction(emp.fullName, caseNumber, input.severity, input.summary) });
+    if (finalSeverity !== "VERBAL_WARNING") {
+      fx.mail.push({ to: emp.email, ...emails.infraction(emp.fullName, caseNumber, finalSeverity, input.summary) });
     }
     return { id: created.id, caseNumber, effects };
   });

@@ -233,6 +233,7 @@ model EmployeeProfile {
   @@unique([workspaceId, staffCode])
   @@index([workspaceId, status])
   @@index([workspaceId, departmentId])
+  timeOffAllowance Json @default("{}")
 }
 
 model Course {
@@ -920,4 +921,12 @@ model AssetCheckout {
 
   @@index([assetId, outAt])
   @@index([employeeId])
+}
+
+model RateLimit {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
 }
