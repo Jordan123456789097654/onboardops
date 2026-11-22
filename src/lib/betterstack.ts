@@ -162,3 +162,65 @@ export async function maybeReconcile() {
   lastReconcile = Date.now();
   await reconcileMaintenance().catch((e) => console.error("betterstack reconcile failed", e instanceof Error ? e.message : e));
 }
+
+/* ---------------- Staff console (status manager) ---------------- */
+export type BsResource = { id: string; name: string; status: string };
+export type BsReport = { id: string; title: string; type: string; state: string; startsAt: string; endsAt: string | null; affected: { id: string; name: string; status: string }[] };
+export type BsMonitor = { id: string; name: string; status: string; url: string; lastCheckedAt: string | null };
+
+export const STATUS_PAGE_URL = "https://status.onboardops.org";
+
+/** Everything the status manager shows: services as the public page sees them, recent reports and the monitors behind them. */
+export async function bsOverview(): Promise<{ resources: BsResource[]; reports: BsReport[]; monitors: BsMonitor[] }> {
+  const [res, rep, mon] = await Promise.all([
+    call("GET", `/v3/status-pages/${pageId()}/resources?per_page=100`),
+    call("GET", `/v2/status-pages/${pageId()}/status-reports?per_page=30&sort=-starts_at`),
+    call("GET", `/v2/monitors?per_page=100`),
+  ]);
+  if (!res.ok) throw new Error(res.status === 401 ? "Better Stack rejected the token." : `Better Stack responded ${res.status}`);
+  const resources = ((res.json.data ?? []) as { id: string; attributes: { public_name?: string; status?: string; position?: number } }[])
+    .map((r) => ({ id: String(r.id), name: r.attributes.public_name ?? "", status: r.attributes.status ?? "operational" }));
+  const nameOf = new Map(resources.map((r) => [r.id, r.name]));
+  const reports = ((rep.json.data ?? []) as { id: string; attributes: { title: string; report_type: string; aggregate_state?: string; starts_at: string; ends_at: string | null; affected_resources?: { status_page_resource_id: string; status: string }[] } }[]).map((r) => ({
+    id: String(r.id), title: r.attributes.title, type: r.attributes.report_type, state: r.attributes.aggregate_state ?? "resolved", startsAt: r.attributes.starts_at, endsAt: r.attributes.ends_at,
+    affected: (r.attributes.affected_resources ?? []).map((a) => ({ id: String(a.status_page_resource_id), name: nameOf.get(String(a.status_page_resource_id)) ?? "Service", status: a.status })),
+  }));
+  const monitors = ((mon.json.data ?? []) as { id: string; attributes: { pronounceable_name?: string; status?: string; url?: string; last_checked_at?: string | null } }[])
+    .map((m) => ({ id: String(m.id), name: m.attributes.pronounceable_name ?? "", status: m.attributes.status ?? "pending", url: m.attributes.url ?? "", lastCheckedAt: m.attributes.last_checked_at ?? null }));
+  return { resources, reports, monitors };
+}
+
+const fail = (r: Resp, what: string) => new Error(`${what} failed (${r.status}): ${typeof r.json?.errors === "string" ? r.json.errors : JSON.stringify(r.json).slice(0, 160)}`);
+
+export async function bsCreateIncident(i: { title: string; message: string; resourceIds: string[]; status: "degraded" | "downtime"; notify: boolean }) {
+  const r = await call("POST", `/v2/status-pages/${pageId()}/status-reports`, { title: i.title, message: i.message, report_type: "manual", notify_subscribers: i.notify, affected_resources: i.resourceIds.map((id) => ({ status_page_resource_id: id, status: i.status })) });
+  if (!r.ok) throw fail(r, "Creating the incident");
+  return String(r.json.data?.id);
+}
+
+/** Posts an update on a report and sets every service it affects to the given state. */
+export async function bsUpdateIncident(reportId: string, message: string, status: "degraded" | "downtime" | "resolved", notify: boolean) {
+  const g = await call("GET", `/v2/status-pages/${pageId()}/status-reports/${reportId}`);
+  if (!g.ok) throw fail(g, "Reading the report");
+  const affected = (g.json.data?.attributes?.affected_resources ?? []) as { status_page_resource_id: string }[];
+  const r = await call("POST", `/v2/status-pages/${pageId()}/status-reports/${reportId}/status-updates`, { message, notify_subscribers: notify, affected_resources: affected.map((a) => ({ status_page_resource_id: String(a.status_page_resource_id), status })) });
+  if (!r.ok) throw fail(r, "Posting the update");
+}
+
+export async function bsScheduleMaintenance(i: { title: string; message: string; resourceIds: string[]; startsAt: string; endsAt: string; notify: boolean }) {
+  const r = await call("POST", `/v2/status-pages/${pageId()}/status-reports`, { title: i.title, message: i.message, report_type: "maintenance", starts_at: i.startsAt, ends_at: i.endsAt, notify_subscribers: i.notify, affected_resources: i.resourceIds.map((id) => ({ status_page_resource_id: id, status: "maintenance" })) });
+  if (!r.ok) throw fail(r, "Scheduling the maintenance");
+  return String(r.json.data?.id);
+}
+
+export async function bsEndMaintenance(reportId: string) {
+  const g = await call("GET", `/v2/status-pages/${pageId()}/status-reports/${reportId}`);
+  const start = g.ok ? Date.parse(g.json.data?.attributes?.starts_at ?? "") : NaN;
+  const r = await call("PATCH", `/v2/status-pages/${pageId()}/status-reports/${reportId}`, { ends_at: new Date(Math.max(Date.now(), isNaN(start) ? 0 : start + 1000)).toISOString() });
+  if (!r.ok) throw fail(r, "Ending the maintenance");
+}
+
+export async function bsDeleteReport(reportId: string) {
+  const r = await call("DELETE", `/v2/status-pages/${pageId()}/status-reports/${reportId}`);
+  if (!r.ok && r.status !== 404) throw fail(r, "Deleting the report");
+}
