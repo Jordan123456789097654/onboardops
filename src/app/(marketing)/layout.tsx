@@ -9,7 +9,7 @@ import { RefCapture } from "@/components/ref-capture";
 
 const cols = [
   { title: "Product", links: [["Why OnboardOps", "/why"], ["Overview", "/features"], ["Solutions", "/solutions"], ["Security", "/security"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"], ["Free tools", "/tools"], ["Playbooks", "/playbooks"]] },
-  { title: "Company", links: [["About", "/about"], ["Help center", "/support"], ["Blog", "/blog"], ["Migration guides", "/migrate"], ["Launch checklist", "/launch"], ["Video tutorial", "/tutorial"],["Verify a certificate", "/verify"], ["Careers", "/careers"], ["Partners and badge", "/partners"], ["Brand", "/brand"], ["Contact support", "/contact"], ["FAQ", "/faq"], ["Sign in", "/login"], ["Create a workspace", "/register"]] },
+  { title: "Company", links: [["About", "/about"], ["Help center", "/support"], ["Blog", "/blog"], ["Migration guides", "/migrate"], ["Launch checklist", "/launch"], ["System status", "https://status.onboardops.org"], ["Video tutorial", "/tutorial"],["Verify a certificate", "/verify"], ["Careers", "/careers"], ["Partners and badge", "/partners"], ["Brand", "/brand"], ["Contact support", "/contact"], ["FAQ", "/faq"], ["Sign in", "/login"], ["Create a workspace", "/register"]] },
   { title: "Legal", links: legalPages.map((l) => [l.label, l.href]) },
 ];
 
@@ -34,14 +34,14 @@ export default async function MarketingLayout({ children }: { children: React.Re
           {cols.map((c) => (
             <div key={c.title}>
               <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-soft">{c.title}</h3>
-              <ul className="space-y-2 text-[13px]">{c.links.map(([l, h]) => <li key={h}><Link href={h} className="link-u text-soft hover:text-ink">{l}</Link></li>)}</ul>
+              <ul className="space-y-2 text-[13px]">{c.links.map(([l, h]) => <li key={h}>{h.startsWith("http") ? <a href={h} target="_blank" rel="noopener noreferrer" className="link-u text-soft hover:text-ink">{l}</a> : <Link href={h} className="link-u text-soft hover:text-ink">{l}</Link>}</li>)}</ul>
             </div>
           ))}
         </div>
         <div className="border-t border-line">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 text-xs text-soft">
             <span>© 2026 OnboardOps. All rights reserved.</span>
-            <span>Built in Georgia, USA</span>
+            <span className="flex items-center gap-4"><a href="https://status.onboardops.org" target="_blank" rel="noopener noreferrer" className="link-u hover:text-ink">System status</a><span>Built in Georgia, USA</span></span>
           </div>
         </div>
       </footer>

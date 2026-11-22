@@ -80,6 +80,7 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userN
           <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-medium">{userName}</div><div className="mono text-[11px] text-soft">{role}</div></div>
           <Link href="/account" className="text-xs text-accent">Account</Link>
         </div>
+        <a href="https://status.onboardops.org" target="_blank" rel="noopener noreferrer" className="block text-center text-[11px] text-soft underline-offset-2 hover:text-ink hover:underline">System status</a>
         <form action={logoutAction}><button className="btn w-full"><LogOut className="h-3.5 w-3.5" />Sign out</button></form>
       </div>
     </nav>
