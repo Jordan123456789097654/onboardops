@@ -30,7 +30,7 @@ export default async function SettingsPage() {
     <Settings
       isOwner={ctx.role === "OWNER"}
       domain={{ address: { enabled: subdomainsEnabled(), slug: w.subdomain ?? "", status: w.subdomainStatus, zone: ZONE, isOwner: ctx.role === "OWNER" }, slug: w.slug, baseUrl: SITE.url, name: w.customDomain, status: w.domainStatus, details: (w.domainDetails as DomainDetails | null) ?? null, vercel: vercelConfigured() }}
-      ws={{ decayDays: getStrikeDecayDays(w.features), accent: getWorkspaceBranding(w.features).accentColor, tagline: getWorkspaceBranding(w.features).tagline, name: w.name, ops: w.operationsWebhookUrl ?? "", conf: w.confidentialWebhookUrl ?? "", threshold: w.autoSuspendStrikeThreshold, retrain: w.autoRetrainOnWrittenInfraction, reminders: w.remindersEnabled }}
+      ws={{ publicCerts: (w.features as Record<string, unknown> | null)?.__publicCerts !== false, decayDays: getStrikeDecayDays(w.features), accent: getWorkspaceBranding(w.features).accentColor, tagline: getWorkspaceBranding(w.features).tagline, name: w.name, ops: w.operationsWebhookUrl ?? "", conf: w.confidentialWebhookUrl ?? "", threshold: w.autoSuspendStrikeThreshold, retrain: w.autoRetrainOnWrittenInfraction, reminders: w.remindersEnabled }}
       departments={departments.map((d) => ({ id: d.id, name: d.name, colorCode: d.colorCode }))}
       roles={roles.map((r) => ({ id: r.id, title: r.title, description: r.description, requiredCourseIds: r.requiredCourseIds }))}
       courses={courses}

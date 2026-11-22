@@ -15,17 +15,20 @@ import { acknowledgePolicyAction } from "@/actions/policies";
 import { fileIncidentAction } from "@/actions/incidents";
 import { submitStaffRequestAction, withdrawStaffRequestAction } from "@/actions/requests";
 import { INCIDENT_TYPES } from "@/lib/constants";
-import { Badge, Empty, Field, Modal, PageHeader, useAction } from "@/components/ui";
+import { Badge, Empty, Field, Modal, PageHeader, Tabs, useAction } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
+import { TodayHub } from "./today-hub";
+import { Check, Circle } from "lucide-react";
 
 type Props = {
+  locationName: string | null; teamShifts: { id: string; name: string; label: string; startsAt: string; endsAt: string }[]; weekEntries: { clockIn: string; clockOut: string | null }[]; credentials: { id: string; name: string; expires: string }[]; submittedTemplates: { id: string; at: string }[];
   calendarUrl: string; sms: { configured: boolean; optIn: boolean; phone: string };
   balances: { type: string; allowance: number; used: number; pending: number }[];
   shifts: { id: string; label: string; startsAt: string; endsAt: string; swap: string | null }[]; coworkers: { id: string; name: string }[];
   phone: string; emergencyContact: string; openEntry: { id: string; since: string } | null; appeals: { caseId: string; status: string; note: string }[];
   name: string; staffCode: string; status: string; readiness: string; points: number;
   enrollments: { id: string; courseId: string; title: string; status: string; best: number | null; cert: string | null; due: string | null; reason: string; remedial: boolean }[];
-  cases: { id: string; caseNumber: string; severity: string; points: number; policy: string; summary: string; acknowledged: boolean; at: string }[];
+  cases: { id: string; caseNumber: string; severity: string; points: number; policy: string; summary: string; acknowledged: boolean; at: string; responded?: boolean }[];
   templates: { dueToday?: boolean; dueTime?: string; id: string; title: string; shiftType: string; items: { id: string; label: string; required: boolean }[] }[];
   submissions: { id: string; title: string; at: string; verified: boolean }[];
   policies: { id: string; title: string; description: string; md: string; fileId: string | null; link?: string; version: number; signed: boolean }[];
@@ -63,6 +66,7 @@ function RequestsSection({ items, balances }: { items: Props["requests"]; balanc
   const router = useRouter();
   const { exec, pending } = useAction();
   const [open, setOpen] = useState(false);
+  useEffect(() => { const h = (e: Event) => { if ((e as CustomEvent).detail === "request") { setF((x) => ({ ...x, kind: "TIMEOFF" })); setOpen(true); } }; window.addEventListener("oo:open", h); return () => window.removeEventListener("oo:open", h); }, []);
   const [f, setF] = useState({ kind: "LOA", subtype: "VACATION", startDate: "", endDate: "", reason: "" });
   return (
     <section className="mb-6">
@@ -98,6 +102,7 @@ function IncidentButton() {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [open, setOpen] = useState(false);
+  useEffect(() => { const h = (e: Event) => { if ((e as CustomEvent).detail === "incident") setOpen(true); }; window.addEventListener("oo:open", h); return () => window.removeEventListener("oo:open", h); }, []);
   const [f, setF] = useState({ type: "NEAR_MISS", occurredAt: "", location: "", description: "", anonymous: false });
   const [photos, setPhotos] = useState<File[]>([]);
   const payload = () => {
@@ -214,11 +219,20 @@ function PhotoButton({ submissionId }: { submissionId: string }) {
   );
 }
 
-function ClockWidget({ openEntry }: { openEntry: Props["openEntry"] }) {
+function CaseSteps({ signed, responded, appeal }: { signed: boolean; responded: boolean; appeal?: string }) {
+  const steps: [string, boolean][] = [["Issued", true], ["You signed (received)", signed], ["Your response added", responded], [appeal ? `Appeal ${appeal === "OPEN" ? "open" : appeal.toLowerCase()}` : "Appeal (optional)", !!appeal]];
+  return (
+    <ol className="flex w-full flex-wrap gap-x-4 gap-y-1 pt-1 text-xs text-soft" aria-label="Case progress">
+      {steps.map(([l, done]) => <li key={l} className="flex items-center gap-1">{done ? <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden /> : <Circle className="h-3 w-3" aria-hidden />}<span className={done ? "text-ink" : ""}>{l}</span></li>)}
+    </ol>
+  );
+}
+
+function ClockWidget({ openEntry, bare }: { openEntry: Props["openEntry"]; bare?: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   return (
-    <section className="card mb-6 flex flex-wrap items-center gap-3 p-4 text-[13px]">
+    <section className={bare ? "flex flex-wrap items-center gap-3 rounded-md border border-line p-3 text-[13px]" : "card mb-6 flex flex-wrap items-center gap-3 p-4 text-[13px]"}>
       <span className="font-semibold">Time clock</span>
       <span className="text-soft">{openEntry ? `Clocked in since ${fmtDateTime(openEntry.since)}` : "You are clocked out."}</span>
       <button className="btn-primary ml-auto" disabled={pending} onClick={() => exec(() => (openEntry ? clockOutAction(openEntry.id) : clockInAction({})), { success: openEntry ? "Clocked out" : "Clocked in", onOk: () => router.refresh() })}>{openEntry ? "Clock out" : "Clock in"}</button>
@@ -350,17 +364,37 @@ function Connections({ calendarUrl, sms }: { calendarUrl: string; sms: Props["sm
   );
 }
 
+const TABS = ["home", "schedule", "training", "policies", "checklists", "requests", "records"];
+
 export function Portal(p: Props) {
   const pending = p.cases.filter((c) => !c.acknowledged);
+  const [tab, setTab] = useState("home");
+  const go = (id: string) => { setTab(id); try { history.replaceState(null, "", `#${id}`); } catch { /* ignore */ } };
+  useEffect(() => {
+    const fromHash = () => { const h = window.location.hash.slice(1); if (TABS.includes(h)) setTab(h); };
+    fromHash();
+    const onTab = (e: Event) => { const t = (e as CustomEvent).detail; if (TABS.includes(t)) setTab(t); };
+    window.addEventListener("hashchange", fromHash);
+    window.addEventListener("oo:tab", onTab);
+    return () => { window.removeEventListener("hashchange", fromHash); window.removeEventListener("oo:tab", onTab); };
+  }, []);
   return (
     <>
       <PageHeader title={`Hi, ${p.name.split(" ")[0]}`} sub="Your training, shift checklists and notices.">
-        <ProfileChange phone={p.phone} emergencyContact={p.emergencyContact} /><span className="mono text-[13px]">{p.staffCode}</span><Badge value={p.status} /><Badge value={p.readiness} />
+        <Link className="btn" href="/app/my-portal/records">What is recorded about me</Link><ProfileChange phone={p.phone} emergencyContact={p.emergencyContact} /><span className="mono text-[13px]">{p.staffCode}</span><Badge value={p.status} /><Badge value={p.readiness} />
       </PageHeader>
       <OfflineSync />
-      <ClockWidget openEntry={p.openEntry} />
-      <Connections calendarUrl={p.calendarUrl} sms={p.sms} />
-      <ShiftsSection shifts={p.shifts} coworkers={p.coworkers} />
+      <Tabs value={tab} onChange={go} tabs={[
+        { id: "home", label: "Home" },
+        { id: "schedule", label: "Schedule" },
+        { id: "training", label: `Training${p.enrollments.filter((e) => e.status !== "PASSED").length ? ` (${p.enrollments.filter((e) => e.status !== "PASSED").length})` : ""}` },
+        { id: "policies", label: `Policies${p.policies.filter((x) => !x.signed).length ? ` (${p.policies.filter((x) => !x.signed).length})` : ""}` },
+        { id: "checklists", label: "Checklists" },
+        { id: "requests", label: "Requests" },
+        { id: "records", label: `Records${pending.length ? ` (${pending.length})` : ""}` },
+      ]} />
+      <div className={tab === "home" ? "mt-4" : "hidden"} role="tabpanel" aria-label="home">
+      <TodayHub clock={<ClockWidget bare openEntry={p.openEntry} />} locationName={p.locationName} myShifts={p.shifts} teamShifts={p.teamShifts} weekEntries={p.weekEntries} templates={p.templates} submittedTemplateIds={p.submittedTemplates} unsignedCases={p.cases.filter((c) => !c.acknowledged).map((c) => ({ id: c.id, caseNumber: c.caseNumber }))} policies={p.policies.map((x) => ({ id: x.id, title: x.title, signed: x.signed }))} enrollments={p.enrollments.map((e) => ({ id: e.id, title: e.title, status: e.status, due: e.due, courseId: e.courseId }))} credentials={p.credentials} requests={p.requests} />
       {pending.length > 0 && (
         <section className="mb-6 space-y-3">
           <h2 className="text-sm font-semibold">Needs your signature</h2>
@@ -373,6 +407,12 @@ export function Portal(p: Props) {
           ))}
         </section>
       )}
+      </div>
+      <div className={tab === "schedule" ? "mt-4" : "hidden"} role="tabpanel" aria-label="schedule">
+      <ShiftsSection shifts={p.shifts} coworkers={p.coworkers} />
+      <Connections calendarUrl={p.calendarUrl} sms={p.sms} />
+      </div>
+      <div className={tab === "training" ? "mt-4" : "hidden"} role="tabpanel" aria-label="training">
       <section className="mb-6">
         <h2 className="mb-2 text-sm font-semibold">My courses</h2>
         {p.enrollments.length === 0 ? <Empty title="No courses assigned" /> : (
@@ -384,16 +424,34 @@ export function Portal(p: Props) {
             </div>))}</div>
         )}
       </section>
+      </div>
+      <div className={tab === "policies" ? "mt-4" : "hidden"} role="tabpanel" aria-label="policies">
       {p.policies.length > 0 && (
-        <section className="mb-6 space-y-3">
+        <section id="policies" className="mb-6 scroll-mt-20 space-y-3">
           <h2 className="text-sm font-semibold">Policies</h2>
           {[...p.policies].sort((a, b) => Number(a.signed) - Number(b.signed)).map((x) => <PolicyCard key={x.id} p={x} />)}
         </section>
       )}
-      <section className="mb-6">
+      {p.policies.length === 0 && <Empty title="No policies assigned to you" />}
+      </div>
+      <div className={tab === "checklists" ? "mt-4" : "hidden"} role="tabpanel" aria-label="checklists">
+      <section id="checklists" className="mb-6 scroll-mt-20">
         <h2 className="mb-2 text-sm font-semibold">Shift checklists</h2>
         {p.templates.length === 0 ? <Empty title="No checklists for your department yet" /> : <div className="grid gap-3 lg:grid-cols-2">{p.templates.map((t) => <Checklist key={t.id} t={t} />)}</div>}
         {p.submissions.length > 0 && <ul className="mono mt-3 space-y-1 text-xs text-soft">{p.submissions.map((s) => <li key={s.id}>{fmtDateTime(s.at)} · {s.title} {s.verified ? "· verified" : "· awaiting verification"} · <PhotoButton submissionId={s.id} /></li>)}</ul>}
+      </section>
+      </div>
+      <div className={tab === "requests" ? "mt-4" : "hidden"} role="tabpanel" aria-label="requests">
+      <RequestsSection items={p.requests} balances={p.balances} />
+      <section className="mb-6">
+        <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">Incident reports</h2><IncidentButton /></div>
+        {p.incidents.length === 0 ? <p className="text-[13px] text-soft">You have not filed any reports.</p> : <div className="card divide-y divide-line">{p.incidents.map((i) => <div key={i.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><Badge value="VERBAL_WARNING" label={i.type} /><span className="mono text-xs text-soft">{fmtDate(i.at)}</span><span className="min-w-0 flex-1 truncate">{i.description}</span><Badge value={i.status === "CLOSED" ? "PASSED" : "PENDING"} label={i.status} /></div>)}</div>}
+      </section>
+      </div>
+      <div className={tab === "records" ? "mt-4" : "hidden"} role="tabpanel" aria-label="records">
+      <section id="notices" className="scroll-mt-20">
+        <h2 className="mb-2 text-sm font-semibold">My notices</h2>
+        {p.cases.length === 0 ? <Empty title="No infractions on file" /> : <div className="card divide-y divide-line">{p.cases.map((c) => <div key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><span className="mono">{c.caseNumber}</span><Badge value={c.severity} /><span className="flex-1">{c.policy}</span>{c.acknowledged ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Awaiting" />}<ResponseBox caseId={c.id} /><AppealBox caseId={c.id} status={p.appeals.find((a) => a.caseId === c.id)?.status} /><CaseSteps signed={c.acknowledged} responded={!!c.responded} appeal={p.appeals.find((a) => a.caseId === c.id)?.status} /></div>)}</div>}
       </section>
       {p.reviews.length > 0 && (
         <section className="mb-6 space-y-3">
@@ -407,20 +465,12 @@ export function Portal(p: Props) {
         </section>
       )}
       {p.documents.length > 0 && (
-        <section className="mb-6">
+        <section id="documents" className="mb-6 scroll-mt-20">
           <h2 className="mb-2 text-sm font-semibold">My documents</h2>
           <div className="card divide-y divide-line">{p.documents.map((d) => <div key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><Paperclip className="h-4 w-4 text-soft" /><a className="flex-1 font-medium text-accent" href={d.href} target="_blank" rel="noreferrer">{d.title}</a><span className="text-xs text-soft">{d.category}{d.expires ? ` · expires ${fmtDate(d.expires)}` : ""}</span></div>)}</div>
         </section>
       )}
-      <RequestsSection items={p.requests} balances={p.balances} />
-      <section className="mb-6">
-        <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">Incident reports</h2><IncidentButton /></div>
-        {p.incidents.length === 0 ? <p className="text-[13px] text-soft">You have not filed any reports.</p> : <div className="card divide-y divide-line">{p.incidents.map((i) => <div key={i.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><Badge value="VERBAL_WARNING" label={i.type} /><span className="mono text-xs text-soft">{fmtDate(i.at)}</span><span className="min-w-0 flex-1 truncate">{i.description}</span><Badge value={i.status === "CLOSED" ? "PASSED" : "PENDING"} label={i.status} /></div>)}</div>}
-      </section>
-      <section>
-        <h2 className="mb-2 text-sm font-semibold">My notices</h2>
-        {p.cases.length === 0 ? <Empty title="No infractions on file" /> : <div className="card divide-y divide-line">{p.cases.map((c) => <div key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><span className="mono">{c.caseNumber}</span><Badge value={c.severity} /><span className="flex-1">{c.policy}</span>{c.acknowledged ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Awaiting" />}<ResponseBox caseId={c.id} /><AppealBox caseId={c.id} status={p.appeals.find((a) => a.caseId === c.id)?.status} /></div>)}</div>}
-      </section>
+      </div>
     </>
   );
 }

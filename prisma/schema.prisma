@@ -155,6 +155,7 @@ model Workspace {
   bambooKeyEnc         String?
   subdomain            String?                    @unique
   subdomainStatus      String                     @default("NONE")
+  referralCode         String?
 }
 
 model WorkspaceMember {
@@ -1015,4 +1016,40 @@ model WaitlistEntry {
   email     String   @unique
   source    String   @default("home")
   createdAt DateTime @default(now())
+}
+
+model Partner {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  contact   String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model JobPosting {
+  id            String           @id @default(cuid())
+  title         String
+  team          String           @default("")
+  location      String           @default("Remote")
+  type          String           @default("Full-time")
+  description   String
+  status        String           @default("OPEN")
+  createdByName String
+  createdAt     DateTime         @default(now())
+  applications  JobApplication[]
+}
+
+model JobApplication {
+  id        String      @id @default(cuid())
+  postingId String?
+  name      String
+  email     String
+  link      String      @default("")
+  message   String
+  status    String      @default("NEW")
+  notes     String      @default("")
+  createdAt DateTime    @default(now())
+  posting   JobPosting? @relation(fields: [postingId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
 }

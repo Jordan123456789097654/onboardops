@@ -5,10 +5,11 @@ import { getSessionUserId } from "@/lib/auth";
 import { legalPages, SITE } from "@/lib/site";
 import { JsonLd } from "@/components/json-ld";
 import { CookieNotice } from "@/components/cookie-notice";
+import { RefCapture } from "@/components/ref-capture";
 
 const cols = [
-  { title: "Product", links: [["Why OnboardOps", "/why"], ["Overview", "/features"], ["Solutions", "/solutions"], ["Security", "/security"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"]] },
-  { title: "Company", links: [["About", "/about"], ["Help center", "/support"], ["Blog", "/blog"], ["Contact support", "/contact"], ["FAQ", "/faq"], ["Sign in", "/login"], ["Create a workspace", "/register"]] },
+  { title: "Product", links: [["Why OnboardOps", "/why"], ["Overview", "/features"], ["Solutions", "/solutions"], ["Security", "/security"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"], ["Free tools", "/tools"], ["Playbooks", "/playbooks"]] },
+  { title: "Company", links: [["About", "/about"], ["Help center", "/support"], ["Blog", "/blog"], ["Migration guides", "/migrate"], ["Launch checklist", "/launch"], ["Verify a certificate", "/verify"], ["Careers", "/careers"], ["Partners and badge", "/partners"], ["Brand", "/brand"], ["Contact support", "/contact"], ["FAQ", "/faq"], ["Sign in", "/login"], ["Create a workspace", "/register"]] },
   { title: "Legal", links: legalPages.map((l) => [l.label, l.href]) },
 ];
 
@@ -22,6 +23,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
       ] }} />
       <div className="no-print"><MarketingNav signedIn={signedIn} /></div>
       <main>{children}</main>
+      <RefCapture />
       <CookieNotice />
       <footer className="no-print mt-24 border-t border-line bg-surface">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">

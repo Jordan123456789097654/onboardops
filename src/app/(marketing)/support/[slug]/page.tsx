@@ -1,3 +1,4 @@
+import { HelpfulVote } from "@/components/helpful-vote";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { articles, bySlug, categories, type Block } from "@/lib/docs";
@@ -53,6 +54,7 @@ export default function Article({ params }: { params: { slug: string } }) {
           {prev ? <Link href={`/support/${prev.slug}`} className="text-soft hover:text-ink">← {prev.title}</Link> : <span />}
           {next && <Link href={`/support/${next.slug}`} className="text-soft hover:text-ink">{next.title} →</Link>}
         </div>
+        <HelpfulVote slug={a.slug} />
         <div className="card mt-8 p-4 text-[13px]">Still stuck? <Link href="/contact" className="text-accent underline">Contact support</Link>. Last reviewed {SITE.legalUpdated}.</div>
       </article>
     </div>

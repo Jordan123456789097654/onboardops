@@ -18,7 +18,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    exec(() => (mode === "login" ? loginAction({ email: f.email, password: f.password }) : registerAction({ ...f, accountType: kind, acceptTerms: accept })), { onOk: (d) => { router.push(d.to); router.refresh(); } });
+    exec(() => (mode === "login" ? loginAction({ email: f.email, password: f.password }) : registerAction({ ...f, accountType: kind, acceptTerms: accept, ref: (() => { try { return localStorage.getItem("oo-ref") ?? undefined; } catch { return undefined; } })(), address: new URLSearchParams(window.location.search).get("address") ?? undefined })), { onOk: (d) => { router.push(d.to); router.refresh(); } });
   };
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.1fr]">

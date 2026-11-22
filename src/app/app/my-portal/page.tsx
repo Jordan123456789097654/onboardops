@@ -16,7 +16,7 @@ export default async function MyPortal() {
   const p = ctx.profile;
   const [enrollments, cases, templates, subs, policies, myIncidents, sharedReviews, myDocs, myRequests, openEntry, myAppeals] = await Promise.all([
     prisma.courseEnrollment.findMany({ where: { employeeId: p.id, workspaceId: ctx.workspaceId, course: { isPublished: true } }, include: { course: true }, orderBy: { dueDate: "asc" } }),
-    prisma.infractionCase.findMany({ where: { employeeId: p.id, workspaceId: ctx.workspaceId }, include: { timeline: true }, orderBy: { createdAt: "desc" } }),
+    prisma.infractionCase.findMany({ where: { employeeId: p.id, workspaceId: ctx.workspaceId }, include: { timeline: true, attachments: true }, orderBy: { createdAt: "desc" } }),
     prisma.shiftChecklistTemplate.findMany({ where: { workspaceId: ctx.workspaceId, OR: [{ departmentId: p.departmentId }, { departmentId: null }] }, orderBy: { shiftType: "asc" } }),
     prisma.shiftChecklistSubmission.findMany({ where: { completedByEmployeeId: p.id }, include: { template: true }, orderBy: { submittedAt: "desc" }, take: 5 }),
     prisma.policy.findMany({ where: { workspaceId: ctx.workspaceId, isPublished: true, OR: [{ appliesToAll: true }, ...(p.jobRoleId ? [{ requiredJobRoleIds: { has: p.jobRoleId } }] : [])] }, include: { acks: { where: { employeeId: p.id } } }, orderBy: { createdAt: "desc" } }),
@@ -37,8 +37,20 @@ export default async function MyPortal() {
         prisma.employeeProfile.findMany({ where: { workspaceId: ctx.workspaceId, status: "ACTIVE", id: { not: p.id } }, orderBy: { fullName: "asc" } }),
       ])
     : [[], []];
+  const [teamShifts, weekEntries, creds, location] = await Promise.all([
+    sched ? prisma.shift.findMany({ where: { workspaceId: ctx.workspaceId, employeeId: { not: null, notIn: [p.id] }, endsAt: { gt: new Date(Date.now() - 12 * 3600000) }, startsAt: { lt: new Date(Date.now() + 8 * 86400000) } }, include: { employee: true }, orderBy: { startsAt: "asc" }, take: 80 }) : Promise.resolve([]),
+    prisma.timeEntry.findMany({ where: { workspaceId: ctx.workspaceId, employeeId: p.id, clockIn: { gte: new Date(Date.now() - 14 * 86400000) } }, orderBy: { clockIn: "desc" }, take: 60 }),
+    prisma.credential.findMany({ where: { workspaceId: ctx.workspaceId, employeeId: p.id, expiresAt: { not: null, lte: new Date(Date.now() + 30 * 86400000) } }, orderBy: { expiresAt: "asc" }, take: 10 }),
+    p.locationId ? prisma.location.findFirst({ where: { id: p.locationId, workspaceId: ctx.workspaceId } }) : Promise.resolve(null),
+  ]);
+  const short = (n: string) => { const [f, ...r] = n.split(" "); return r.length ? `${f} ${r[r.length - 1][0]}.` : f; };
   return (
     <Portal
+      locationName={location?.name ?? null}
+      teamShifts={teamShifts.map((s) => ({ id: s.id, name: short(s.employee!.fullName), label: s.label, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString() }))}
+      weekEntries={weekEntries.map((e) => ({ clockIn: e.clockIn.toISOString(), clockOut: e.clockOut?.toISOString() ?? null }))}
+      credentials={creds.map((c) => ({ id: c.id, name: c.name, expires: c.expiresAt!.toISOString() }))}
+      submittedTemplates={subs.map((s) => ({ id: s.templateId, at: s.submittedAt.toISOString() }))}
       calendarUrl={p.calendarToken ? `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/api/calendar/${p.calendarToken}.ics` : ""}
       sms={{ configured: hasSmsConfig(ctx.workspace), optIn: p.smsOptIn, phone: p.phone ?? "" }}
       balances={TIMEOFF_TYPES.map((t) => ({ type: t, allowance: allow[t], used: use[t].used, pending: use[t].pending }))}
@@ -50,7 +62,7 @@ export default async function MyPortal() {
       enrollments={enrollments.map((e) => ({ id: e.id, courseId: e.courseId, title: e.course.title, status: e.status, best: e.bestScore, cert: e.certificateCode, due: e.dueDate?.toISOString() ?? null, reason: e.assignedReason, remedial: e.course.isRemedial }))}
       cases={cases.map((c) => {
         const s = serializeInfraction("EMPLOYEE", c);
-        return { id: s.id, caseNumber: s.caseNumber, severity: s.severity, points: s.pointsAdded, policy: s.policyViolated, summary: s.summary, acknowledged: s.employeeAcknowledged, at: s.createdAt.toISOString() };
+        return { id: s.id, caseNumber: s.caseNumber, severity: s.severity, points: s.pointsAdded, policy: s.policyViolated, summary: s.summary, acknowledged: s.employeeAcknowledged, at: s.createdAt.toISOString(), responded: c.attachments.some((a) => a.kind === "EMPLOYEE_RESPONSE") };
       })}
       templates={templates.map((t) => ({ id: t.id, title: t.title, shiftType: t.shiftType, items: t.items as { id: string; label: string; required: boolean }[], dueToday: t.scheduleDays.includes(new Date().getDay()), dueTime: t.dueTime ?? "" }))}
       policies={policies.map((x) => ({ id: x.id, title: x.title, description: x.description, md: x.contentMarkdown, fileId: x.fileId, link: x.externalUrl ?? "", version: x.version, signed: x.acks.some((a) => a.version === x.version) }))}

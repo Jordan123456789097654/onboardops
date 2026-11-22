@@ -7,6 +7,9 @@ import dynamic from "next/dynamic";
 import { CompareToggle, FlowStepper, RoleExplorer } from "@/components/home-interactive";
 import { BetaBox, FaqBlock, SecurityStrip, WhatsNew } from "@/components/home-sections";
 import { StickyCta } from "@/components/sticky-cta";
+import { ReserveAddress } from "@/components/reserve-address";
+import { subdomainsEnabled } from "@/lib/subdomain";
+import { ZONE } from "@/lib/spaceship-dns";
 import { WaitlistForm } from "@/components/waitlist-form";
 
 const Sandbox = dynamic(() => import("@/components/sandbox").then((m) => m.Sandbox), { loading: () => <div className="card h-72 animate-pulse" aria-hidden /> });
@@ -38,6 +41,7 @@ export default function Home() {
             <Link href="/register" className="btn-primary group !h-11 !px-6 !text-sm">Create a workspace <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></Link>
             <a href="#how" className="btn !h-11 !px-6 !text-sm">See how it works</a>
           </div>
+          {subdomainsEnabled() && <ReserveAddress zone={ZONE} />}
         </div>
         <div className="relative mt-14">
           <div className="anim-rise" style={{ "--d": "500ms" } as React.CSSProperties}><Shot name="overview" url="/app/overview" alt="The OnboardOps Command Center showing staff counts, training compliance and who needs attention" priority /></div>

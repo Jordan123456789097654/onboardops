@@ -21,7 +21,7 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
   domain: { address: { enabled: boolean; slug: string; status: string; zone: string; isOwner: boolean }; slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
-  ws: { decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
+  ws: { publicCerts: boolean; decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
   departments: Required<Dept>[]; roles: Required<JobRole>[]; courses: { id: string; title: string }[]; members: { id: string; name: string; email: string; role: string; customRoleId: string | null }[];
 }) {
   const router = useRouter();
@@ -29,7 +29,7 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
   const toast = useToast();
   const [tab, setTab] = useState("workspace");
   const [s, setS] = useState({ name: ws.name, operationsWebhookUrl: ws.ops, confidentialWebhookUrl: ws.conf, autoSuspendStrikeThreshold: ws.threshold, autoRetrainOnWrittenInfraction: ws.retrain, remindersEnabled: ws.reminders });
-  const [meta, setMeta] = useState({ strikeDecayDays: ws.decayDays, accentColor: ws.accent, tagline: ws.tagline });
+  const [meta, setMeta] = useState({ publicCerts: ws.publicCerts, strikeDecayDays: ws.decayDays, accentColor: ws.accent, tagline: ws.tagline });
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeName, setCloseName] = useState("");
   const [closePw, setClosePw] = useState("");
@@ -61,6 +61,7 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
               <Field label="Brand color (#RRGGBB)"><input className="input mono" placeholder="#1D4ED8" value={meta.accentColor} onChange={(e) => setMeta({ ...meta, accentColor: e.target.value })} /></Field>
               <Field label="Tagline"><input className="input" maxLength={140} value={meta.tagline} onChange={(e) => setMeta({ ...meta, tagline: e.target.value })} /></Field>
             </div>
+            <label className="flex items-start gap-2 text-[13px] sm:col-span-3"><input type="checkbox" className="mt-0.5" checked={meta.publicCerts} onChange={(e) => setMeta({ ...meta, publicCerts: e.target.checked })} />Let anyone confirm a training certificate by its code on onboardops.org/verify. When on, the page shows the employee&apos;s name, the course, your company name and the dates. Turn it off to confirm only that the certificate is real.</label>
             <button className="btn" disabled={pending} onClick={() => exec(() => saveWorkspaceMetaAction(meta), { success: "Decay and branding saved", onOk: done })}>Save decay and branding</button>
             <button className="btn-primary" disabled={pending} onClick={() => exec(() => saveSettingsAction(s), { success: "Settings saved", onOk: done })}>Save settings</button>
           </div>

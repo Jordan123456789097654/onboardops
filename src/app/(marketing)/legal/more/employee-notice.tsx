@@ -78,4 +78,7 @@ export const employeeMore: Section[] = [
     <p><strong>Is my employer tracking my location?</strong> The software does not collect your location.</p>
     <p><strong>Who do I ask about a record?</strong> Your employer first.</p>
   </> },
+  { title: "Certificate checks", body: <>
+    <p>When you earn a training certificate, it has a code. Anyone who has the code can enter it on our public verification page to confirm the certificate is real. By default that page shows your name, the course, your employer&rsquo;s name and the dates. Your employer can turn the name off. If you do not want your name shown, ask your employer to do that, or keep your certificate code private.</p>
+  </> },
 ];

@@ -21,6 +21,8 @@ const registerSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   workspaceName: z.string().trim().max(80).default(""),
+  ref: z.string().max(40).optional(),
+  address: z.string().max(60).optional(),
   acceptTerms: z.literal(true, { errorMap: () => ({ message: "You must accept the Terms of Service and Privacy Policy" }) }),
 });
 
@@ -90,7 +92,12 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     await sendVerification(userId, d.name, email);
     await createSession(userId);
     setActiveWorkspace(wsId);
-    await autoClaimSubdomain(wsId, slug);
+    if (d.ref && /^[a-z0-9-]{3,30}$/i.test(d.ref)) {
+      const partner = await prisma.partner.findUnique({ where: { code: d.ref.toLowerCase() } });
+      if (partner) await prisma.workspace.update({ where: { id: wsId }, data: { referralCode: partner.code } }).catch(() => {});
+    }
+    const claimed = d.address ? await autoClaimSubdomain(wsId, d.address) : null;
+    if (!claimed) await autoClaimSubdomain(wsId, slug);
     return { to: "/app/overview" };
   });
 }

@@ -130,4 +130,18 @@ export const privacyMore: Section[] = [
     <p><strong>Do you use my data to train AI?</strong> No.</p>
     <p><strong>Where is my data stored?</strong> With our hosting and database providers in the United States.</p>
   </> },
+  { title: "Website forms, lists and public lookups", body: <>
+    <p>Some parts of our website collect small amounts of information without an account.</p>
+    <ul>
+      <li><strong>Waitlist and playbook list.</strong> If you give your email address to hear about releases or playbooks, we store the address and use it only for that. You can ask us to remove it.</li>
+      <li><strong>Job applications and introductions.</strong> If you apply or introduce yourself on the Careers page, we store your name, email, any link you give and your message. Staff use it only to consider and reply to you. We do not collect files or ID numbers. You can ask us to delete it.</li>
+      <li><strong>&ldquo;Was this helpful?&rdquo; on help articles.</strong> We store your yes or no and any comment, without your name or email, and use it to improve the guides.</li>
+      <li><strong>Address check.</strong> The homepage box that checks whether a workspace address is free does not store what you type, other than ordinary short-lived rate-limit counters.</li>
+      <li><strong>Referral codes.</strong> If you arrive through a partner link, we remember the partner&rsquo;s code on your device. If you then create a workspace, we record the code with the workspace so the partner can be credited.</li>
+      <li><strong>Free tools.</strong> The tools on our website run in your browser. What you type is not sent to us. If you choose to save a draft, it stays on your device until you add it to a workspace.</li>
+    </ul>
+  </> },
+  { title: "Training certificate lookups", body: <>
+    <p>Anyone can enter a certificate code on our verification page to confirm that a training certificate is real. When a code matches, the page shows the name of the person it was issued to, the course, the employer&rsquo;s name and the dates. A Workspace owner can turn the name off for their workspace in Settings, in which case the page confirms only that the certificate is real. Lookups are limited per address to make it harder to guess codes. If you believe your certificate should not be shown, tell your employer or contact us.</p>
+  </> },
 ];
