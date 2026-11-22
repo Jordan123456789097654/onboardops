@@ -4,8 +4,13 @@ export const entries: ChangelogEntry[] = [
   {
     v: "0.11.0",
     date: "2026-11-21",
-    highlight: "Employee portal tabs, free manager tools and a new update screen",
+    highlight: "Stronger encryption, employee portal tabs and free manager tools",
     items: [
+      "Stronger encryption: sensitive notes, case and incident text, injury details, contact numbers and every uploaded file are now encrypted before they are stored, with a separate key for each workspace.",
+      "A new, simpler maintenance page that checks on its own and reloads when we are back.",
+      "Legal documents are much longer and more detailed, and now say plainly that no system can be guaranteed to be 100% secure.",
+      "The employee portal is now split into tabs: Home, Schedule, Training, Policies, Checklists, Requests and Records, with counts on the tabs that need attention.",
+      "Careers is now in the main navigation.",
       "Employees can add a written response to any case, and managers can keep private coaching notes that are never infractions.",
       "Incident reports can include photos and be filed anonymously. Managers can assign an investigator and due date, and record injury details. Injury log export (CSV) for the year.",
       "Case trends page: cases by month, severity, policy, department and manager, with appeal overturn rate.",
@@ -13,7 +18,7 @@ export const entries: ChangelogEntry[] = [
       "Payroll hours export (CSV) from timesheets, and an Email me this summary button on Reports.",
       "Locations: add sites or stores and assign employees to them.",
       "Installable app (add to home screen) with an offline page. Checklists finished without a connection are saved on the device and sent when you are back online.",
-      "When a new version of OnboardOps goes live, open tabs now show a short update animation and refresh themselves, instead of breaking.",
+      "When a new version of OnboardOps goes live, open tabs now show a short update screen with a one-line note of what is new, then refresh themselves, instead of breaking.",
       "Free tools for managers: a warning write-up helper, a \"should I write this up?\" helper, a policy builder with sign-off sheets, a discipline ladder builder and a handbook outline generator. Drafts you save can be added to a new workspace.",
       "Public certificate verification at /verify, free manager playbooks, migration guides from spreadsheets and paper, a 30-minute launch checklist, a Careers page with a staff-side applications inbox, partner badges with referral tracking, a brand page, \"Was this helpful?\" on help articles, and a friendlier 404 page.",
       "Employee portal Today view: your shift and who is on with you, a one-tap time clock, checklists due, things to sign, a to-do list with progress, and a 7-day strip. Plus a case progress tracker and a plain-language page of what is recorded about you.",

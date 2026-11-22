@@ -156,6 +156,7 @@ model Workspace {
   subdomain            String?                    @unique
   subdomainStatus      String                     @default("NONE")
   referralCode         String?
+  dataKeyEnc           String?
 }
 
 model WorkspaceMember {

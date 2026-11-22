@@ -51,6 +51,9 @@ export const betaMore: Section[] = [
   { title: "Who this beta is not for", body: <>
     <p>Do not use the beta to store information that the Acceptable Use Policy forbids, or to carry out an activity where a failure of the Service could cause serious harm, such as the sole record of a safety-critical process, without safeguards of your own. Do not use the beta if you are under the minimum age in the Terms of Service.</p>
   </> },
+  { title: "Security during the beta", body: <>
+    <p>We apply the safeguards on our Security page during the beta, but <strong>we cannot guarantee that your information will be 100% secure</strong>, and because the Service is early it may not yet have every protection that larger or older services have. Please keep your own backups, enter only what you need, and read the list of gaps on the Security page before you decide what to store.</p>
+  </> },
   { title: "Questions about the beta", body: <>
     <p><strong>Is my data safe?</strong> We protect it with the controls on the Security page. Because this is a beta, also keep your own exports.</p>
     <p><strong>Will I be charged without warning?</strong> No. We will tell you and ask first.</p>

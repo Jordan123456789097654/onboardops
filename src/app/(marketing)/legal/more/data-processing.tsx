@@ -78,4 +78,7 @@ export const dpaMore: Section[] = [
   { title: "How to contact us about this DPA", body: <>
     <p>For questions about this DPA, to ask for a signed copy, to request deletion confirmation, to report a security concern or to object to a subprocessor change, use the <Link href="/contact">contact form</Link> and choose the topic that fits best. Include the Workspace name and the person who is authorized to act for the Customer.</p>
   </> },
+  { title: "No absolute guarantee of security", body: <>
+    <p>The Provider will maintain the security measures described in this DPA and will keep them reasonable for the nature of the information. The parties understand that <strong>no system can be completely secure, and the Provider does not guarantee that Customer Data will never be accessed, lost, altered or disclosed without authorization.</strong> A Security Incident, by itself, does not mean that the Provider broke this DPA. The Provider&rsquo;s duties if one occurs are the notification, containment and assistance duties described above, and its liability remains subject to the limits in the Terms and to the law.</p>
+  </> },
 ];

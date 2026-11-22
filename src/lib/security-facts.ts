@@ -23,6 +23,7 @@ export const securityGroups: { title: string; items: [string, string][] }[] = [
   {
     title: "Data and integrations",
     items: [
+      ["Encryption of sensitive records", "Confidential manager notes, case and incident text, injury details, coaching and review notes, appeal text, leave reasons, phone numbers, emergency contacts, custom field values and every uploaded file are encrypted with AES-256-GCM in our application before they are stored. Each workspace has its own random key, which is kept only in locked form and is locked by a master key held outside the database. Deleting a workspace deletes its key. Names, email addresses, staff IDs, dates and titles are not encrypted, so search and sign-in keep working, and encryption does not protect against someone who controls the running application."],
       ["Integration credentials", "SMS and BambooHR credentials that you connect are encrypted with AES-256-GCM before storage and are never shown again."],
       ["API keys", "Read-only, stored only as hashes, shown once when created, and revocable at any time."],
       ["Webhooks", "JSON webhooks are signed with HMAC-SHA256. Endpoints must be public https addresses, and internal addresses are refused."],

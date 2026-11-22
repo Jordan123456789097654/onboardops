@@ -26,6 +26,7 @@ export default function Security() {
       <h2 className="text-lg font-semibold">Not yet</h2>
       <p className="mt-1 text-[13px] text-soft">We are in beta, so we will be direct about the gaps:</p>
       <ul className="mt-3 space-y-1.5 text-[13px]">{notYet.map((n) => <li key={n} className="flex gap-2"><span className="mono text-soft">–</span>{n}</li>)}</ul>
+      <p className="mt-6 rounded-lg border border-line bg-muted p-4 text-[13px] leading-relaxed"><strong>No system is completely secure.</strong> We work hard to protect records, but we cannot guarantee that information will be 100% secure. Unauthorized access, loss or disclosure can happen despite reasonable safeguards. Keep your own backups, enter only what you need, and use strong, unique passwords.</p>
       <p className="mt-8 text-[13px] text-soft">Found a vulnerability? Please tell us through the <Link className="text-accent" href="/contact">contact page</Link> before disclosing it publicly. See also our <Link className="text-accent" href="/legal/privacy">Privacy Policy</Link> and <Link className="text-accent" href="/legal/data-processing">Data Processing Addendum</Link>.</p>
       <CtaBand />
     </PageShell>

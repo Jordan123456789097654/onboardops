@@ -77,6 +77,9 @@ export const touMore: Section[] = [
       <li>These Terms of Use are written in English, and the English version controls over any translation.</li>
     </ul>
   </> },
+  { title: "No guarantee of absolute security", body: <>
+    <p>We try to keep the Site and the information you give us safe, but <strong>no website can be completely secure, and we cannot guarantee that your information will be 100% secure.</strong> Information you send through the Site, including forms and your account details, could be lost, intercepted or accessed without permission despite our reasonable safeguards. Please do not send us sensitive information that we do not need, and keep your passwords and sign-in links private.</p>
+  </> },
   { title: "Common questions", body: <>
     <p><strong>Is this the agreement for using the application?</strong> No. The application is covered by the Terms of Service. These Terms of Use cover the public website.</p>
     <p><strong>Can I copy a blog article or template?</strong> You may share a link to it and quote a short part with credit. For other uses, ask us first.</p>

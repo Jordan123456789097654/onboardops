@@ -20,6 +20,7 @@ export default function SecuritySummary() {
         <h2 className="text-sm font-semibold">Not yet in place</h2>
         <ul className="mt-1.5 list-disc space-y-1 pl-5">{notYet.map((n) => <li key={n}>{n}</li>)}</ul>
       </section>
+      <p className="mt-6 text-soft"><strong>No system is completely secure.</strong> We cannot guarantee that information will be 100% secure. Unauthorized access, loss or disclosure can happen despite reasonable safeguards. Keep your own backups and enter only the information you need.</p>
       <p className="mt-6 text-soft">Report a vulnerability through the contact page at onboardops.org/contact before disclosing it publicly.</p>
     </div>
   );

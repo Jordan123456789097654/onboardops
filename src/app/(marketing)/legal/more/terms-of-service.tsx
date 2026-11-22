@@ -96,6 +96,12 @@ export const termsMore: Section[] = [
       <li><strong>Language.</strong> These Terms are written in English. Any translation is for convenience only, and the English version controls.</li>
     </ul>
   </> },
+  { title: "No guarantee of absolute security", body: <>
+    <p>We work hard to protect Customer Data and account information, and the <Link href="/security">Security page</Link> lists the safeguards we use. Even so, <strong>no website, software or system can be made completely secure, and we cannot guarantee that information will be 100% secure.</strong></p>
+    <p>Despite reasonable safeguards, information may be lost, accessed, changed or disclosed without authorization. This can happen because of events such as criminal attacks, malware, software flaws that are not yet known, mistakes by people, failures at our hosting, database, email or other providers, or events outside our control. You understand and accept that you use the Service, and enter information into it, with this risk.</p>
+    <p>This does not remove our responsibilities. We will keep using reasonable safeguards, we will notify affected Customers of a security incident as described in the Data Processing Addendum, and nothing here limits any duty that the law does not allow us to limit. The limits on our liability in these Terms still apply.</p>
+    <p>You can lower your own risk. Use strong, unique passwords, never share a sign-in link or API key, remove access promptly when people leave, give people only the roles they need, enter only the information you need, and keep your own exports of records you cannot afford to lose. Tell us right away if you think your account or Workspace was accessed without permission.</p>
+  </> },
   { title: "Common questions", body: <>
     <p><strong>Who owns the records in a Workspace?</strong> The Customer owns its Customer Data. We receive only the license described in these Terms so that we can run the Service.</p>
     <p><strong>Can an employee see everything their manager wrote?</strong> No. Employees see what the Customer&rsquo;s settings allow. Confidential manager notes and coaching notes are not shown to employees by the Service.</p>
