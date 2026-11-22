@@ -55,7 +55,7 @@ export default function Article({ params }: { params: { slug: string } }) {
           {next && <Link href={`/support/${next.slug}`} className="text-soft hover:text-ink">{next.title} →</Link>}
         </div>
         <HelpfulVote slug={a.slug} />
-        <div className="card mt-8 p-4 text-[13px]">Still stuck? <Link href="/contact" className="text-accent underline">Contact support</Link>. Last reviewed {SITE.legalUpdated}.</div>
+        <div className="card mt-8 p-4 text-[13px]">Prefer to watch? <Link href="/tutorial" className="text-accent underline">The two minute setup tutorial</Link> shows the whole setup. Still stuck?<Link href="/contact" className="text-accent underline">Contact support</Link>. Last reviewed {SITE.legalUpdated}.</div>
       </article>
     </div>
   );

@@ -6,7 +6,7 @@ export const entries: ChangelogEntry[] = [
     date: "2026-11-22",
     highlight: "New video tutorial for setting up your workspace",
     items: [
-      "A two minute video tutorial now walks through setting up a workspace: the setup wizard, inviting staff, your first course, discipline rules, Discord and Teams alerts, features and roles, and your own domain. Chapters are clickable, and it is linked from the footer and the launch checklist.",
+      "A two minute video tutorial now walks through setting up a workspace: the setup wizard, inviting staff, your first course, discipline rules, Discord and Teams alerts, features and roles, and your own domain. Chapters are clickable. The video plays from YouTube only when you press play, and it is linked from the help center, every help article, the footer, the launch checklist and the end of the setup wizard.",
     ],
   },
   {
