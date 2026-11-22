@@ -14,6 +14,7 @@ const main = [
   { href: "/features", label: "Product" },
   { href: "/solutions", label: "Solutions" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/careers", label: "Careers" },
 ];
 const more = [
   { href: "/security", label: "Security", hint: "How records are protected" },
