@@ -1,48 +1,19 @@
-import { checkApi, checkAuth, checkDatabase, checkDomains, checkEmail, checkFrontend, checkStorage, type ComponentHealth } from "@/lib/status";
+import { checkApi, checkAuth, checkDatabase, checkDomains, checkEmail, checkFrontend, checkStorage } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
-const CHECKERS: Record<string, () => Promise<ComponentHealth>> = {
-  frontend: checkFrontend,
-  web: checkFrontend,
-  app: checkFrontend,
-  database: checkDatabase,
-  db: checkDatabase,
-  postgres: checkDatabase,
-  auth: checkAuth,
-  login: checkAuth,
-  api: checkApi,
-  backend: checkApi,
-  email: checkEmail,
-  mail: checkEmail,
-  storage: checkStorage,
-  files: checkStorage,
-  domains: checkDomains,
-};
+const CHECKS = { frontend: checkFrontend, database: checkDatabase, auth: checkAuth, api: checkApi, email: checkEmail, storage: checkStorage, domains: checkDomains } as const;
+const HEADERS = { "Cache-Control": "no-store, no-cache, must-revalidate", "Access-Control-Allow-Origin": "*" };
 
+/** One service on its own: 200 when it is healthy, 503 when it is not. Monitors can watch each service separately. */
 export async function GET(_req: Request, { params }: { params: { service: string } }) {
-  const key = (params.service || "").toLowerCase();
-  const checker = CHECKERS[key];
-  if (!checker) {
-    return Response.json(
-      { ok: false, status: "unknown", error: `Unknown service "${key}". Available: ${Object.keys(CHECKERS).join(", ")}` },
-      { status: 404, headers: { "Cache-Control": "no-store" } }
-    );
-  }
-  const res = await checker();
-  return Response.json(res, {
-    status: res.ok ? 200 : 503,
-    headers: { "Cache-Control": "no-store, no-cache, must-revalidate", "Access-Control-Allow-Origin": "*" },
-  });
+  const check = CHECKS[params.service as keyof typeof CHECKS];
+  if (!check) return Response.json({ error: "Unknown service", services: Object.keys(CHECKS) }, { status: 404, headers: HEADERS });
+  const r = await check();
+  return Response.json({ ...r, service: params.service, timestamp: new Date().toISOString() }, { status: r.ok ? 200 : 503, headers: HEADERS });
 }
 
-export async function HEAD(_req: Request, { params }: { params: { service: string } }) {
-  const key = (params.service || "").toLowerCase();
-  const checker = CHECKERS[key];
-  if (!checker) return new Response(null, { status: 404 });
-  const res = await checker();
-  return new Response(null, {
-    status: res.ok ? 200 : 503,
-    headers: { "Cache-Control": "no-store, no-cache, must-revalidate", "Access-Control-Allow-Origin": "*" },
-  });
+export async function HEAD(req: Request, ctx: { params: { service: string } }) {
+  const res = await GET(req, ctx);
+  return new Response(null, { status: res.status, headers: HEADERS });
 }
