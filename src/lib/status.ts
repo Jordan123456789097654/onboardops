@@ -106,17 +106,21 @@ export async function checkApi(): Promise<ComponentHealth> {
   };
 }
 
+/** Email counts as degraded when it is not set up, or when most recent sends failed (so messages are not reaching people). */
 export async function checkEmail(): Promise<ComponentHealth> {
   const start = Date.now();
   const configured = !!process.env.RESEND_API_KEY;
-  return {
-    service: "email",
-    status: configured ? "up" : "degraded",
-    ok: true,
-    latencyMs: Date.now() - start,
-    message: configured ? "Resend email transport configured and ready" : "Email is not configured, so messages are not being sent",
-    timestamp: new Date().toISOString(),
-  };
+  const mk = (status: "up" | "degraded", message: string): ComponentHealth => ({ service: "email", status, ok: true, latencyMs: Date.now() - start, message, timestamp: new Date().toISOString() });
+  if (!configured) return mk("degraded", "Email is not configured, so messages are not being sent");
+  try {
+    const rows = await prisma.emailLog.groupBy({ by: ["status"], where: { createdAt: { gte: new Date(Date.now() - 30 * 60_000) }, status: { in: ["SENT", "FAILED"] } }, _count: { _all: true } });
+    const sent = rows.find((r) => r.status === "SENT")?._count._all ?? 0;
+    const failed = rows.find((r) => r.status === "FAILED")?._count._all ?? 0;
+    if (failed >= 3 && failed / (sent + failed) >= 0.5) return mk("degraded", `${failed} of the last ${sent + failed} emails failed to send`);
+    return mk("up", "Resend email transport configured and ready");
+  } catch {
+    return mk("up", "Resend email transport configured and ready");
+  }
 }
 
 export async function checkStorage(): Promise<ComponentHealth> {
