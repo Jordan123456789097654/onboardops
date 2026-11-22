@@ -1,3 +1,4 @@
+import { maybeReconcile, syncDegraded } from "@/lib/betterstack";
 import { checkApi, checkAuth, checkDatabase, checkDomains, checkEmail, checkFrontend, checkStorage } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,8 @@ export async function GET(_req: Request, { params }: { params: { service: string
   const check = CHECKS[params.service as keyof typeof CHECKS];
   if (!check) return Response.json({ error: "Unknown service", services: Object.keys(CHECKS) }, { status: 404, headers: HEADERS });
   const r = await check();
+  // Keep the public status page in step (degraded reports, maintenance). Never let it slow or break the check.
+  await Promise.race([Promise.all([syncDegraded(params.service, r), maybeReconcile()]).catch(() => {}), new Promise((res) => setTimeout(res, 6000))]);
   return Response.json({ ...r, service: params.service, timestamp: new Date().toISOString() }, { status: r.ok ? 200 : 503, headers: HEADERS });
 }
 

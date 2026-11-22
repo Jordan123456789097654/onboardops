@@ -10,6 +10,7 @@ import { notifyRoles } from "@/lib/notify";
 import { getStaff, requireStaff, staffAudit, SUPPORT_STAFF, OWNER_ONLY } from "@/lib/platform";
 import { PERMANENT_OWNER_EMAILS } from "@/lib/platform-role";
 import { saveAnnouncementState, saveMaintenanceState } from "@/lib/maintenance";
+import { reconcileMaintenance } from "@/lib/betterstack";
 import { mergeWorkspaceMeta } from "@/lib/workspace-meta";
 import { connectDomain, removeDomain, validateDomain } from "@/lib/vercel-domains";
 import { run } from "./_util";
@@ -316,6 +317,8 @@ export async function setMaintenanceModeAction(input: unknown) {
             : "Maintenance mode DISABLED (site unlocked)",
       })
     );
+    // Show it on the public status page straight away. A failure here must not undo the maintenance change.
+    await reconcileMaintenance().catch((e) => console.error("status page update failed", e instanceof Error ? e.message : e));
     revalidatePath("/", "layout");
     return state;
   });

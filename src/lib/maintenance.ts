@@ -4,7 +4,8 @@ import { ALL_AREAS, type MaintArea } from "./maintenance-areas";
 export const MAINTENANCE_ROW_ID = "__platform_maintenance__";
 export const ANNOUNCEMENT_ROW_ID = "__platform_announcement__";
 export const VISITS_ROW_ID = "__platform_visits__";
-export const PLATFORM_META_IDS = [MAINTENANCE_ROW_ID, ANNOUNCEMENT_ROW_ID, VISITS_ROW_ID];
+export const BETTERSTACK_ROW_ID = "__platform_betterstack__";
+export const PLATFORM_META_IDS = [MAINTENANCE_ROW_ID, ANNOUNCEMENT_ROW_ID, VISITS_ROW_ID, BETTERSTACK_ROW_ID];
 
 export type MaintenanceState = {
   enabled: boolean;
