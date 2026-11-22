@@ -7,7 +7,7 @@ import { guides } from "@/lib/migrate";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const pages = ["", "/why", "/features", "/solutions", "/security", "/pricing", "/changelog", "/blog", "/roadmap", "/tools", "/tools/write-up-helper", "/tools/should-i-write-this-up", "/tools/policy-builder", "/tools/discipline-ladder", "/tools/handbook-outline", "/playbooks", "/migrate", "/launch", "/careers", "/partners", "/brand", "/verify", "/support", "/faq", "/about", "/contact", "/legal", "/login", "/register"];
+  const pages = ["", "/why", "/features", "/solutions", "/security", "/pricing", "/changelog", "/blog", "/roadmap", "/tools", "/tools/write-up-helper", "/tools/should-i-write-this-up", "/tools/policy-builder", "/tools/discipline-ladder", "/tools/handbook-outline", "/playbooks", "/migrate", "/launch", "/tutorial","/careers", "/partners", "/brand", "/verify", "/support", "/faq", "/about", "/contact", "/legal", "/login", "/register"];
   return [
     ...pages.map((p) => ({ url: `${SITE.url}${p}`, lastModified: now })),
     ...legalPages.map((l) => ({ url: `${SITE.url}${l.href}`, lastModified: now })),

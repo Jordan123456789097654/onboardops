@@ -9,7 +9,7 @@ import { RefCapture } from "@/components/ref-capture";
 
 const cols = [
   { title: "Product", links: [["Why OnboardOps", "/why"], ["Overview", "/features"], ["Solutions", "/solutions"], ["Security", "/security"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"], ["Free tools", "/tools"], ["Playbooks", "/playbooks"]] },
-  { title: "Company", links: [["About", "/about"], ["Help center", "/support"], ["Blog", "/blog"], ["Migration guides", "/migrate"], ["Launch checklist", "/launch"], ["Verify a certificate", "/verify"], ["Careers", "/careers"], ["Partners and badge", "/partners"], ["Brand", "/brand"], ["Contact support", "/contact"], ["FAQ", "/faq"], ["Sign in", "/login"], ["Create a workspace", "/register"]] },
+  { title: "Company", links: [["About", "/about"], ["Help center", "/support"], ["Blog", "/blog"], ["Migration guides", "/migrate"], ["Launch checklist", "/launch"], ["Video tutorial", "/tutorial"],["Verify a certificate", "/verify"], ["Careers", "/careers"], ["Partners and badge", "/partners"], ["Brand", "/brand"], ["Contact support", "/contact"], ["FAQ", "/faq"], ["Sign in", "/login"], ["Create a workspace", "/register"]] },
   { title: "Legal", links: legalPages.map((l) => [l.label, l.href]) },
 ];
 

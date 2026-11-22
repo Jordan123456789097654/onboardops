@@ -2,6 +2,14 @@ export type ChangelogEntry = { v: string; date: string; items: string[]; highlig
 
 export const entries: ChangelogEntry[] = [
   {
+    v: "0.11.1",
+    date: "2026-11-22",
+    highlight: "New video tutorial for setting up your workspace",
+    items: [
+      "A two minute video tutorial now walks through setting up a workspace: the setup wizard, inviting staff, your first course, discipline rules, Discord and Teams alerts, features and roles, and your own domain. Chapters are clickable, and it is linked from the footer and the launch checklist.",
+    ],
+  },
+  {
     v: "0.11.0",
     date: "2026-11-21",
     highlight: "Stronger encryption, employee portal tabs and free manager tools",
