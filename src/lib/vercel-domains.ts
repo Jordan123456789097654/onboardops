@@ -103,6 +103,21 @@ async function manualCheck(domain: string, base: DomainDetails): Promise<DomainD
   }
 }
 
+let recCache: { at: number; value: string } | null = null;
+/** The CNAME target Vercel currently recommends for this project (it looks like abc123.vercel-dns-017.com). Cached for an hour. Null if Vercel is not connected or does not answer. */
+export async function recommendedCname(domain: string): Promise<string | null> {
+  if (process.env.VERCEL_CNAME_TARGET) return process.env.VERCEL_CNAME_TARGET.toLowerCase().replace(/\.$/, "");
+  if (!vercelConfigured()) return null;
+  if (recCache && Date.now() - recCache.at < 3600_000) return recCache.value;
+  try {
+    const cfg = await fetch(url(`/v6/domains/${encodeURIComponent(domain)}/config`), { headers: { Authorization: `Bearer ${token()}` }, signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+    const rec = (cfg.recommendedCNAME as { rank: number; value: string }[] | undefined)?.sort((x, y) => x.rank - y.rank)[0]?.value;
+    if (!rec) return null;
+    recCache = { at: Date.now(), value: rec.toLowerCase().replace(/\.$/, "") };
+    return recCache.value;
+  } catch { return null; }
+}
+
 /** Adds one domain to the Vercel project. Already-added (409) counts as success. */
 export async function addProjectDomain(domain: string): Promise<{ ok: boolean; error?: string }> {
   if (!vercelConfigured()) return { ok: true };

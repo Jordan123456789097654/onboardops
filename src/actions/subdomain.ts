@@ -7,7 +7,8 @@ import { requireWorkspaceRole } from "@/lib/rbac";
 import { enforceRate } from "@/lib/rate-limit";
 import { claimSubdomain, releaseSubdomain, subdomainAvailable, subdomainHost, subdomainLive } from "@/lib/subdomain";
 import { getStaff, SUPPORT_STAFF, staffAudit } from "@/lib/platform";
-import { spaceshipConfigured, testDns } from "@/lib/spaceship-dns";
+import { ZONE, retargetRecords, spaceshipConfigured, testDns } from "@/lib/spaceship-dns";
+import { recommendedCname } from "@/lib/vercel-domains";
 import { run } from "./_util";
 
 const OWNER_ONLY = ["OWNER"] as const;
@@ -68,6 +69,23 @@ export async function testDnsConnectionAction() {
     const r = await testDns();
     await prisma.$transaction((tx) => staffAudit(tx, staff, { action: "DNS_TESTED", targetType: "System", targetId: "dns", summary: `DNS connection tested (${r.total} records)` }));
     return { total: r.total };
+  });
+}
+
+/** Staff (owner role): point every existing workspace address (and any hosts in SUBDOMAIN_EXTRA_HOSTS, default "management") at the CNAME target Vercel now recommends. Only records that already point at Vercel are changed. */
+export async function updateDnsTargetsAction() {
+  return run(async () => {
+    const staff = await getStaff();
+    if (!staff || staff.role !== "OWNER") throw new Error("Only the site owner can update DNS targets.");
+    if (!spaceshipConfigured()) throw new Error("SPACESHIP_API_KEY and SPACESHIP_API_SECRET are not set.");
+    const target = await recommendedCname(`management.${ZONE}`);
+    if (!target) throw new Error("Could not read the recommended target from Vercel. Check VERCEL_API_TOKEN and VERCEL_PROJECT_ID.");
+    const rows = await prisma.workspace.findMany({ where: { subdomain: { not: null } }, select: { subdomain: true } });
+    const extra = (process.env.SUBDOMAIN_EXTRA_HOSTS ?? "management").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+    const hosts = Array.from(new Set([...rows.map((r) => r.subdomain as string), ...extra]));
+    const r = await retargetRecords(hosts, target);
+    await prisma.$transaction((tx) => staffAudit(tx, staff, { action: "DNS_RETARGETED", targetType: "System", targetId: "dns", summary: `DNS targets updated to ${target}: ${r.updated} changed, ${r.already} already correct, ${r.skipped} skipped` }));
+    return { ...r, target };
   });
 }
 

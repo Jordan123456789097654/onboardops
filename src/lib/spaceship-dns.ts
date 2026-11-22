@@ -38,17 +38,19 @@ export async function listRecords(take = 500): Promise<{ items: Rec[]; total: nu
   return { items: (r.json.items ?? []) as Rec[], total: Number(r.json.total ?? 0) };
 }
 
+/** Any Vercel DNS target: the old shared one (cname.vercel-dns.com) or a project one (abc123.vercel-dns-017.com). */
+export const isVercelTarget = (t: string | undefined) => /(^|\.)vercel-dns(-\d+)?\.com\.?$/i.test((t ?? "").trim());
 const sameName = (a: string | undefined, b: string) => (a ?? "").toLowerCase() === b.toLowerCase();
 const sameTarget = (a: string | undefined, b: string) => (a ?? "").toLowerCase().replace(/\.$/, "") === b.toLowerCase().replace(/\.$/, "");
 
 /** Creates host.<zone> CNAME -> Vercel. Refuses if any other record already uses that name. */
-export async function createSubdomainRecord(host: string) {
+export async function createSubdomainRecord(host: string, target: string = VERCEL_CNAME) {
   const { items } = await listRecords();
   const existing = items.filter((r) => sameName(r.name, host));
-  const ours = existing.find((r) => (r.type ?? "").toUpperCase() === "CNAME" && sameTarget(r.cname ?? r.value, VERCEL_CNAME));
+  const ours = existing.find((r) => (r.type ?? "").toUpperCase() === "CNAME" && isVercelTarget(r.cname ?? r.value));
   if (ours) return { created: false };
   if (existing.length) throw new Error("That name already has a DNS record that we did not create.");
-  const r = await call("PUT", `/dns/records/${ZONE}`, { items: [{ type: "CNAME", name: host, cname: VERCEL_CNAME, ttl: 300 }] });
+  const r = await call("PUT", `/dns/records/${ZONE}`, { items: [{ type: "CNAME", name: host, cname: target, ttl: 300 }] });
   if (!r.ok) throw fail(r, "Creating the DNS record");
   return { created: true };
 }
@@ -56,9 +58,9 @@ export async function createSubdomainRecord(host: string) {
 /** Deletes host.<zone> only if it is a CNAME pointing at Vercel. Never touches any other record. */
 export async function deleteSubdomainRecord(host: string) {
   const { items } = await listRecords();
-  const ours = items.find((r) => sameName(r.name, host) && (r.type ?? "").toUpperCase() === "CNAME" && sameTarget(r.cname ?? r.value, VERCEL_CNAME));
+  const ours = items.find((r) => sameName(r.name, host) && (r.type ?? "").toUpperCase() === "CNAME" && isVercelTarget(r.cname ?? r.value));
   if (!ours) return { deleted: false };
-  const r = await call("DELETE", `/dns/records/${ZONE}`, [{ type: "CNAME", name: host, cname: VERCEL_CNAME }]);
+  const r = await call("DELETE", `/dns/records/${ZONE}`, [{ type: "CNAME", name: host, cname: (ours.cname ?? ours.value ?? VERCEL_CNAME).replace(/\.$/, "") }]);
   if (!r.ok && r.status !== 404) throw fail(r, "Removing the DNS record");
   return { deleted: true };
 }
@@ -67,4 +69,29 @@ export async function deleteSubdomainRecord(host: string) {
 export async function testDns() {
   const r = await listRecords(1);
   return { total: r.total };
+}
+
+/**
+ * Points existing Vercel CNAMEs for the given hosts at a new target (used when Vercel recommends a new one).
+ * Only records that already point at Vercel are touched. Each is removed and re-created at the new target.
+ */
+export async function retargetRecords(hosts: string[], target: string) {
+  const { items } = await listRecords();
+  let updated = 0, already = 0, skipped = 0;
+  for (const host of hosts) {
+    const rec = items.find((r) => sameName(r.name, host) && (r.type ?? "").toUpperCase() === "CNAME");
+    const current = rec?.cname ?? rec?.value;
+    if (!rec || !isVercelTarget(current)) { skipped++; continue; }
+    if (sameTarget(current, target)) { already++; continue; }
+    const del = await call("DELETE", `/dns/records/${ZONE}`, [{ type: "CNAME", name: host, cname: (current ?? "").replace(/\.$/, "") }]);
+    if (!del.ok && del.status !== 404) throw fail(del, `Removing the old record for ${host}`);
+    const add = await call("PUT", `/dns/records/${ZONE}`, { items: [{ type: "CNAME", name: host, cname: target, ttl: 300 }] });
+    if (!add.ok) {
+      // Put the old record back so the address keeps working.
+      await call("PUT", `/dns/records/${ZONE}`, { items: [{ type: "CNAME", name: host, cname: (current ?? "").replace(/\.$/, ""), ttl: 300 }] }).catch(() => {});
+      throw fail(add, `Updating ${host}`);
+    }
+    updated++;
+  }
+  return { updated, already, skipped };
 }

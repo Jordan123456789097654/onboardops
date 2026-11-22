@@ -2,7 +2,7 @@ import dns from "node:dns/promises";
 import { prisma } from "./prisma";
 import { hit } from "./rate-limit";
 import { ZONE, createSubdomainRecord, deleteSubdomainRecord, spaceshipConfigured } from "./spaceship-dns";
-import { addProjectDomain, removeDomain, vercelConfigured } from "./vercel-domains";
+import { addProjectDomain, recommendedCname, removeDomain, vercelConfigured } from "./vercel-domains";
 
 /** Names that must never be claimed: our own services, common infrastructure and easy impersonation targets. */
 const RESERVED = new Set([
@@ -59,7 +59,7 @@ export async function claimSubdomain(workspaceId: string, rawSlug: string) {
   }
   let dnsCreated = false;
   try {
-    if (spaceshipConfigured()) dnsCreated = (await createSubdomainRecord(a.slug)).created;
+    if (spaceshipConfigured()) dnsCreated = (await createSubdomainRecord(a.slug, (await recommendedCname(host)) ?? undefined)).created;
     if (vercelConfigured()) {
       const r = await addProjectDomain(host);
       if (!r.ok) throw new Error(r.error ?? "Could not add the address to the hosting project.");
