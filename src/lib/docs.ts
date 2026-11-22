@@ -332,7 +332,7 @@ export const articles: Article[] = [
     slug: "system-status-and-maintenance", cat: "Support", title: "System status, BetterStack monitoring and maintenance mode", summary: "Live health checks, JSON monitoring endpoints and scheduled maintenance locks.",
     body: [
       h("Live status page and BetterStack endpoints"),
-      p("Visit /status to view real-time health and latency across all OnboardOps subsystems. External uptime monitors (such as BetterStack) can poll our JSON health endpoints (GET or HEAD, returning HTTP 200 when healthy and HTTP 503 if degraded):"),
+      p("Visit status.onboardops.org to see live health and incident history for OnboardOps. External uptime monitors (such as BetterStack) can poll our JSON health endpoints (GET or HEAD, returning HTTP 200 when healthy and HTTP 503 if degraded):"),
       ul(
         "/api/status (or /api/health): Master status summary across all services.",
         "/api/status/frontend: Next.js App Router frontend, SSR and maintenance state.",

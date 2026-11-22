@@ -98,7 +98,7 @@ export function MaintenanceScreen({ m, isOwner, onPreview, preview }: { m: Maint
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3 text-[12px] text-soft">
             <span>Need help? <Link className="text-accent underline underline-offset-2" href="/contact">Contact us</Link></span>
-            <span className="flex gap-3"><Link className="underline underline-offset-2 hover:text-ink" href="/status">System status</Link>{!isOwner && <Link className="underline underline-offset-2 hover:text-ink" href="/login">Owner sign in</Link>}</span>
+            <span className="flex gap-3"><a className="underline underline-offset-2 hover:text-ink" href="https://status.onboardops.org" target="_blank" rel="noopener noreferrer">System status</a>{!isOwner && <Link className="underline underline-offset-2 hover:text-ink" href="/login">Owner sign in</Link>}</span>
           </div>
         </div>
       </main>

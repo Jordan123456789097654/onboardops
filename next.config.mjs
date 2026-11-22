@@ -36,6 +36,10 @@ const nextConfig = {
   poweredByHeader: false,
   env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
+  // The status page now lives on Better Stack. Old links to /status go there.
+  async redirects() {
+    return [{ source: "/status", destination: "https://status.onboardops.org", permanent: true }];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

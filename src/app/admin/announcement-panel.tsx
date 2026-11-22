@@ -8,7 +8,7 @@ import type { AnnouncementState } from "@/lib/maintenance";
 
 const QUICK_BANNERS: { label: string; message: string; tone: "info" | "warning" | "success"; linkUrl?: string; linkLabel?: string }[] = [
   { label: "New Release", message: "New update v0.9 is live! Check out Shift Handoff Notes, 1-click role assignment, and more.", tone: "success", linkUrl: "/changelog", linkLabel: "See changelog" },
-  { label: "Maintenance Notice", message: "Scheduled maintenance tonight at 11:00 PM EST (~20 min expected downtime).", tone: "warning", linkUrl: "/status", linkLabel: "System status" },
+  { label: "Maintenance Notice", message: "Scheduled maintenance tonight at 11:00 PM EST (~20 min expected downtime).", tone: "warning", linkUrl: "https://status.onboardops.org", linkLabel: "System status" },
   { label: "Beta Feedback", message: "We're actively building OnboardOps with our beta teams—click Feedback in the top bar anytime!", tone: "info" },
 ];
 
