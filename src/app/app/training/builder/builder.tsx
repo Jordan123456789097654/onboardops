@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveCourseAction } from "@/actions/courses";
 import { Field, PageHeader, useAction } from "@/components/ui";
+import { AiTools } from "./ai-tools";
 
 export type CourseDraft = {
   id?: string; title: string; description: string; category: string; passingScore: number; cooldownMinutes: number; isRemedial: boolean; isPublished: boolean; validityDays: number | null; defaultDueDays: number;
@@ -11,7 +12,7 @@ export type CourseDraft = {
   questions: { id?: string; prompt: string; options: string[]; correctOptionIndex: number; explanation: string }[];
 };
 
-export function Builder({ initial, otherCourses }: { initial: CourseDraft; otherCourses: { id: string; title: string }[] }) {
+export function Builder({ initial, otherCourses, ai = false }: { initial: CourseDraft; otherCourses: { id: string; title: string }[]; ai?: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [c, setC] = useState<CourseDraft>(initial);
@@ -61,6 +62,7 @@ export function Builder({ initial, otherCourses }: { initial: CourseDraft; other
           <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={c.isRemedial} onChange={(e) => patch({ isRemedial: e.target.checked })} /><span>Remedial course. Assigned automatically after a written infraction (the oldest published remedial course is used).</span></label>
         </section>
         <div className="space-y-6">
+          {ai && <AiTools c={c} patch={patch} />}
           <section className="space-y-3">
             <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Lessons</h2><button className="btn" onClick={() => patch({ lessons: [...c.lessons, { title: "", contentMarkdown: "", videoUrl: "", minReadSeconds: 30 }] })}>Add lesson</button></div>
             {c.lessons.map((l, i) => (

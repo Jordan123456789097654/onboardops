@@ -65,6 +65,10 @@ const tos: Extra = {
     </> },
   ],
   "Customer Data": [
+    { title: "AI features", body: <>
+      <p>Some features use an AI provider to draft text, such as a course from a procedure you paste, simpler wording, a translation, or quiz questions. They are on by default, and a Workspace Owner or Admin can turn them off in Settings. When you use one, the text or image you submit is sent to the provider to produce the draft.</p>
+      <p>AI output can be wrong, incomplete or unsuitable. It is a draft for you to read and change, not advice. You are responsible for what you save and publish, and for checking translations with a fluent speaker. Do not submit anything you are not allowed to share, and do not use AI output as legal, medical or safety advice. We do not use AI to decide anything about an employee, and an AI feature never saves, sends or changes a record on its own.</p>
+    </> },
     { title: "Customer-supplied encryption keys", body: <>
       <p>An Owner may choose to protect a Workspace&apos;s encrypted records with a key that the Owner supplies instead of the key we manage. While that key is active, we keep a copy of it in encrypted form so the Service can work. If the Owner revokes the key, we delete that copy and the Workspace&apos;s encrypted records are locked: nobody, including OnboardOps, can read or change them until the Owner provides the same key again. Nothing is deleted by revoking.</p>
       <p>The Owner is responsible for keeping the key. If it is lost or destroyed after it is revoked, we cannot recover the encrypted records, and we cannot restore access for you. A key you replace stops working for new data, but backups that the database provider made earlier remain until they expire under the provider&apos;s normal cycle. Choosing this option is optional, and you can return to the key we manage while your key is active.</p>
@@ -262,6 +266,7 @@ export const employeeNotice: Doc = {
         <li>Documents your employer uploaded for you, such as licenses or signed forms.</li>
       </ul>
     </> },
+    { title: "AI helpers", body: <p>Some OnboardOps features let a manager use an AI provider to help draft text, such as training courses. Anything sent is limited to what the manager chooses to submit, and the result is a draft that a person reviews. AI is not used to make decisions about you, to score you, or to change your record.</p> },
     { title: "What you can and cannot see", body: <>
       <p>In your portal you can see your training, certificates, policies, checklists, requests, incident reports you filed, notices that need your signature, documents your employer chose to share and reviews that were shared with you.</p>
       <p>Managers can keep <strong>confidential notes</strong> on conduct cases and reviews that are not shown to you in the service. Employers may have separate legal obligations to show you or correct some records. If you think a record is wrong or you want a copy of your file, ask your employer directly. OnboardOps cannot decide that for them.</p>

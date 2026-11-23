@@ -28,6 +28,9 @@ export const FEATURES: Feature[] = [
   { key: "scheduling", group: "Shifts and operations", label: "Shift scheduling and swaps", description: "Build a weekly schedule. Employees see their shifts and can request swaps.", defaultOn: false },
   { key: "timeClock", group: "Shifts and operations", label: "Time clock", description: "Employees clock in and out. Managers see timesheets and can export them.", defaultOn: false },
   { key: "assets", group: "Shifts and operations", label: "Equipment sign-out", description: "Track who has which tool, key or vehicle.", defaultOn: false },
+  // AI
+  { key: "ai", group: "AI assistance", label: "AI assistance", description: "Drafting courses and quizzes, simpler wording, translation, and other helpers. Text you submit is sent to our AI provider to produce a draft. Nothing is saved until you review it.", defaultOn: true },
+  { key: "aiPeople", group: "AI assistance", label: "AI tools that read case or employee text", description: "Helpers for write-ups, incidents, credentials and summaries. They send the text you provide, with names and contact details removed first, to our AI provider. A person always decides.", defaultOn: true },
   // Access
   { key: "customRoles", group: "Access", label: "Custom roles and permissions", description: "Create roles such as Safety lead and choose what each role can do.", defaultOn: true },
 ];

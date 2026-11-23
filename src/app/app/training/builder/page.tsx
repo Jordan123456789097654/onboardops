@@ -2,8 +2,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, MANAGEMENT_ROLES, requirePagePerm } from "@/lib/rbac";
 import { Builder, type CourseDraft } from "./builder";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
 
 export const metadata = { title: "Course Builder" };
+// AI drafting can take up to a minute.
+export const maxDuration = 60;
 
 export default async function BuilderPage({ searchParams }: { searchParams: { id?: string } }) {
   const ctx = await requirePagePerm("training.build");
@@ -24,5 +28,5 @@ export default async function BuilderPage({ searchParams }: { searchParams: { id
     };
   }
   const otherCourses = await prisma.course.findMany({ where: { workspaceId: ctx.workspaceId, ...(searchParams.id ? { id: { not: searchParams.id } } : {}) }, orderBy: { title: "asc" }, select: { id: true, title: true } });
-  return <Builder initial={draft} otherCourses={otherCourses} />;
+  return <Builder initial={draft} otherCourses={otherCourses} ai={aiConfigured() && featureOn(ctx.workspace.features, "ai")} />;
 }

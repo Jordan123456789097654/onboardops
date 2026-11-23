@@ -8,6 +8,18 @@ export type ChangelogEntry = {
 
 export const entries: ChangelogEntry[] = [
   {
+    v: "0.14.0",
+    date: "2026-11-23",
+    highlight: "AI tools in the course builder",
+    bullets: ["Draft a course and quiz from a pasted procedure", "Better wrong answers, scenario questions and simpler wording", "Translate a course, and check lessons for unclear parts"],
+    items: [
+      "New AI tools in the course builder: draft a whole course and quiz from a pasted procedure or policy, turn a long policy into a three-minute lesson, add more or scenario-style questions, rewrite weak wrong answers, simplify a lesson, translate a course into another language as a separate copy, suggest reading times and a pass mark, and check lessons for unclear or contradictory parts.",
+      "Everything the AI writes is a draft in the form. Nothing is saved until you press Save, and it can be wrong, so read it first.",
+      "AI is on by default. An owner or admin can switch it off in Settings, Features. Use is limited per person and per workspace.",
+      "The text you submit is sent to our AI provider (Groq) to write the draft. The privacy policy, data processing addendum, terms, Security page and FAQ describe this.",
+    ],
+  },
+  {
     v: "0.13.0",
     date: "2026-11-23",
     highlight: "Two-factor sign-in, Google and GitHub sign-in, single sign-on, API writes and your own encryption key",

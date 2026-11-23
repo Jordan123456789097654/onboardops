@@ -165,6 +165,22 @@ model SsoIdentity {
   @@index([userId])
 }
 
+/// How much AI each workspace used, per month and feature. Counts only: never the text that was sent or received.
+model AiUsage {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  /// YYYY-MM
+  month        String
+  feature      String
+  requests     Int      @default(0)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([workspaceId, month, feature])
+  @@index([workspaceId, month])
+}
+
 /// A customer-supplied encryption key for one workspace. The workspace data key (Workspace.dataKeyEnc) is wrapped by this key.
 model WorkspaceCmk {
   id          String    @id @default(cuid())
