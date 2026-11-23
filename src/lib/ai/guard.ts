@@ -8,8 +8,8 @@ export class AiLimitError extends Error {
 
 export type Risk = "low" | "care";
 
-/** "Care" tasks read employee or case text. They stay closed until AI_CARE_FROM (a date), so the subprocessor notice period in our DPA can run first. */
-export const careOpen = (now = Date.now()) => { const d = Date.parse(process.env.AI_CARE_FROM ?? ""); return Number.isFinite(d) && now >= d; };
+/** "Care" tasks read employee or case text. They are open by default; setting AI_CARE_FROM to a future date holds them closed until then. */
+export const careOpen = (now = Date.now()) => { const d = Date.parse(process.env.AI_CARE_FROM ?? ""); return !Number.isFinite(d) || now >= d; };
 
 export const AI_LIMITS = { userPerHour: 30, workspacePerDay: 200, workspacePerMonth: 3000 };
 

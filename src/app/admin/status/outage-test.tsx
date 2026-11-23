@@ -40,12 +40,12 @@ export function OutageTest({ canEdit, active, services, until, startedBy }: { ca
       {active ? (
         <>
           <p className="mt-2"><b>A test outage is running.</b> These services are reporting down: {services.join(", ")}. {until && <>Ends in <span className="mono">{left(until)}</span>.</>} {startedBy && <span className="text-soft">Started by {startedBy}.</span>}</p>
-          <p className="mt-1 text-soft">The real app and database are working normally. Only the health checks are forced to fail, so monitors and the public status page react as in a real outage. Remember to post a notice if you want visitors to understand it.</p>
+          <p className="mt-1 text-soft">Everyone using the app sees an &quot;We are experiencing issues&quot; screen with the status details, except the Staff Console and sign-in. The health checks also report down, so monitors and the public status page react. Your data is not touched.</p>
           {canEdit && <button className="btn-primary mt-3" disabled={pending} onClick={() => exec(() => stopOutageTestAction(), { success: "Outage test stopped", onOk: () => router.refresh() })}>Stop the test now</button>}
         </>
       ) : (
         <>
-          <p className="mt-1 text-soft">Make the health checks for the services you pick report down for a short time, to test alerts and the public status page. Nothing is actually broken, and it always ends by itself.</p>
+          <p className="mt-1 text-soft">Make the chosen services show as down for a short time. The app shows an &quot;experiencing issues&quot; screen to everyone except the Staff Console, and the health checks report down for monitors and the status page. Nothing is actually broken, and it always ends by itself.</p>
           {canEdit ? (
             <>
               <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
@@ -53,7 +53,7 @@ export function OutageTest({ canEdit, active, services, until, startedBy }: { ca
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2">Lasts <select className="input !h-8 !w-auto" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>{[2, 5, 10, 15, 30, 60].map((m) => <option key={m} value={m}>{m} minutes</option>)}</select></label>
-                <button className="btn-danger" disabled={pending || picked.length === 0} onClick={() => { if (confirm("Start a test outage? Monitors will go down and alert emails may be sent. The public status page will show the affected services as down until it ends.")) exec(() => startOutageTestAction({ services: picked, minutes }), { success: "Outage test started", onOk: () => router.refresh() }); }}>Start outage test</button>
+                <button className="btn-danger" disabled={pending || picked.length === 0} onClick={() => { if (confirm("Start a test outage? The whole app will show an issues screen to all users (except the Staff Console and sign-in) until it ends. Monitors may go down and alert emails may be sent.")) exec(() => startOutageTestAction({ services: picked, minutes }), { success: "Outage test started", onOk: () => router.refresh() }); }}>Start outage test</button>
               </div>
               <p className="mt-2 text-xs text-soft">Visitors will see the services as down on the status page, and Better Stack may email you. Monitors take up to a few minutes to notice.</p>
             </>
