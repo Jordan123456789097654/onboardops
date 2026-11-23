@@ -5,7 +5,50 @@ export const MAINTENANCE_ROW_ID = "__platform_maintenance__";
 export const ANNOUNCEMENT_ROW_ID = "__platform_announcement__";
 export const VISITS_ROW_ID = "__platform_visits__";
 export const BETTERSTACK_ROW_ID = "__platform_betterstack__";
-export const PLATFORM_META_IDS = [MAINTENANCE_ROW_ID, ANNOUNCEMENT_ROW_ID, VISITS_ROW_ID, BETTERSTACK_ROW_ID];
+export const SIMULATION_ROW_ID = "__platform_outage_test__";
+export const PLATFORM_META_IDS = [MAINTENANCE_ROW_ID, ANNOUNCEMENT_ROW_ID, VISITS_ROW_ID, BETTERSTACK_ROW_ID, SIMULATION_ROW_ID];
+
+/**
+ * Outage test. While active, the health checks for the chosen services report "down" (HTTP 503), so monitors and the public status
+ * page react exactly as in a real outage. Nothing else changes: the app and the real database keep working. It always expires.
+ */
+export type OutageTest = { active: boolean; services: string[]; until: string | null; startedBy: string | null };
+export const OUTAGE_SERVICES = ["database", "storage", "auth", "api", "email", "frontend", "domains"] as const;
+/** A database outage also takes down everything that depends on it. */
+export const OUTAGE_CASCADE: Record<string, string[]> = { database: ["database", "storage", "auth", "api"] };
+export const MAX_OUTAGE_MINUTES = 60;
+
+let simCache: { at: number; v: OutageTest } | null = null;
+export async function getOutageTest(): Promise<OutageTest> {
+  if (simCache && Date.now() - simCache.at < 2000) return simCache.v;
+  let v: OutageTest = { active: false, services: [], until: null, startedBy: null };
+  try {
+    const row = await prisma.jobRun.findUnique({ where: { id: SIMULATION_ROW_ID } });
+    const s = (row?.summary ?? {}) as Record<string, unknown>;
+    const until = typeof s.until === "string" ? s.until : null;
+    const services = Array.isArray(s.services) ? (s.services as unknown[]).filter((x): x is string => typeof x === "string") : [];
+    if (row?.ok && until && Date.parse(until) > Date.now() && services.length) v = { active: true, services, until, startedBy: typeof s.startedBy === "string" ? s.startedBy : null };
+  } catch { /* a database problem must never turn the test on */ }
+  simCache = { at: Date.now(), v };
+  return v;
+}
+/** True when the outage test is forcing this service down. */
+export async function isSimulatedDown(service: string): Promise<boolean> {
+  const t = await getOutageTest();
+  return t.active && t.services.some((s) => (OUTAGE_CASCADE[s] ?? [s]).includes(service));
+}
+export async function startOutageTest(services: string[], minutes: number, by: string) {
+  const mins = Math.max(1, Math.min(MAX_OUTAGE_MINUTES, Math.round(minutes)));
+  const until = new Date(Date.now() + mins * 60_000).toISOString();
+  const summary = { services, until, startedBy: by };
+  await prisma.jobRun.upsert({ where: { id: SIMULATION_ROW_ID }, create: { id: SIMULATION_ROW_ID, name: "platform:outage-test", ok: true, summary, durationMs: 0 }, update: { ok: true, summary } });
+  simCache = null;
+  return until;
+}
+export async function stopOutageTest() {
+  await prisma.jobRun.updateMany({ where: { id: SIMULATION_ROW_ID }, data: { ok: false } });
+  simCache = null;
+}
 
 export type MaintenanceState = {
   enabled: boolean;

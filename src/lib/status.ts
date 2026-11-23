@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./prisma";
-import { getMaintenanceState } from "./maintenance";
+import { getMaintenanceState, isSimulatedDown } from "./maintenance";
 
 export type ComponentHealth = {
   service: string;
@@ -16,13 +16,24 @@ export type ComponentHealth = {
 const SLOW_DB_MS = 1200;
 const SLOW_STORAGE_MS = 1500;
 
+
+/** While the staff outage test is running, the chosen services report down. The real service is not touched. */
+function guard(service: string, fn: () => Promise<ComponentHealth>) {
+  return async (): Promise<ComponentHealth> => {
+    if (await isSimulatedDown(service)) {
+      return { service, status: "down", ok: false, latencyMs: 0, message: "Simulated outage (staff test). Nothing is actually down.", timestamp: new Date().toISOString() };
+    }
+    return fn();
+  };
+}
+
 type Probe = { ok: boolean; ms: number; error?: string };
 async function probeDb(): Promise<Probe> {
   const t = Date.now();
   try { await prisma.$queryRaw`SELECT 1`; return { ok: true, ms: Date.now() - t }; } catch (e) { return { ok: false, ms: Date.now() - t, error: e instanceof Error ? e.message : "Database unreachable" }; }
 }
 
-export async function checkFrontend(): Promise<ComponentHealth> {
+async function real_checkFrontend(): Promise<ComponentHealth> {
   const start = Date.now();
   const maint = await getMaintenanceState();
   return {
@@ -36,7 +47,7 @@ export async function checkFrontend(): Promise<ComponentHealth> {
   };
 }
 
-export async function checkDatabase(): Promise<ComponentHealth> {
+async function real_checkDatabase(): Promise<ComponentHealth> {
   const start = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -62,7 +73,7 @@ export async function checkDatabase(): Promise<ComponentHealth> {
   }
 }
 
-export async function checkAuth(): Promise<ComponentHealth> {
+async function real_checkAuth(): Promise<ComponentHealth> {
   const start = Date.now();
   try {
     const secret = new TextEncoder().encode(process.env.SESSION_SECRET || "dev-only-secret-change-me-please-32chars");
@@ -91,7 +102,7 @@ export async function checkAuth(): Promise<ComponentHealth> {
   }
 }
 
-export async function checkApi(): Promise<ComponentHealth> {
+async function real_checkApi(): Promise<ComponentHealth> {
   const start = Date.now();
   const db = await probeDb();
   if (!db.ok) return { service: "api", status: "down", ok: false, latencyMs: Date.now() - start, message: "The API cannot reach the database", timestamp: new Date().toISOString() };
@@ -107,7 +118,7 @@ export async function checkApi(): Promise<ComponentHealth> {
 }
 
 /** Email counts as degraded when it is not set up, or when most recent sends failed (so messages are not reaching people). */
-export async function checkEmail(): Promise<ComponentHealth> {
+async function real_checkEmail(): Promise<ComponentHealth> {
   const start = Date.now();
   const configured = !!process.env.RESEND_API_KEY;
   const mk = (status: "up" | "degraded", message: string): ComponentHealth => ({ service: "email", status, ok: true, latencyMs: Date.now() - start, message, timestamp: new Date().toISOString() });
@@ -123,7 +134,7 @@ export async function checkEmail(): Promise<ComponentHealth> {
   }
 }
 
-export async function checkStorage(): Promise<ComponentHealth> {
+async function real_checkStorage(): Promise<ComponentHealth> {
   const start = Date.now();
   try {
     await prisma.storedFile.count({ take: 1 });
@@ -149,7 +160,7 @@ export async function checkStorage(): Promise<ComponentHealth> {
   }
 }
 
-export async function checkDomains(): Promise<ComponentHealth> {
+async function real_checkDomains(): Promise<ComponentHealth> {
   const start = Date.now();
   return {
     service: "domains",
@@ -160,6 +171,14 @@ export async function checkDomains(): Promise<ComponentHealth> {
     timestamp: new Date().toISOString(),
   };
 }
+
+export const checkFrontend = guard("frontend", real_checkFrontend);
+export const checkDatabase = guard("database", real_checkDatabase);
+export const checkAuth = guard("auth", real_checkAuth);
+export const checkApi = guard("api", real_checkApi);
+export const checkEmail = guard("email", real_checkEmail);
+export const checkStorage = guard("storage", real_checkStorage);
+export const checkDomains = guard("domains", real_checkDomains);
 
 export async function checkAllServices() {
   const start = Date.now();

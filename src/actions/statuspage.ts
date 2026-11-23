@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { OWNER_ONLY, requireStaff, staffAudit } from "@/lib/platform";
 import { bsCreateIncident, bsDeleteReport, bsEndMaintenance, bsOverview, bsScheduleMaintenance, bsUpdateIncident, betterstackConfigured } from "@/lib/betterstack";
+import { MAX_OUTAGE_MINUTES, OUTAGE_SERVICES, startOutageTest, stopOutageTest } from "@/lib/maintenance";
 import { run } from "./_util";
 
 /** The status page manager. Site owner only, because what is posted here is public. Every change is written to the staff audit log. */
@@ -18,6 +19,28 @@ const audit = (staff: Awaited<ReturnType<typeof owner>>, action: string, id: str
 const title = z.string().trim().min(3, "Give it a title").max(120);
 const message = z.string().trim().min(3, "Write a short message").max(1000);
 const ids = z.array(z.string().regex(/^\d+$/)).min(1, "Pick at least one service").max(40);
+
+/** The outage test only changes what the health checks report, so it does not need Better Stack to be connected. */
+export async function startOutageTestAction(input: unknown) {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    const d = z.object({ services: z.array(z.enum(OUTAGE_SERVICES)).min(1, "Pick at least one service").max(7), minutes: z.number().int().min(1).max(MAX_OUTAGE_MINUTES) }).parse(input);
+    const until = await startOutageTest(d.services, d.minutes, staff.email ?? "staff");
+    await audit(staff, "OUTAGE_TEST_STARTED", "outage-test", `Started an outage test for ${d.services.join(", ")} for ${d.minutes} minutes`);
+    revalidatePath("/admin/status");
+    return { until };
+  });
+}
+
+export async function stopOutageTestAction() {
+  return run(async () => {
+    const staff = await requireStaff(OWNER_ONLY);
+    await stopOutageTest();
+    await audit(staff, "OUTAGE_TEST_STOPPED", "outage-test", "Stopped the outage test");
+    revalidatePath("/admin/status");
+    return undefined;
+  });
+}
 
 export async function testStatusConnectionAction() {
   return run(async () => {

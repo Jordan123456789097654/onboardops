@@ -1,6 +1,8 @@
 import { requireStaffPage, SUPPORT_STAFF } from "@/lib/platform";
 import { PageHeader } from "@/components/ui";
 import { betterstackConfigured, bsOverview, STATUS_PAGE_URL, type BsMonitor, type BsReport, type BsResource } from "@/lib/betterstack";
+import { getOutageTest } from "@/lib/maintenance";
+import { OutageTest } from "./outage-test";
 import { StatusManager } from "./manager";
 
 export const metadata = { title: "Status page" };
@@ -9,6 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminStatus() {
   const staff = await requireStaffPage(SUPPORT_STAFF);
   const configured = betterstackConfigured();
+  const test = await getOutageTest();
   let data: { resources: BsResource[]; reports: BsReport[]; monitors: BsMonitor[] } = { resources: [], reports: [], monitors: [] };
   let error = "";
   if (configured) {
@@ -17,6 +20,7 @@ export default async function AdminStatus() {
   return (
     <>
       <PageHeader title="Status page" sub="What visitors see on the public status page. Post incidents, schedule maintenance and mark services as degraded. Maintenance mode and slow services are posted automatically." />
+      <div className="mb-8"><OutageTest canEdit={staff.role === "OWNER"} active={test.active} services={test.services} until={test.until} startedBy={test.startedBy} /></div>
       <StatusManager configured={configured} error={error} canEdit={staff.role === "OWNER"} publicUrl={STATUS_PAGE_URL} resources={data.resources} reports={data.reports} monitors={data.monitors} />
     </>
   );
