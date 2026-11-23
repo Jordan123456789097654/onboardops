@@ -1,3 +1,14 @@
+/** The YouTube play button in a red circle, the same shape as the black version. */
+export function YouTubeIcon({ className = "h-6 w-6" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 512 512" className={className} aria-hidden="true" focusable="false">
+      <circle cx="256" cy="256" r="256" fill="#FF0000" />
+      <rect x="124" y="158" width="264" height="196" rx="54" fill="#ffffff" />
+      <path d="M228 213l73 43-73 43z" fill="#FF0000" />
+    </svg>
+  );
+}
+
 /** The Facebook "f" in its blue circle. A white disc behind the mark keeps the "f" white in light and dark themes. */
 export function FacebookIcon({ className = "h-6 w-6" }: { className?: string }) {
   return (

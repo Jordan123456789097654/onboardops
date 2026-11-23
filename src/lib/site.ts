@@ -7,6 +7,8 @@ export const SITE = {
   domain: "onboardops.org",
   /** Our public Facebook page. */
   facebookUrl: "https://www.facebook.com/profile.php?id=61596868529996",
+  /** Our YouTube channel. */
+  youtubeUrl: "https://www.youtube.com/@OnboardOpsOfficial",
   /** Public base URL. Production sets APP_URL=https://onboardops.org; local development uses http://localhost:3000. */
   url: process.env.APP_URL || "http://localhost:3000",
   legalUpdated: "November 26, 2026",
