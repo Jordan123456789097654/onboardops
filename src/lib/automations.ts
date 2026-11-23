@@ -8,6 +8,7 @@ import { sendGenericWebhook } from "./generic-webhook";
 import type { Ctx } from "./rbac";
 import { getStrikeDecayDays } from "./workspace-meta";
 import { notifyEmployee, notifyRoles } from "./notify";
+import { pickQuiz, unmetPrerequisites } from "./course-rules";
 
 type Tx = Prisma.TransactionClient;
 
@@ -104,12 +105,19 @@ export async function assignRoleCourses(
   return fresh.map((c) => c.title);
 }
 
-export type QuizResult = { score: number; passed: boolean; correct: number; total: number; certificateCode?: string; cooldownUntil?: string; review: { prompt: string; chosen: number; correctIndex: number; explanation: string }[] };
+export type QuizQuestionOut = { id: string; prompt: string; /** i is the option's original index. Only that number is sent back with an answer. */ options: { i: number; text: string }[] };
+export type QuizResult = { score: number; passed: boolean; correct: number; total: number; certificateCode?: string; cooldownUntil?: string; review: { questionId: string; prompt: string; chosen: number; correctIndex: number; explanation: string }[] };
 
-/** Automation 2: grade on the server, certify, promote readiness/status. */
-export async function submitQuiz(ctx: Ctx, employeeId: string, courseId: string, answers: number[]): Promise<{ result: QuizResult; fx: Effects }> {
-  const fx = newEffects();
-  const result = await prisma.$transaction(async (tx) => {
+function cooldownMessage(until: Date, minutes: number) {
+  return `Retake available after ${until.toISOString().slice(11, 16)}Z (${minutes} minute cooldown).`;
+}
+
+/**
+ * Starts (or resumes) a quiz sitting. The server chooses the questions (a random bank pick if the course uses one) and the option
+ * order, remembers that choice, and only ever sends the prompts and options. Correct answers never leave the server.
+ */
+export async function startQuizAttempt(ctx: Ctx, employeeId: string, courseId: string): Promise<{ attemptId: string; questions: QuizQuestionOut[] }> {
+  return prisma.$transaction(async (tx) => {
     const enrollment = await tx.courseEnrollment.findFirst({
       where: { employeeId, courseId, workspaceId: ctx.workspaceId },
       include: { course: { include: { questions: { orderBy: { orderIndex: "asc" } } } }, employee: true },
@@ -118,22 +126,74 @@ export async function submitQuiz(ctx: Ctx, employeeId: string, courseId: string,
     const { course, employee } = enrollment;
     if (enrollment.status === "PASSED") throw new Error("You already passed this course.");
     if (employee.status === "TERMINATED") throw new Error("This employee is terminated.");
+    const unmet = await unmetPrerequisites(tx, { workspaceId: ctx.workspaceId, employeeId, jobRoleId: employee.jobRoleId, course });
+    if (unmet.length) throw new Error(`Pass ${unmet.map((u) => `"${u.title}"`).join(" and ")} first.`);
     if (enrollment.lastAttemptAt && enrollment.status === "FAILED") {
       const until = new Date(enrollment.lastAttemptAt.getTime() + course.cooldownMinutes * 60000);
-      if (until > new Date()) throw new Error(`Retake available after ${until.toISOString().slice(11, 16)}Z (${course.cooldownMinutes} minute cooldown).`);
+      if (until > new Date()) throw new Error(cooldownMessage(until, course.cooldownMinutes));
     }
-    const qs = course.questions;
+    if (!course.questions.length) throw new Error("This course has no quiz questions.");
+    const byId = new Map(course.questions.map((q) => [q.id, q]));
+    // Resume an unfinished sitting from the last 2 hours, so a page refresh does not change the questions.
+    let attempt = await tx.quizAttempt.findFirst({ where: { employeeId, courseId, submittedAt: null, startedAt: { gte: new Date(Date.now() - 2 * 3600_000) } }, orderBy: { startedAt: "desc" } });
+    if (attempt && !attempt.questionIds.every((id) => byId.has(id))) attempt = null; // the quiz was edited since
+    if (!attempt) {
+      const pick = pickQuiz(course, course.questions);
+      attempt = await tx.quizAttempt.create({ data: { workspaceId: ctx.workspaceId, courseId, employeeId, questionIds: pick.questionIds, optionOrder: pick.optionOrder } });
+    }
+    const order = (attempt.optionOrder ?? {}) as Record<string, number[]>;
+    const questions = attempt.questionIds.map((id) => {
+      const q = byId.get(id)!;
+      const opts = q.options as string[];
+      return { id, prompt: q.prompt, options: (order[id] ?? opts.map((_, i) => i)).map((i) => ({ i, text: opts[i] })) };
+    });
+    return { attemptId: attempt.id, questions };
+  });
+}
+
+/** Automation 2: grade on the server against the questions that were asked, certify, promote readiness/status. */
+export async function submitQuiz(ctx: Ctx, employeeId: string, courseId: string, attemptId: string, answers: { questionId: string; optionIndex: number }[]): Promise<{ result: QuizResult; fx: Effects }> {
+  const fx = newEffects();
+  const result = await prisma.$transaction(async (tx) => {
+    const enrollment = await tx.courseEnrollment.findFirst({
+      where: { employeeId, courseId, workspaceId: ctx.workspaceId },
+      include: { course: { include: { questions: true } }, employee: true },
+    });
+    if (!enrollment) throw new Error("You are not enrolled in this course.");
+    const { course, employee } = enrollment;
+    if (enrollment.status === "PASSED") throw new Error("You already passed this course.");
+    if (employee.status === "TERMINATED") throw new Error("This employee is terminated.");
+    const unmet = await unmetPrerequisites(tx, { workspaceId: ctx.workspaceId, employeeId, jobRoleId: employee.jobRoleId, course });
+    if (unmet.length) throw new Error(`Pass ${unmet.map((u) => `"${u.title}"`).join(" and ")} first.`);
+    if (enrollment.lastAttemptAt && enrollment.status === "FAILED") {
+      const until = new Date(enrollment.lastAttemptAt.getTime() + course.cooldownMinutes * 60000);
+      if (until > new Date()) throw new Error(cooldownMessage(until, course.cooldownMinutes));
+    }
+    const attempt = await tx.quizAttempt.findFirst({ where: { id: attemptId, employeeId, courseId, workspaceId: ctx.workspaceId } });
+    if (!attempt) throw new Error("Start the quiz again, then submit.");
+    if (attempt.submittedAt) throw new Error("This quiz was already submitted. Start a new attempt.");
+    const byId = new Map(course.questions.map((q) => [q.id, q]));
+    const asked = attempt.questionIds.map((id) => byId.get(id));
+    if (asked.some((q) => !q)) throw new Error("This quiz was updated while you were taking it. Reload and start again.");
+    const qs = asked as NonNullable<(typeof asked)[number]>[];
     if (!qs.length) throw new Error("This course has no quiz questions.");
-    if (answers.length !== qs.length) throw new Error("Answer every question before submitting.");
+    const given = new Map(answers.map((a) => [a.questionId, a.optionIndex]));
+    if (given.size !== qs.length || !qs.every((q) => given.has(q.id))) throw new Error("Answer every question before submitting.");
     let correct = 0;
-    const review = qs.map((q, i) => {
-      if (answers[i] === q.correctOptionIndex) correct++;
-      return { prompt: q.prompt, chosen: answers[i], correctIndex: q.correctOptionIndex, explanation: q.explanation };
+    const review = qs.map((q) => {
+      const chosen = given.get(q.id)!;
+      if (chosen === q.correctOptionIndex) correct++;
+      return { questionId: q.id, prompt: q.prompt, chosen, correctIndex: q.correctOptionIndex, explanation: q.explanation };
     });
     const score = Math.round((correct / qs.length) * 100);
     const passed = score >= course.passingScore;
     const best = Math.max(score, enrollment.bestScore ?? 0);
     let certificateCode: string | undefined;
+
+    await tx.quizAttempt.update({ where: { id: attempt.id }, data: { submittedAt: new Date(), score, passed } });
+    await tx.quizAnswer.createMany({
+      data: qs.map((q, i) => ({ attemptId: attempt.id, workspaceId: ctx.workspaceId, courseId, questionId: q.id, prompt: q.prompt, chosenIndex: review[i].chosen, correctIndex: q.correctOptionIndex, correct: review[i].chosen === q.correctOptionIndex, options: q.options as string[] })),
+    });
 
     if (passed) {
       for (let i = 0; i < 6 && !certificateCode; i++) {

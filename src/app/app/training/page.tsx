@@ -15,7 +15,7 @@ export default async function Training() {
   ]);
   return (
     <>
-      <PageHeader title="Training Academy" sub="Course catalog">{canBuild && <Link href="/app/training/builder" className="btn-primary">New course</Link>}</PageHeader>
+      <PageHeader title="Training Academy" sub="Course catalog">{canBuild && <Link href="/app/training/analytics" className="btn">Quiz analytics</Link>}{canBuild && <Link href="/app/training/builder" className="btn-primary">New course</Link>}</PageHeader>
       {courses.length === 0 ? <Empty title="No courses yet" hint="Build a course with Markdown lessons and a quiz, then require it on a job role." /> : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {courses.map((c) => {
@@ -24,7 +24,7 @@ export default async function Training() {
               <div key={c.id} className="card lift flex flex-col p-4">
                 <div className="flex items-start justify-between gap-2"><h2 className="font-medium">{c.title}</h2><div className="flex gap-1">{c.isRemedial && <Badge value="RETRAINING_REQUIRED" label="Remedial" />}{!c.isPublished && <Badge value="LOA" label="Draft" />}</div></div>
                 <p className="mt-1 flex-1 text-[13px] text-soft">{c.description}</p>
-                <p className="mono mt-3 text-xs text-soft">{c._count.lessons} lessons · {c._count.questions} questions · pass {c.passingScore}% · {passed}/{c._count.enrollments} passed</p>
+                <p className="mono mt-3 text-xs text-soft">{c._count.lessons} lessons · {c._count.questions} questions{c.quizQuestionCount && c.quizQuestionCount < c._count.questions ? ` (asks ${c.quizQuestionCount})` : ""} · pass {c.passingScore}% · {passed}/{c._count.enrollments} passed{c.prerequisiteIds.length ? ` · ${c.prerequisiteIds.length} prerequisite${c.prerequisiteIds.length === 1 ? "" : "s"}` : ""}</p>
                 <div className="mt-3 flex gap-2">
                   <Link href={`/app/training/course/${c.id}`} className="btn">Open</Link>
                   {canBuild && <Link href={`/app/training/builder?id=${c.id}`} className="btn">Edit</Link>}

@@ -6,11 +6,12 @@ import { Field, PageHeader, useAction } from "@/components/ui";
 
 export type CourseDraft = {
   id?: string; title: string; description: string; category: string; passingScore: number; cooldownMinutes: number; isRemedial: boolean; isPublished: boolean; validityDays: number | null; defaultDueDays: number;
+  quizQuestionCount: number | null; shuffleQuestions: boolean; shuffleOptions: boolean; prerequisiteIds: string[];
   lessons: { title: string; contentMarkdown: string; videoUrl: string; minReadSeconds: number }[];
-  questions: { prompt: string; options: string[]; correctOptionIndex: number; explanation: string }[];
+  questions: { id?: string; prompt: string; options: string[]; correctOptionIndex: number; explanation: string }[];
 };
 
-export function Builder({ initial }: { initial: CourseDraft }) {
+export function Builder({ initial, otherCourses }: { initial: CourseDraft; otherCourses: { id: string; title: string }[] }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [c, setC] = useState<CourseDraft>(initial);
@@ -41,6 +42,22 @@ export function Builder({ initial }: { initial: CourseDraft }) {
             <Field label="Certificate valid (days)"><input className="input mono" type="number" min={1} placeholder="Never expires" value={c.validityDays ?? ""} onChange={(e) => patch({ validityDays: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
           </div>
           <p className="-mt-1 text-xs text-soft">When a certificate expires, the employee is re-enrolled automatically and warned 30 and 7 days before.</p>
+          <div className="space-y-2 border-t border-line pt-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">Quiz rules</h3>
+            <Field label="Questions asked per attempt"><input className="input mono" type="number" min={1} max={c.questions.length} placeholder={`All ${c.questions.length}`} value={c.quizQuestionCount ?? ""} onChange={(e) => patch({ quizQuestionCount: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
+            <p className="-mt-1 text-xs text-soft">{c.quizQuestionCount && c.quizQuestionCount < c.questions.length ? `A question bank: each attempt gets ${c.quizQuestionCount} of your ${c.questions.length} questions, picked at random, so a retake is not the same quiz.` : "Leave empty to ask every question. Enter a smaller number to use the questions below as a bank."}</p>
+            <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={c.shuffleQuestions} onChange={(e) => patch({ shuffleQuestions: e.target.checked })} /><span>Shuffle the question order</span></label>
+            <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={c.shuffleOptions} onChange={(e) => patch({ shuffleOptions: e.target.checked })} /><span>Shuffle the answer options</span></label>
+          </div>
+          <div className="space-y-1.5 border-t border-line pt-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">Prerequisites</h3>
+            {otherCourses.length === 0 ? <p className="text-xs text-soft">No other courses yet.</p> : (
+              <>
+                <p className="text-xs text-soft">People must pass these before they can open this course.</p>
+                {otherCourses.map((o) => <label key={o.id} className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={c.prerequisiteIds.includes(o.id)} onChange={() => patch({ prerequisiteIds: c.prerequisiteIds.includes(o.id) ? c.prerequisiteIds.filter((x) => x !== o.id) : [...c.prerequisiteIds, o.id] })} /><span>{o.title}</span></label>)}
+              </>
+            )}
+          </div>
           <label className="flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={c.isRemedial} onChange={(e) => patch({ isRemedial: e.target.checked })} /><span>Remedial course. Assigned automatically after a written infraction (the oldest published remedial course is used).</span></label>
         </section>
         <div className="space-y-6">

@@ -11,6 +11,9 @@ import { ReserveAddress } from "@/components/reserve-address";
 import { subdomainsEnabled } from "@/lib/subdomain";
 import { ZONE } from "@/lib/spaceship-dns";
 import { WaitlistForm } from "@/components/waitlist-form";
+import { Testimonials } from "@/components/testimonials";
+
+export const revalidate = 300;
 
 const Sandbox = dynamic(() => import("@/components/sandbox").then((m) => m.Sandbox), { loading: () => <div className="card h-72 animate-pulse" aria-hidden /> });
 
@@ -78,6 +81,8 @@ export default function Home() {
           </div>
         </Reveal>
       </section>
+
+      <Testimonials />
 
       <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-4 pt-24">
         <Reveal className="max-w-2xl"><p className="eyebrow">How it works</p><h2 className="section-title mt-2">From the first shift to the last write-up</h2><p className="lead mt-3 !text-base">Click through. These are real screens from the app.</p></Reveal>

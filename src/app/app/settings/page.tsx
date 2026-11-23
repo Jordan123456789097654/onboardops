@@ -32,7 +32,7 @@ export default async function SettingsPage() {
       domain={{ address: { enabled: subdomainsEnabled(), slug: w.subdomain ?? "", status: w.subdomainStatus, zone: ZONE, isOwner: ctx.role === "OWNER" }, slug: w.slug, baseUrl: SITE.url, name: w.customDomain, status: w.domainStatus, details: (w.domainDetails as DomainDetails | null) ?? null, vercel: vercelConfigured() }}
       ws={{ publicCerts: (w.features as Record<string, unknown> | null)?.__publicCerts !== false, decayDays: getStrikeDecayDays(w.features), accent: getWorkspaceBranding(w.features).accentColor, tagline: getWorkspaceBranding(w.features).tagline, name: w.name, ops: w.operationsWebhookUrl ?? "", conf: w.confidentialWebhookUrl ?? "", threshold: w.autoSuspendStrikeThreshold, retrain: w.autoRetrainOnWrittenInfraction, reminders: w.remindersEnabled }}
       departments={departments.map((d) => ({ id: d.id, name: d.name, colorCode: d.colorCode }))}
-      roles={roles.map((r) => ({ id: r.id, title: r.title, description: r.description, requiredCourseIds: r.requiredCourseIds }))}
+      roles={roles.map((r) => ({ id: r.id, title: r.title, description: r.description, requiredCourseIds: r.requiredCourseIds, pathSequential: r.pathSequential }))}
       courses={courses}
       members={members.map((m) => ({ id: m.id, name: m.user.name, email: m.user.email, role: m.role, customRoleId: m.customRoleId }))}
       customRoles={customRoles.map((r) => ({ id: r.id, name: r.name, description: r.description, baseRole: r.baseRole, members: r._count.members }))}

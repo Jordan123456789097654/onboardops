@@ -67,17 +67,20 @@ export async function saveDepartmentAction(input: unknown) {
 export async function saveJobRoleAction(input: unknown) {
   return run(async () => {
     const ctx = await requireWorkspaceRole(ADMIN_ROLES);
-    const d = z.object({ id: z.string().optional(), title: z.string().trim().min(2, "Job title is required"), description: z.string().trim().default(""), requiredCourseIds: z.array(z.string()) }).parse(input);
+    const d = z.object({ id: z.string().optional(), title: z.string().trim().min(2, "Job title is required"), description: z.string().trim().default(""), requiredCourseIds: z.array(z.string()), pathSequential: z.boolean().default(false) }).parse(input);
     await prisma.$transaction(async (tx) => {
       const valid = await tx.course.findMany({ where: { id: { in: d.requiredCourseIds }, workspaceId: ctx.workspaceId }, select: { id: true } });
-      const data = { title: d.title, description: d.description, requiredCourseIds: valid.map((v) => v.id) };
+      // Keep the order the admin chose: it is the learning path order.
+      const validSet = new Set(valid.map((v) => v.id));
+      const ordered = [...new Set(d.requiredCourseIds)].filter((id) => validSet.has(id));
+      const data = { title: d.title, description: d.description, requiredCourseIds: ordered, pathSequential: d.pathSequential && ordered.length > 1 };
       if (d.id) {
         if (!(await tx.jobRole.findFirst({ where: { id: d.id, workspaceId: ctx.workspaceId } }))) throw new Error("Job role not found.");
         await tx.jobRole.update({ where: { id: d.id }, data });
       } else {
         await tx.jobRole.create({ data: { ...data, workspaceId: ctx.workspaceId } });
       }
-      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: d.id ? "JOB_ROLE_UPDATED" : "JOB_ROLE_CREATED", targetType: "JobRole", targetId: d.id ?? "new", summary: `Job role "${d.title}" saved with ${valid.length} required course(s)` });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: d.id ? "JOB_ROLE_UPDATED" : "JOB_ROLE_CREATED", targetType: "JobRole", targetId: d.id ?? "new", summary: `Job role "${d.title}" saved with ${ordered.length} required course(s)${data.pathSequential ? ", unlocked in order" : ""}` });
     });
     revalidatePath("/app", "layout");
     return undefined;

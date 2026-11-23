@@ -13,7 +13,7 @@ import type { DomainDetails } from "@/lib/vercel-domains";
 import { Badge, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/components/ui";
 
 type Dept = { id?: string; name: string; colorCode: string };
-type JobRole = { id?: string; title: string; description: string; requiredCourseIds: string[] };
+type JobRole = { id?: string; title: string; description: string; requiredCourseIds: string[]; pathSequential: boolean };
 
 export function Settings({ integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
   customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
@@ -73,8 +73,8 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
               <div className="card divide-y divide-line">{departments.map((d) => <div key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><span className="h-3 w-3 rounded-sm" style={{ background: d.colorCode }} /><span className="flex-1">{d.name}</span><span className="mono text-xs text-soft">{d.colorCode}</span><button className="btn" onClick={() => setDept(d)}>Edit</button></div>)}</div>
             </section>
             <section>
-              <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">Job roles and required courses</h2><button className="btn" onClick={() => setRole({ title: "", description: "", requiredCourseIds: [] })}>Add job role</button></div>
-              <div className="card divide-y divide-line">{roles.map((r) => <div key={r.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><div className="flex-1"><div className="font-medium">{r.title}</div><div className="text-xs text-soft">{r.requiredCourseIds.map((id) => courses.find((c) => c.id === id)?.title).filter(Boolean).join(" · ") || "No required courses"}</div></div><button className="btn" onClick={() => setRole(r)}>Edit</button></div>)}</div>
+              <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">Job roles and required courses</h2><button className="btn" onClick={() => setRole({ title: "", description: "", requiredCourseIds: [], pathSequential: false })}>Add job role</button></div>
+              <div className="card divide-y divide-line">{roles.map((r) => <div key={r.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><div className="flex-1"><div className="font-medium">{r.title}</div><div className="text-xs text-soft">{r.requiredCourseIds.map((id) => courses.find((c) => c.id === id)?.title).filter(Boolean).join(r.pathSequential ? " → " : " · ") || "No required courses"}{r.pathSequential && r.requiredCourseIds.length > 1 ? " (in order)" : ""}</div></div><button className="btn" onClick={() => setRole(r)}>Edit</button></div>)}</div>
               <p className="mt-2 text-xs text-soft">Assigning a job role to an employee enrolls them in every required course and sets readiness to Pending.</p>
             </section>
           </div>
@@ -118,6 +118,16 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
       <Modal open={!!role} onClose={() => setRole(null)} title={role?.id ? "Edit job role" : "Add job role"}>
         {role && <div className="space-y-3"><Field label="Title"><input className="input" value={role.title} onChange={(e) => setRole({ ...role, title: e.target.value })} /></Field><Field label="Description"><input className="input" value={role.description} onChange={(e) => setRole({ ...role, description: e.target.value })} /></Field>
           <div><span className="label">Required courses</span><div className="space-y-1">{courses.map((c) => <label key={c.id} className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={role.requiredCourseIds.includes(c.id)} onChange={() => setRole({ ...role, requiredCourseIds: role.requiredCourseIds.includes(c.id) ? role.requiredCourseIds.filter((x) => x !== c.id) : [...role.requiredCourseIds, c.id] })} />{c.title}</label>)}</div></div>
+          {role.requiredCourseIds.length > 1 && (
+            <div>
+              <span className="label">Learning path order</span>
+              <ol className="space-y-1">{role.requiredCourseIds.map((id, i) => {
+                const move = (d: number) => { const j = i + d; if (j < 0 || j >= role.requiredCourseIds.length) return; const n = [...role.requiredCourseIds]; [n[i], n[j]] = [n[j], n[i]]; setRole({ ...role, requiredCourseIds: n }); };
+                return <li key={id} className="flex items-center gap-2 text-[13px]"><span className="mono w-5 text-xs text-soft">{i + 1}.</span><span className="flex-1">{courses.find((c) => c.id === id)?.title}</span><button type="button" className="btn !px-2" disabled={i === 0} onClick={() => move(-1)}>Up</button><button type="button" className="btn !px-2" disabled={i === role.requiredCourseIds.length - 1} onClick={() => move(1)}>Down</button></li>;
+              })}</ol>
+              <label className="mt-2 flex items-start gap-2 text-[13px]"><input type="checkbox" className="mt-0.5" checked={role.pathSequential} onChange={(e) => setRole({ ...role, pathSequential: e.target.checked })} /><span>Unlock in order. Each course opens only after the one above it is passed.</span></label>
+            </div>
+          )}
           <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => saveJobRoleAction(role), { success: "Job role saved", onOk: () => { setRole(null); done(); } })}>Save</button></div>}
       </Modal>
     </>

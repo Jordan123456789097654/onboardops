@@ -3,15 +3,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { startCourseAction, submitQuizAction } from "@/actions/courses";
+import { startCourseAction, startQuizAction, submitQuizAction } from "@/actions/courses";
 import { Badge, Modal, PageHeader, useAction } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import type { QuizResult } from "@/lib/automations";
+import type { QuizQuestionOut, QuizResult } from "@/lib/automations";
 
 type Props = {
   course: { id: string; title: string; description: string; passingScore: number; cooldownMinutes: number };
   lessons: { id: string; title: string; md: string; video: string | null; secs: number }[];
-  questions: { id: string; prompt: string; options: string[] }[];
+  /** Only set in manager preview (not enrolled). Enrolled people get their questions from the server when they start the quiz. */
+  previewQuestions: QuizQuestionOut[] | null;
+  bank: { asked: number; total: number; shuffled: boolean } | null;
+  locked: { id: string; title: string }[];
   enrollment: { id: string; status: string; best: number | null; cert: string | null; lastAttemptAt: string | null } | null;
 };
 
@@ -25,13 +28,14 @@ function embed(url: string) {
   return null;
 }
 
-export function CoursePlayer({ course, lessons, questions, enrollment }: Props) {
+export function CoursePlayer({ course, lessons, previewQuestions, bank, locked, enrollment }: Props) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [step, setStep] = useState(0); // 0..lessons-1 lessons, lessons.length = quiz
   const [seen, setSeen] = useState<Set<number>>(new Set());
   const [left, setLeft] = useState(lessons[0]?.secs ?? 0);
-  const [answers, setAnswers] = useState<(number | null)[]>(questions.map(() => null));
+  const [quiz, setQuiz] = useState<{ attemptId: string; questions: QuizQuestionOut[] } | null>(null);
+  const [answers, setAnswers] = useState<Record<string, number>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
   const [certOpen, setCertOpen] = useState(false);
   const isQuiz = step === lessons.length;
@@ -44,10 +48,27 @@ export function CoursePlayer({ course, lessons, questions, enrollment }: Props) 
     return () => clearInterval(t);
   }, [step, isQuiz, seen, lessons]);
 
-  useEffect(() => { if (enrollment?.status === "ASSIGNED") startCourseAction(course.id); }, [enrollment?.status, course.id]);
+  useEffect(() => { if (enrollment?.status === "ASSIGNED" && locked.length === 0) startCourseAction(course.id); }, [enrollment?.status, course.id, locked.length]);
+
+  const questions = quiz?.questions ?? previewQuestions ?? [];
+  const begin = () => exec(() => startQuizAction(course.id), { onOk: (q) => { setQuiz(q); setAnswers({}); setResult(null); } });
+  // Ask the server for this sitting's questions the first time the quiz is opened.
+  useEffect(() => { if (isQuiz && enrollment && !passed && !quiz && !result) begin(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [isQuiz]);
 
   const next = () => { setSeen((s) => new Set(s).add(step)); setStep(step + 1); };
-  const submit = () => exec(() => submitQuizAction(course.id, answers as number[]), { onOk: (r) => { setResult(r); if (r.passed) setCertOpen(true); router.refresh(); } });
+  const submit = () => quiz && exec(() => submitQuizAction(course.id, quiz.attemptId, questions.map((q) => ({ questionId: q.id, optionIndex: answers[q.id] }))), { onOk: (r) => { setResult(r); if (r.passed) setCertOpen(true); router.refresh(); } });
+
+  if (locked.length > 0 && enrollment) {
+    return (
+      <>
+        <PageHeader title={course.title} sub={course.description}><Link href="/app/my-portal" className="btn">Back</Link></PageHeader>
+        <div className="card max-w-xl p-5 text-[13px]">
+          <h2 className="text-sm font-semibold">This course is locked</h2>
+          <p className="mt-2 text-soft">Pass {locked.map((l, i) => <span key={l.id}>{i > 0 && " and "}<Link className="text-accent underline" href={`/app/training/course/${l.id}`}>{l.title}</Link></span>)} first. It unlocks as soon as you do.</p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -75,17 +96,19 @@ export function CoursePlayer({ course, lessons, questions, enrollment }: Props) 
           ) : (
             <>
               <h2 className="mb-1 text-lg font-semibold">Quiz</h2>
-              {passed ? <div className="mb-4 flex items-center gap-2 text-[13px]"><Badge value="PASSED" /><span className="mono">{enrollment?.best ?? result?.score}% · {enrollment?.cert ?? result?.certificateCode}</span></div> : <p className="mb-4 text-[13px] text-soft">Answer every question. Retakes after a fail wait {course.cooldownMinutes} minutes.</p>}
+              {passed ? <div className="mb-4 flex items-center gap-2 text-[13px]"><Badge value="PASSED" /><span className="mono">{enrollment?.best ?? result?.score}% · {enrollment?.cert ?? result?.certificateCode}</span></div> : <p className="mb-4 text-[13px] text-soft">Answer every question.{bank ? ` You get ${bank.asked} questions picked at random from a bank of ${bank.total}.` : ""} Retakes after a fail wait {course.cooldownMinutes} minutes.</p>}
               {result && !result.passed && <div className="mb-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-[13px] text-rose-900 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">Score <span className="mono">{result.score}%</span> ({result.correct}/{result.total}). Needed {course.passingScore}%. You can retake after {new Date(result.cooldownUntil!).toISOString().slice(11, 16)}Z.</div>}
+              {enrollment && !passed && !quiz && !result && <p className="text-[13px] text-soft">{pending ? "Getting your questions…" : "Your questions could not be loaded."}</p>}
+              {result && !result.passed && <button className="btn mb-4" disabled={pending} onClick={begin}>Try again</button>}
               <div className="space-y-5">
                 {questions.map((q, i) => {
-                  const rv = result?.review[i];
+                  const rv = result?.review.find((r) => r.questionId === q.id);
                   return (
-                    <fieldset key={q.id} disabled={!enrollment || !!passed}>
+                    <fieldset key={q.id} disabled={!enrollment || !!passed || !!result}>
                       <legend className="mb-2 text-[13px] font-medium">{i + 1}. {q.prompt}</legend>
                       <div className="space-y-1">
-                        {q.options.map((o, j) => (
-                          <button key={j} onClick={() => setAnswers((a) => a.map((x, k) => (k === i ? j : x)))} className={cn("block w-full rounded-md border px-3 py-2 text-left text-[13px]", answers[i] === j ? "border-accent bg-muted" : "border-line hover:bg-muted", rv && rv.correctIndex === j && "border-emerald-500", rv && rv.chosen === j && rv.chosen !== rv.correctIndex && "border-rose-500")}>{o}</button>
+                        {q.options.map((o) => (
+                          <button key={o.i} onClick={() => setAnswers((a) => ({ ...a, [q.id]: o.i }))} className={cn("block w-full rounded-md border px-3 py-2 text-left text-[13px]", answers[q.id] === o.i ? "border-accent bg-muted" : "border-line hover:bg-muted", rv && rv.correctIndex === o.i && "border-emerald-500", rv && rv.chosen === o.i && rv.chosen !== rv.correctIndex && "border-rose-500")}>{o.text}</button>
                         ))}
                       </div>
                       {rv && <p className="mt-1 text-xs text-soft">{rv.chosen === rv.correctIndex ? "Correct. " : "Not quite. "}{rv.explanation}</p>}
@@ -93,7 +116,7 @@ export function CoursePlayer({ course, lessons, questions, enrollment }: Props) 
                   );
                 })}
               </div>
-              {enrollment && !passed && <button className="btn-primary mt-6" disabled={pending || answers.some((a) => a === null)} onClick={submit}>{pending ? "Grading…" : "Submit quiz"}</button>}
+              {enrollment && !passed && quiz && !result && <button className="btn-primary mt-6" disabled={pending || questions.some((q) => answers[q.id] === undefined)} onClick={submit}>{pending ? "Grading…" : "Submit quiz"}</button>}
             </>
           )}
         </div>
