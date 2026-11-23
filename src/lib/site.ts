@@ -5,6 +5,8 @@ export const SITE = {
   legalEntity: process.env.NEXT_PUBLIC_LEGAL_ENTITY || "OnboardOps",
   state: "Georgia",
   domain: "onboardops.org",
+  /** Our public Facebook page. */
+  facebookUrl: "https://www.facebook.com/profile.php?id=61596868529996",
   /** Public base URL. Production sets APP_URL=https://onboardops.org; local development uses http://localhost:3000. */
   url: process.env.APP_URL || "http://localhost:3000",
   legalUpdated: "November 26, 2026",

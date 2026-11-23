@@ -6,6 +6,7 @@ import { legalPages, SITE } from "@/lib/site";
 import { JsonLd } from "@/components/json-ld";
 import { CookieNotice } from "@/components/cookie-notice";
 import { RefCapture } from "@/components/ref-capture";
+import { FacebookIcon } from "@/components/social-icons";
 
 const cols = [
   { title: "Product", links: [["Why OnboardOps", "/why"], ["Overview", "/features"], ["Solutions", "/solutions"], ["Security", "/security"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"], ["Free tools", "/tools"], ["Playbooks", "/playbooks"]] },
@@ -18,7 +19,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen">
       <JsonLd data={{ "@context": "https://schema.org", "@graph": [
-        { "@type": "Organization", name: SITE.name, url: SITE.url, areaServed: "US", address: { "@type": "PostalAddress", addressRegion: "GA", addressCountry: "US" } },
+        { "@type": "Organization", name: SITE.name, url: SITE.url, sameAs: [SITE.facebookUrl], areaServed: "US", address: { "@type": "PostalAddress", addressRegion: "GA", addressCountry: "US" } },
         { "@type": "SoftwareApplication", name: SITE.name, applicationCategory: "BusinessApplication", operatingSystem: "Web", url: SITE.url, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } },
       ] }} />
       <div className="no-print"><MarketingNav signedIn={signedIn} /></div>
@@ -30,6 +31,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
           <div>
             <Link href="/" aria-label="OnboardOps home"><Brand /></Link>
             <p className="mt-3 max-w-xs text-[13px] text-soft">Write it once. Prove it forever. Staff records, discipline and training for shift-based teams. Built in Georgia, USA.</p>
+            <div className="mt-4 flex items-center gap-3"><a href={SITE.facebookUrl} target="_blank" rel="noopener noreferrer" aria-label="OnboardOps on Facebook" title="OnboardOps on Facebook" className="inline-flex transition-transform hover:-translate-y-0.5"><FacebookIcon className="h-7 w-7" /></a></div>
           </div>
           {cols.map((c) => (
             <div key={c.title}>
@@ -41,7 +43,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         <div className="border-t border-line">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 text-xs text-soft">
             <span>© 2026 OnboardOps. All rights reserved.</span>
-            <span className="flex items-center gap-4"><a href="https://status.onboardops.org" target="_blank" rel="noopener noreferrer" className="link-u hover:text-ink">System status</a><span>Built in Georgia, USA</span></span>
+            <span className="flex items-center gap-4"><a href={SITE.facebookUrl} target="_blank" rel="noopener noreferrer" className="link-u hover:text-ink">Facebook</a><a href="https://status.onboardops.org" target="_blank" rel="noopener noreferrer" className="link-u hover:text-ink">System status</a><span>Built in Georgia, USA</span></span>
           </div>
         </div>
       </footer>
