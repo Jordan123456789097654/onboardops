@@ -74,7 +74,11 @@ export function OutageGate({ outage, children }: { outage: OutageView; children:
             </div>
           ))}
         </div>
-        <p className="mt-6 text-xs text-zinc-500">Staff can still reach the admin panel and sign-in. This page reloads when service returns.</p>
+        <p className="mt-6 text-xs text-zinc-500">
+          Live updates at{" "}
+          <a href="https://status.onboardops.org" target="_blank" rel="noopener noreferrer" className="underline">status.onboardops.org</a>
+          . Staff can still reach the admin panel and sign-in. This page reloads when service returns.
+        </p>
       </div>
     </div>
   );
