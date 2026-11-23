@@ -147,10 +147,15 @@ export function clearSupportGrant() {
   cookies().delete(SUPPORT);
 }
 
-export async function listMemberships() {
-  const uid = await getSessionUserId();
-  if (!uid) return [];
+/** A user's memberships (limited to the workspace on a custom domain). Works before a session exists, for the sign-in steps. */
+export async function membershipsFor(uid: string) {
   const all = await prisma.workspaceMember.findMany({ where: { userId: uid }, include: { workspace: true }, orderBy: { createdAt: "asc" } });
   const hostWs = await hostWorkspaceId();
   return hostWs ? all.filter((m) => m.workspaceId === hostWs) : all;
+}
+
+export async function listMemberships() {
+  const uid = await getSessionUserId();
+  if (!uid) return [];
+  return membershipsFor(uid);
 }

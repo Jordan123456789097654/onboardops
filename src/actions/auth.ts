@@ -2,7 +2,10 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { createSession, destroySession, hashPassword, setActiveWorkspace, verifyPassword, listMemberships, getSessionUserId, getCurrentUser } from "@/lib/auth";
+import { createSession, destroySession, hashPassword, setActiveWorkspace, verifyPassword, listMemberships, membershipsFor, getSessionUserId, getCurrentUser } from "@/lib/auth";
+import { beginSession, landingFor } from "@/lib/login";
+import { hasOAuthAccount } from "@/lib/oauth";
+import { ssoRequiredFor } from "@/lib/sso";
 import { writeAudit } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
 import { createToken, findValidToken } from "@/lib/tokens";
@@ -30,6 +33,8 @@ export async function loginAction(input: unknown): Promise<Result<{ to: string }
   return run(async () => {
     await enforceRate("login", 20, 900);
     const d = loginSchema.parse(input);
+    // A company that requires single sign-on sends its members to their identity provider; the password is not accepted for them (owners are exempt).
+    if (await ssoRequiredFor(d.email)) return { to: `/api/auth/sso/start?email=${encodeURIComponent(d.email.trim().toLowerCase())}` };
     const user = await findUserByAnyEmail(d.email);
     if (user?.lockedUntil && user.lockedUntil > new Date()) throw new Error("Too many failed attempts. Try again in a few minutes, or reset your password.");
     if (!user || !(await verifyPassword(d.password, user.passwordHash))) {
@@ -45,11 +50,11 @@ export async function loginAction(input: unknown): Promise<Result<{ to: string }
       throw new Error(maint.message || "OnboardOps is currently undergoing scheduled maintenance.");
     }
     if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
-    await createSession(user.id);
+    const first = (await membershipsFor(user.id))[0];
+    const gate = await beginSession(user.id, { workspaceId: first?.workspaceId, method: "password" });
+    if (!gate.done) return { to: gate.to };
     if (maint.enabled && isOwner) return { to: "/admin" };
-    const ms = await listMemberships();
-    if (ms[0]) setActiveWorkspace(ms[0].workspaceId);
-    return { to: !ms[0] ? (isOwner ? "/admin" : "/workplaces") : ms[0].role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview" };
+    return { to: await landingFor(user.id, first?.workspaceId) };
   });
 }
 
@@ -181,10 +186,12 @@ export async function resetPasswordAction(input: unknown): Promise<Result<{ to: 
       const ms = await tx.workspaceMember.findMany({ where: { userId: t.userId } });
       for (const m of ms) await writeAudit(tx, { workspaceId: m.workspaceId, actorMemberId: m.id, actorName: t.user.name, actionType: t.kind === "INVITE" ? "PASSWORD_SET" : "PASSWORD_RESET", targetType: "User", targetId: t.userId, summary: `${t.user.name} ${t.kind === "INVITE" ? "set a password from an invite" : "reset their password"}; other sessions were signed out` });
     });
-    await createSession(t.userId);
-    const ms = await listMemberships();
-    if (ms[0]) setActiveWorkspace(ms[0].workspaceId);
-    return { to: !ms[0] ? "/workplaces" : ms[0].role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview" };
+    // A reset link proves the email, not the second factor, so it goes through the same gate as a password sign-in.
+    if (await ssoRequiredFor(t.user.email)) return { to: "/sso" };
+    const first = (await membershipsFor(t.userId))[0];
+    const gate = await beginSession(t.userId, { workspaceId: first?.workspaceId, method: "reset" });
+    if (!gate.done) return { to: gate.to };
+    return { to: await landingFor(t.userId, first?.workspaceId, "/workplaces") };
   });
 }
 
@@ -224,7 +231,8 @@ export async function staffLoginAction(input: unknown): Promise<Result<{ to: str
 
     // If the user was created by an invite link (!user.passwordSetAt) and hasn't set a password yet, let their first sign-in set their password
     let passwordOk = await verifyPassword(d.password, user.passwordHash);
-    if (!passwordOk && !user.passwordSetAt && d.password.length >= 8) {
+    // An account created through Google or GitHub has a random password nobody knows. It must not be claimable by whoever types a password first.
+    if (!passwordOk && !user.passwordSetAt && d.password.length >= 8 && !(await hasOAuthAccount(user.id))) {
       const newHash = await hashPassword(d.password);
       user = await prisma.user.update({
         where: { id: user.id },
@@ -254,9 +262,11 @@ export async function staffLoginAction(input: unknown): Promise<Result<{ to: str
     }
 
     if (!member) throw new Error(generic);
+    if (member.role !== "OWNER" && (await ssoRequiredFor(user.email))?.workspaceId === ws.id) return { to: `/api/auth/sso/start?email=${encodeURIComponent(user.email)}` };
 
     if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
-    await createSession(user.id);
+    const gate = await beginSession(user.id, { workspaceId: ws.id, method: "staff" });
+    if (!gate.done) return { to: gate.to };
     setActiveWorkspace(ws.id);
     return { to: member.role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview" };
   });
@@ -307,14 +317,16 @@ export async function magicSignInAction(input: unknown): Promise<Result<{ to: st
     const d = z.object({ token: z.string().min(10), ws: z.string().optional() }).parse(input);
     const t = await findValidToken(d.token);
     if (!t || t.kind !== "MAGIC") throw new Error("This sign-in link is invalid or has expired. Request a new one.");
+    if (await ssoRequiredFor(t.user.email)) throw new Error("Your company requires single sign-on. Use the single sign-on link on the sign-in page.");
     await prisma.$transaction([
       prisma.authToken.update({ where: { id: t.id }, data: { usedAt: new Date() } }),
       prisma.user.update({ where: { id: t.userId }, data: { emailVerifiedAt: t.user.emailVerifiedAt ?? new Date(), failedLogins: 0, lockedUntil: null } }),
     ]);
-    await createSession(t.userId);
-    const ms = await listMemberships();
+    const ms = await membershipsFor(t.userId);
     const target = (d.ws && ms.find((m) => m.workspaceId === d.ws)) || ms[0];
-    if (target) setActiveWorkspace(target.workspaceId);
-    return { to: !target ? "/workplaces" : target.role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview" };
+    // A sign-in link proves the email, not the second factor, so it goes through the same gate as a password sign-in.
+    const gate = await beginSession(t.userId, { workspaceId: target?.workspaceId, method: "magic" });
+    if (!gate.done) return { to: gate.to };
+    return { to: await landingFor(t.userId, target?.workspaceId, "/workplaces") };
   });
 }

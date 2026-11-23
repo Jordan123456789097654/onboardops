@@ -7,6 +7,8 @@ import { addEmailAction, changePasswordAction, makePrimaryEmailAction, removeAva
 import { resendVerificationAction } from "@/actions/auth";
 import { Badge, Field, useAction, useToast } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
+import { TwoFactor, type MfaState } from "./two-factor";
+import { ConnectedAccounts, type ConnectedProvider } from "./connected-accounts";
 
 type Me = { id: string; name: string; nickname: string; email: string; verified: boolean; avatarUrl: string | null; hasPassword: boolean; createdAt: string };
 type Extra = { id: string; email: string; verified: boolean };
@@ -26,7 +28,7 @@ async function toAvatar(file: File): Promise<File> {
   return new File([blob], "avatar.jpg", { type: "image/jpeg" });
 }
 
-export function Account({ me, extras, sessions = [] }: { me: Me; extras: Extra[]; sessions?: { id: string; device: string; ip: string; at: string; current: boolean }[] }) {
+export function Account({ me, extras, mfa, need2fa = false, oauth, sessions = [] }: { me: Me; extras: Extra[]; mfa: MfaState; need2fa?: boolean; oauth: { providers: ConnectedProvider[]; canUnlink: boolean; notice?: string; error?: string }; sessions?: { id: string; device: string; ip: string; at: string; current: boolean }[] }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -97,6 +99,10 @@ export function Account({ me, extras, sessions = [] }: { me: Me; extras: Extra[]
           <div className="sm:col-span-2"><button className="btn-primary" disabled={pending}>{me.hasPassword ? "Change password" : "Set password"}</button> <Link className="ml-2 text-[13px] text-accent" href="/forgot-password">Forgot your password?</Link></div>
         </form>
       </Card>
+
+      <ConnectedAccounts providers={oauth.providers} canUnlink={oauth.canUnlink} notice={oauth.notice} error={oauth.error} />
+
+      <TwoFactor mfa={mfa} need2fa={need2fa} />
 
       <Card title="Sessions" sub="Signed in somewhere you do not recognize? End every other session.">
         <button className="btn" disabled={pending} onClick={() => { if (confirm("Sign out of every other device? You will stay signed in here.")) exec(() => signOutOtherDevicesAction(), { success: "Signed out everywhere else" }); }}><ShieldCheck className="h-3.5 w-3.5" />Sign out of other devices</button>

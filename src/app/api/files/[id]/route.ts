@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getActiveMembership } from "@/lib/auth";
+import { mfaBlocked } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const m = await getActiveMembership();
   if (!m) return new Response("Unauthorized", { status: 401 });
+  if (mfaBlocked(m)) return new Response("Two-factor authentication is required by this workspace.", { status: 403 });
   const file = await prisma.storedFile.findFirst({ where: { id: params.id, workspaceId: m.workspaceId } });
   if (!file) return new Response("Not found", { status: 404 });
 

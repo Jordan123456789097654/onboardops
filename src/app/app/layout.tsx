@@ -1,18 +1,22 @@
 import { redirect } from "next/navigation";
 import { getActiveMembership, listMemberships, unauthPath } from "@/lib/auth";
-import { visibleTo, hasFeature } from "@/lib/rbac";
+import { visibleTo, hasFeature, mfaBlocked } from "@/lib/rbac";
 import { can } from "@/lib/perms";
 import { resolvePlatformRole } from "@/lib/platform-role";
 import { Shell, type NavItem } from "@/components/shell";
 import { prisma } from "@/lib/prisma";
 import { LockedScreen } from "@/components/locked-screen";
 import { SupportBanner } from "@/components/support-banner";
+import { KeyLockedScreen } from "@/components/key-locked-screen";
+import { isWorkspaceLocked } from "@/lib/cmk";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const m = await getActiveMembership();
   if (!m) redirect(await unauthPath());
+  if (mfaBlocked(m)) redirect("/account?need2fa=1");
+  if (await isWorkspaceLocked(m.workspace)) return <KeyLockedScreen workspace={m.workspace.name} isOwner={m.role === "OWNER" && !m.support} />;
   if (m.workspace.suspendedAt && !m.support) return <LockedScreen workspace={m.workspace.name} reason={m.workspace.suspendedReason} canExport={m.role === "OWNER" || m.role === "ADMIN"} />;
   if (m.role === "EMPLOYEE" && m.profile?.status === "TERMINATED") return <LockedScreen workspace={m.workspace.name} title="Your access has ended" message={`Your employee record at ${m.workspace.name} is closed, so you can no longer sign in to this workplace.`} reason="" canExport={false} />;
   const memberships = m.support ? [] : await listMemberships();

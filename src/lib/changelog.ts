@@ -8,6 +8,21 @@ export type ChangelogEntry = {
 
 export const entries: ChangelogEntry[] = [
   {
+    v: "0.13.0",
+    date: "2026-11-23",
+    highlight: "Two-factor sign-in, Google and GitHub sign-in, single sign-on, API writes and your own encryption key",
+    bullets: ["Two-factor sign-in with an authenticator app, and backup codes", "Sign in with Google or GitHub, and single sign-on for a workspace", "API write access with scoped keys, and an option to use your own encryption key"],
+    items: [
+      "Two-factor authentication: turn it on in Account settings with an authenticator app such as Google Authenticator or 1Password, and save your backup codes. It is asked for after your password, an email link or a reset link. A code cannot be used twice, and five wrong codes lock it for 15 minutes. A workspace owner can require it for everyone and can reset it for someone who lost their phone.",
+      "Sign in with Google or GitHub, and connect or disconnect them in Account settings. They are linked to an existing account only when the email is verified on both sides, and two-factor is still asked for afterwards. You cannot disconnect your only way to sign in.",
+      "Single sign-on for a workspace: owners can set up Google Workspace or Microsoft Entra ID in Settings, test it, then turn it on. Only people who already belong to the workspace can get in, and a company domain alone never grants access. Owners can always use a password.",
+      "API write access: create and update employees, assign courses, log verbal warnings, written infractions and strike points, and create shifts. Keys have separate read and write scopes, can expire, can be revoked at any time, and can never do more than the person who made them. Every write is recorded in the audit log under the key's name. The API reference is in the help center.",
+      "Use your own encryption key: an owner can protect the workspace's encrypted records with a key they supply, rotate it, or revoke it to lock those records until the key is provided again. The key is shown once and cannot be recovered by us.",
+      "Fixed an error that could stop a new infraction from being saved on workspaces with encryption turned on.",
+      "Legal documents and the Security page and FAQ now describe these features.",
+    ],
+  },
+  {
     v: "0.12.0",
     date: "2026-11-22",
     highlight: "Maintenance notices, per-area maintenance and release notes in the app",

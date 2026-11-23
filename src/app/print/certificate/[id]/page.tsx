@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveMembership } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { mfaBlocked } from "@/lib/rbac";
 import { fmtDate } from "@/lib/utils";
 import { PrintButton } from "../../print-button";
 
@@ -11,6 +12,7 @@ export const metadata = { title: "Certificate" };
 export default async function Certificate({ params }: { params: { id: string } }) {
   const m = await getActiveMembership();
   if (!m) redirect("/login");
+  if (mfaBlocked(m)) redirect("/account?need2fa=1");
   const e = await prisma.courseEnrollment.findFirst({ where: { id: params.id, workspaceId: m.workspaceId, status: "PASSED" }, include: { course: true, employee: true } });
   if (!e || !e.certificateCode) notFound();
   // Employees may only open their own certificates.

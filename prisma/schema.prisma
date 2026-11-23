@@ -81,6 +81,17 @@ model User {
   extraEmails       UserEmail[]
   failedLogins      Int               @default(0)
   lockedUntil       DateTime?
+  /// Two-factor sign-in. The secret is sealed (secret-box), never stored in plain text.
+  totpSecretEnc     String?
+  totpPendingEnc    String?
+  totpEnabledAt     DateTime?
+  totpFailed        Int               @default(0)
+  totpLockedUntil   DateTime?
+  /// Highest 30-second step already accepted, so a code cannot be used twice.
+  totpLastStep      Int?
+  backupCodes       BackupCode[]
+  oauthAccounts     OAuthAccount[]
+  ssoIdentities     SsoIdentity[]
   memberships       WorkspaceMember[]
   tokens            AuthToken[]
   sessions          UserSession[]
@@ -90,8 +101,107 @@ model User {
   timezone          String?
 }
 
+/// A Google or GitHub identity linked to a user. Sign-in matches on (provider, providerAccountId), never on email alone.
+model OAuthAccount {
+  id                String    @id @default(cuid())
+  userId            String
+  /// "google" | "github"
+  provider          String
+  /// Google: the stable `sub`. GitHub: the numeric user id.
+  providerAccountId String
+  email             String?
+  createdAt         DateTime  @default(now())
+  lastLoginAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+}
+
+/// Single sign-on for one workspace (Google Workspace or Microsoft Entra ID). The client secret is stored sealed and never shown again.
+model WorkspaceSso {
+  id              String    @id @default(cuid())
+  workspaceId     String    @unique
+  /// google | entra
+  provider        String
+  clientId        String
+  clientSecretEnc String
+  /// Entra only: the tenant (directory) ID.
+  tenantId        String?
+  domains         String[]
+  enabled         Boolean   @default(false)
+  /// When on, members on these domains (except owners) must sign in through SSO.
+  enforce         Boolean   @default(false)
+  /// Set by a successful test sign-in. SSO cannot be enabled until it is set.
+  testedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/// An email domain claimed by one workspace's SSO. A domain belongs to at most one workspace.
+model SsoDomain {
+  id          String @id @default(cuid())
+  domain      String @unique
+  workspaceId String
+
+  @@index([workspaceId])
+}
+
+/// Links a person to their identity at the workspace's identity provider. Later sign-ins match on this, not on email.
+model SsoIdentity {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  issuer      String
+  subject     String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, issuer, subject])
+  @@index([userId])
+}
+
+/// A customer-supplied encryption key for one workspace. The workspace data key (Workspace.dataKeyEnc) is wrapped by this key.
+model WorkspaceCmk {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  /// ACTIVE | REVOKED
+  status      String    @default("ACTIVE")
+  keyVersion  Int       @default(1)
+  /// First 8 hex characters of a digest of the key, so the owner can tell which key is in use. It is not the key.
+  fingerprint String
+  /// The customer's key, sealed with SECRETS_KEY while the key is ACTIVE. Deleted when the key is revoked.
+  kekSealed   String?
+  addedAt     DateTime  @default(now())
+  rotatedAt   DateTime?
+  revokedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/// One single-use recovery code. Only a keyed hash is stored.
+model BackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, codeHash])
+}
+
 model Workspace {
   id                             String         @id @default(cuid())
+  /// When on, every member must use two-factor sign-in.
+  require2fa                     Boolean        @default(false)
+  cmk                            WorkspaceCmk?
+  sso                            WorkspaceSso?
   name                           String
   slug                           String         @unique
   plan                           Plan           @default(FREE)
@@ -1027,15 +1137,19 @@ model CoachingNote {
 }
 
 model ApiKey {
-  id            String    @id @default(cuid())
-  workspaceId   String
-  name          String
-  prefix        String
-  keyHash       String    @unique
-  createdByName String
-  createdAt     DateTime  @default(now())
-  lastUsedAt    DateTime?
-  revokedAt     DateTime?
+  /// What this key may do, for example employees:write. Keys made before scopes existed stay read-only.
+  scopes            String[]  @default(["employees:read", "shifts:read"])
+  expiresAt         DateTime?
+  createdByMemberId String?
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  prefix            String
+  keyHash           String    @unique
+  createdByName     String
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime?
+  revokedAt         DateTime?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

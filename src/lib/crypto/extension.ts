@@ -45,7 +45,18 @@ async function wsFromRecord(model: string, where: Any): Promise<string | null> {
   const r = await delegate.findFirst({ where, select: { workspaceId: true } });
   return r?.workspaceId ?? null;
 }
+/**
+ * Cases created moments ago inside a still-open transaction cannot be found by a lookup that runs outside that transaction,
+ * so the workspace of each case this process creates is remembered briefly. Without it, adding a timeline note to a brand-new case failed.
+ */
+const justCreated = new Map<string, string>();
+function rememberCase(id: string, ws: string) {
+  justCreated.set(id, ws);
+  if (justCreated.size > 500) justCreated.delete(justCreated.keys().next().value as string);
+}
+
 async function wsFromParent(parent: string, id: string): Promise<string | null> {
+  if (parent === "InfractionCase") { const known = justCreated.get(id); if (known) return known; }
   const r = await (basePrisma as Any)[lower(parent)].findUnique({ where: { id }, select: { workspaceId: true } });
   return r?.workspaceId ?? null;
 }
@@ -121,6 +132,7 @@ export const encryptionExtension = Prisma.defineExtension({
           }
         }
         const result = await query(a);
+        if (model === "InfractionCase" && operation === "create" && result && typeof result === "object" && typeof (result as Any).id === "string" && typeof (result as Any).workspaceId === "string") rememberCase((result as Any).id, (result as Any).workspaceId);
         return deepDecrypt(result);
       },
     },

@@ -28,6 +28,8 @@ export const cookiesMore: Section[] = [
       ["Session cookie", "Strictly necessary cookie", "Keeps you signed in. Signed, HTTP-only, and sent only over HTTPS in production.", "Up to 14 days, or until you sign out."],
       ["Active workspace cookie", "Strictly necessary cookie", "Remembers which workspace you were using.", "Up to 90 days."],
       ["Support access cookie", "Strictly necessary cookie", "Used only by our staff during a time-limited support access session.", "For the access period, then it ends."],
+      ["Two-factor step cookie", "Strictly necessary cookie", "Set only between entering your password and entering your two-factor code. It is not a sign-in and is rejected as one.", "5 minutes."],
+      ["Provider sign-in cookie", "Strictly necessary cookie", "Set only while you sign in with Google, GitHub or your company's single sign-on. Holds a one-time value that protects the sign-in against forgery.", "10 minutes."],
       ["Theme preference", "Local storage (functional)", "Remembers light, dark or system theme.", "Until you clear it."],
       ["Cookie notice choice", "Local storage (functional)", "Remembers that you dismissed the cookie notice so we do not show it again.", "Until you clear it."],
       ["Offline checklist queue", "Local storage (functional)", "Holds a checklist you completed without a connection until it can be sent. Removed after it sends.", "Until sent or you clear it."],

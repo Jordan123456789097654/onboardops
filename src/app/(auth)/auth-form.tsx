@@ -5,10 +5,11 @@ import Link from "next/link";
 import { loginAction, registerAction } from "@/actions/auth";
 import { Brand, Field, ThemeToggle, useAction } from "@/components/ui";
 import { MagicLinkBox } from "@/components/magic-link-box";
+import { GitHubIcon, GoogleIcon } from "@/components/social-icons";
 
 const points = ["One record per employee, from hire to audit trail", "Server-graded quizzes and printable certificates", "Confidential notes that employees never receive", "Free for beta testers"];
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" | "register"; providers?: ("google" | "github")[]; oauthError?: string }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [f, setF] = useState({ name: "", email: "", password: "", workspaceName: "" });
@@ -18,7 +19,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    exec(() => (mode === "login" ? loginAction({ email: f.email, password: f.password }) : registerAction({ ...f, accountType: kind, acceptTerms: accept, ref: (() => { try { return localStorage.getItem("oo-ref") ?? undefined; } catch { return undefined; } })(), address: new URLSearchParams(window.location.search).get("address") ?? undefined })), { onOk: (d) => { router.push(d.to); router.refresh(); } });
+    exec(() => (mode === "login" ? loginAction({ email: f.email, password: f.password }) : registerAction({ ...f, accountType: kind, acceptTerms: accept, ref: (() => { try { return localStorage.getItem("oo-ref") ?? undefined; } catch { return undefined; } })(), address: new URLSearchParams(window.location.search).get("address") ?? undefined })), { onOk: (d) => { if (d.to.startsWith("/api/")) { window.location.href = d.to; return; } router.push(d.to); router.refresh(); } });
   };
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.1fr]">
@@ -54,8 +55,29 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                 <span>I am at least 13 years old (with a parent or guardian's permission if under 18) and agree to the <Link className="text-accent underline" href="/legal/terms-of-service" target="_blank">Terms of Service</Link>, <Link className="text-accent underline" href="/legal/privacy" target="_blank">Privacy Policy</Link> and <Link className="text-accent underline" href="/legal/beta-terms" target="_blank">Beta Program Terms</Link>.</span>
               </label>
             )}
+            {oauthError && <p role="alert" className="rounded-md border border-rose-300 bg-rose-50 p-3 text-[13px] text-rose-900 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">{oauthError}</p>}
             <button className="btn-primary !h-10 w-full !text-sm" disabled={pending || (mode === "register" && !accept)}>{pending ? "Working…" : mode === "login" ? "Sign in" : kind === "OWNER" ? "Create workspace" : "Create account"}</button>
+            {providers.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 text-xs text-soft"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
+                {providers.map((p) => {
+                  const label = p === "google" ? "Google" : "GitHub";
+                  const icon = p === "google" ? <GoogleIcon className="h-4 w-4" /> : <GitHubIcon className="h-4 w-4" />;
+                  if (mode === "login") return <a key={p} className="btn w-full" href={`/api/auth/oauth/${p}/start?mode=login`}>{icon}Continue with {label}</a>;
+                  const needsCompany = kind === "OWNER" && f.workspaceName.trim().length < 2;
+                  const go = () => {
+                    const q = new URLSearchParams({ mode: "signup", terms: "1", kind, company: f.workspaceName.trim() });
+                    try { const r = localStorage.getItem("oo-ref"); if (r) q.set("ref", r); } catch {}
+                    const a = new URLSearchParams(window.location.search).get("address"); if (a) q.set("address", a);
+                    window.location.href = `/api/auth/oauth/${p}/start?${q.toString()}`;
+                  };
+                  return <button key={p} type="button" className="btn w-full" disabled={!accept || needsCompany} title={!accept ? "Accept the terms first" : needsCompany ? "Enter your company name first" : undefined} onClick={go}>{icon}Sign up with {label}</button>;
+                })}
+                {mode === "register" && <p className="text-xs text-soft">Tick the terms{kind === "OWNER" ? " and enter your company name" : ""} above first.</p>}
+              </div>
+            )}
             {mode === "login" && <button type="button" className="btn w-full" onClick={() => setMagic(true)}>Email me a sign-in link instead</button>}
+            {mode === "login" && <p className="text-xs text-soft">Company account? <Link className="text-accent" href="/sso">Sign in with single sign-on</Link></p>}
             <p className="text-xs text-soft">{mode === "login" ? <>New here? <Link className="text-accent" href="/register">Create an account</Link>. Employee? <Link className="text-accent" href="/staff">Find your workplace sign in</Link></> : <>Already have an account? <Link className="text-accent" href="/login">Sign in</Link></>}</p>
           </form>)}
         </div>

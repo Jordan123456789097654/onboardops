@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { createApiKeyAction, deleteLocationAction, removeBambooAction, removeSmsConfigAction, revokeApiKeyAction, saveGenericWebhookAction, saveLocationAction, saveBambooAction, saveSmsConfigAction, syncBambooAction, testGenericWebhookAction, testSmsConfigAction } from "@/actions/integrations";
 import { Field, useAction } from "@/components/ui";
 import { fmtDateTime } from "@/lib/utils";
+import { DEFAULT_SCOPES, SCOPES, SCOPE_INFO, isWriteScope } from "@/lib/api-scopes";
 
-type Key = { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null };
+type Key = { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; scopes: string[]; expiresAt: string | null };
 type Loc = { id: string; name: string; address: string; timezone: string };
 
 export function IntegrationsPanel({ keys, webhookUrl, locations, sms, bamboo }: { keys: Key[]; webhookUrl: string; locations: Loc[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } }) {
@@ -17,6 +18,8 @@ export function IntegrationsPanel({ keys, webhookUrl, locations, sms, bamboo }: 
   const { exec, pending } = useAction();
   const [name, setName] = useState("");
   const [fresh, setFresh] = useState("");
+  const [scopes, setScopes] = useState<string[]>([...DEFAULT_SCOPES]);
+  const [days, setDays] = useState<number | null>(null);
   const [url, setUrl] = useState(webhookUrl);
   const [secret, setSecret] = useState("");
   const [loc, setLoc] = useState({ name: "", address: "", timezone: "" });
@@ -24,13 +27,18 @@ export function IntegrationsPanel({ keys, webhookUrl, locations, sms, bamboo }: 
     <div className="space-y-6 text-[13px]">
       <section className="card space-y-3 p-4">
         <h2 className="text-sm font-semibold">API keys</h2>
-        <p className="text-soft">Read-only access to your own employees and shifts. Send <span className="mono">Authorization: Bearer &lt;key&gt;</span> to <span className="mono">/api/v1/employees</span> or <span className="mono">/api/v1/shifts</span>. 120 requests a minute per key.</p>
+        <p className="text-soft">Access to your own workspace data. Each key gets only the scopes you tick, can be revoked at any time, and every write it makes is recorded in the audit log under the key&apos;s name. Send <span className="mono">Authorization: Bearer &lt;key&gt;</span>. 120 requests a minute per key, 30 writes a minute. A key can never do more than the person who created it can do in the app. See the API reference in the help center.</p>
         {fresh && <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"><div className="font-medium">Copy this key now. It will not be shown again.</div><div className="mono mt-1 break-all">{fresh}</div></div>}
         {keys.length > 0 && <ul className="divide-y divide-line">{keys.map((k) => (
-          <li key={k.id} className="flex items-center gap-3 py-2"><div className="min-w-0 flex-1"><div className="font-medium">{k.name}</div><div className="mono text-xs text-soft">{k.prefix}… · created {fmtDateTime(k.createdAt)} · {k.lastUsedAt ? `last used ${fmtDateTime(k.lastUsedAt)}` : "never used"}</div></div>
+          <li key={k.id} className="flex items-center gap-3 py-2"><div className="min-w-0 flex-1"><div className="font-medium">{k.name}</div><div className="mono text-xs text-soft">{k.prefix}… · created {fmtDateTime(k.createdAt)} · {k.lastUsedAt ? `last used ${fmtDateTime(k.lastUsedAt)}` : "never used"}{k.expiresAt ? ` · expires ${fmtDateTime(k.expiresAt)}` : ""}</div><div className="mt-1 flex flex-wrap gap-1">{k.scopes.map((s) => <span key={s} className={`rounded border px-1.5 py-0.5 text-[11px] ${isWriteScope(s) ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200" : "border-line bg-muted text-soft"}`}>{s}</span>)}</div></div>
             <button className="btn-danger" disabled={pending} onClick={() => { if (confirm(`Revoke "${k.name}"? Anything using it stops working.`)) exec(() => revokeApiKeyAction(k.id), { success: "Key revoked", onOk: () => router.refresh() }); }}>Revoke</button></li>
         ))}</ul>}
-        <div className="flex gap-2"><input className="input" placeholder="Key name, e.g. Payroll sync" value={name} onChange={(e) => setName(e.target.value)} /><button className="btn-primary" disabled={pending} onClick={() => exec(() => createApiKeyAction({ name }), { onOk: (d) => { setFresh(d.key); setName(""); router.refresh(); } })}>Create key</button></div>
+        <div className="space-y-3 rounded-lg border border-line p-3">
+          <input className="input" placeholder="Key name, e.g. Payroll sync" value={name} onChange={(e) => setName(e.target.value)} />
+          <fieldset><legend className="label">Scopes</legend><div className="grid gap-1 sm:grid-cols-2">{SCOPES.map((s) => <label key={s} className="flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={scopes.includes(s)} onChange={() => setScopes(scopes.includes(s) ? scopes.filter((x) => x !== s) : [...scopes, s])} /><span><span className="mono text-xs">{s}</span>{isWriteScope(s) && <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">write</span>}<span className="block text-xs text-soft">{SCOPE_INFO[s].hint}</span></span></label>)}</div></fieldset>
+          <div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2">Expires<select className="input !w-auto" value={days ?? ""} onChange={(e) => setDays(e.target.value ? Number(e.target.value) : null)}><option value="">Never</option><option value="30">in 30 days</option><option value="90">in 90 days</option><option value="365">in 1 year</option></select></label>
+            <button className="btn-primary" disabled={pending || !scopes.length} onClick={() => exec(() => createApiKeyAction({ name, scopes, expiresInDays: days }), { onOk: (d) => { setFresh(d.key); setName(""); setScopes([...DEFAULT_SCOPES]); setDays(null); router.refresh(); } })}>Create key</button></div>
+        </div>
       </section>
 
       <section className="card space-y-3 p-4">

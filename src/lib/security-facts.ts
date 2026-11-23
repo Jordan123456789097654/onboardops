@@ -5,6 +5,8 @@ export const securityGroups: { title: string; items: [string, string][] }[] = [
     items: [
       ["Passwords", "Stored as bcrypt hashes. We never store or email a plain-text password."],
       ["Sessions", "Signed, HTTP-only cookies that expire after 14 days. Account settings list your signed-in devices so you can end any of them, and we email you when a new device signs in."],
+      ["Two-factor authentication", "Optional for everyone, and an owner can require it for the whole workspace. It uses an authenticator app (TOTP) and works after a password, an email link, a reset link, or Google or GitHub sign-in. Secrets are stored encrypted, backup codes are shown once and stored only as keyed hashes, a code cannot be used twice, and five wrong codes lock it for 15 minutes."],
+      ["Sign in with Google or GitHub", "Optional, and only offered when the operator has configured it. We check the provider's signed response, a one-time state value and a PKCE challenge, and use the provider's verified email. A provider is linked to an existing account only when that account's email is also verified, so nobody can take over an account by registering its address first."],
       ["Lockout and rate limits", "Accounts lock after repeated wrong passwords. Sign-in, password reset, magic links, contact forms and search are rate limited per address."],
       ["Role checks on the server", "Every action and page checks your role before it reads or writes data. Hiding a button is not the control."],
       ["Confidential notes", "Removed on the server for employees and supervisors before the page is built."],
@@ -39,4 +41,4 @@ export const securityGroups: { title: string; items: [string, string][] }[] = [
   },
 ];
 
-export const notYet = ["SOC 2 or ISO 27001 certification", "Single sign-on (SSO) and two-factor authentication", "Customer-managed encryption keys", "An independent third-party penetration test"];
+export const notYet = ["SOC 2 or ISO 27001 certification", "Customer-managed encryption keys", "An independent third-party penetration test"];

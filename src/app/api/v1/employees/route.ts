@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { authApiKey } from "@/lib/api-auth";
+import { apiWrite, createEmployee, maybeBulk } from "@/lib/api-write";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/v1/employees?status=ACTIVE&limit=100&cursor=<id>. Read-only. No confidential HR data is exposed. */
 export async function GET(req: Request) {
-  const auth = await authApiKey(req);
+  const auth = await authApiKey(req, { scope: "employees:read" });
   if (auth instanceof Response) return auth;
   const q = new URL(req.url).searchParams;
   const limit = Math.min(200, Math.max(1, Number(q.get("limit")) || 100));
@@ -23,4 +24,9 @@ export async function GET(req: Request) {
     data: page.map((e) => ({ id: e.id, staffCode: e.staffCode, fullName: e.fullName, email: e.email, phone: e.phone, status: e.status, readiness: e.readiness, department: e.department?.name ?? null, jobRole: e.jobRole?.title ?? null, hireDate: e.hireDate.toISOString().slice(0, 10) })),
     nextCursor: rows.length > limit ? page[page.length - 1].id : null,
   });
+}
+
+/** POST /api/v1/employees. Scope: employees:write. One object or an array of up to 100. */
+export async function POST(req: Request) {
+  return apiWrite(req, "employees:write", (a, body) => maybeBulk(body, (item) => createEmployee(a, item)), 201);
 }

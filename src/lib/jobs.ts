@@ -14,7 +14,7 @@ export type JobSummary = { workspaces: number; expired: number; expiringNotices:
 export async function runDailyJobs(workspaceId?: string): Promise<JobSummary> {
   const now = new Date();
   const out: JobSummary = { workspaces: 0, expired: 0, expiringNotices: 0, dueReminders: 0, overdueReminders: 0, leaveStarted: 0, leaveEnded: 0, separated: 0 };
-  const workspaces = await prisma.workspace.findMany({ where: { ...(workspaceId ? { id: workspaceId } : {}), remindersEnabled: true }, select: { id: true, name: true } });
+  const workspaces = await prisma.workspace.findMany({ where: { ...(workspaceId ? { id: workspaceId } : {}), remindersEnabled: true, NOT: { cmk: { is: { status: "REVOKED" } } } }, select: { id: true, name: true } });
 
   for (const ws of workspaces) {
     out.workspaces++;

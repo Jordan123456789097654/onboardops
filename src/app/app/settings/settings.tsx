@@ -9,16 +9,22 @@ import { IntegrationsPanel } from "./integrations-panel";
 import { RolesPanel } from "./roles-panel";
 import { closeWorkspaceAction, runRemindersNowAction } from "@/actions/workspace";
 import { DomainPanel } from "./domain-panel";
+import { TwoFactorPolicy, type MfaPolicy } from "./two-factor-policy";
+import { EncryptionPanel, type EncryptionState } from "./encryption-panel";
+import { SsoPanel, type SsoPanelState } from "./sso-panel";
 import type { DomainDetails } from "@/lib/vercel-domains";
 import { Badge, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/components/ui";
 
 type Dept = { id?: string; name: string; colorCode: string };
 type JobRole = { id?: string; title: string; description: string; requiredCourseIds: string[]; pathSequential: boolean };
 
-export function Settings({ integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
+export function Settings({ sso, encryption, mfa, integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
   customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
-  integrations: { keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null }[]; webhookUrl: string; locations: { id: string; name: string; address: string; timezone: string }[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } };
+  integrations: { keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; scopes: string[]; expiresAt: string | null }[]; webhookUrl: string; locations: { id: string; name: string; address: string; timezone: string }[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } };
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
+  mfa: MfaPolicy;
+  encryption: EncryptionState;
+  sso: SsoPanelState;
   domain: { address: { enabled: boolean; slug: string; status: string; zone: string; isOwner: boolean }; slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
   ws: { publicCerts: boolean; decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
@@ -79,9 +85,10 @@ export function Settings({ integrations, customFields, features, rolePerms, cust
             </section>
           </div>
         )}
-        {tab === "domain" && <DomainPanel address={domain.address} slug={domain.slug} baseUrl={domain.baseUrl} domain={domain.name} status={domain.status} details={domain.details} vercel={domain.vercel} />}
+        {tab === "domain" && <div className="space-y-4"><TwoFactorPolicy policy={mfa} isOwner={isOwner} /><SsoPanel s={sso} isOwner={isOwner} /><DomainPanel address={domain.address} slug={domain.slug} baseUrl={domain.baseUrl} domain={domain.name} status={domain.status} details={domain.details} vercel={domain.vercel} /></div>}
         {tab === "data" && (
           <div className="space-y-4">
+            <EncryptionPanel s={encryption} isOwner={isOwner} />
             <div className="card p-4 text-[13px]"><h2 className="text-sm font-semibold">Export everything</h2><p className="mt-1 text-soft">A JSON file with employees, courses, enrollments, cases (including confidential notes), checklists, policies, incident reports, reviews and the audit log. Uploaded files are listed but not included. Each export is recorded in the audit log.</p><a className="btn-primary mt-3" href="/api/export/workspace">Download workspace export</a></div>
             <div className="card p-4 text-[13px]"><h2 className="text-sm font-semibold">Run reminders now</h2><p className="mt-1 text-soft">The daily job expires lapsed certifications, warns before they lapse, and nudges people with due or overdue training. Run it now to see what it would send.</p><button className="btn mt-3" disabled={pending} onClick={() => exec(() => runRemindersNowAction(), { onOk: (r) => toast("ok", `${r.expired} expired, ${r.expiringNotices} expiry notices, ${r.dueReminders} due soon, ${r.overdueReminders} overdue reminders`) })}>Run reminders</button></div>
             {isOwner && <div className="card border-rose-300 p-4 text-[13px]"><h2 className="text-sm font-semibold">Close workspace</h2><p className="mt-1 text-soft">Permanently delete this workspace and all of its data. Only the owner can do this.</p><button className="btn-danger mt-3" onClick={() => setCloseOpen(true)}>Close workspace…</button></div>}

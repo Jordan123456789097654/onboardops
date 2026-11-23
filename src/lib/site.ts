@@ -11,7 +11,7 @@ export const SITE = {
   youtubeUrl: "https://www.youtube.com/@OnboardOpsOfficial",
   /** Public base URL. Production sets APP_URL=https://onboardops.org; local development uses http://localhost:3000. */
   url: process.env.APP_URL || "http://localhost:3000",
-  legalUpdated: "November 26, 2026",
+  legalUpdated: "November 23, 2026",
 };
 
 export const legalPages = [

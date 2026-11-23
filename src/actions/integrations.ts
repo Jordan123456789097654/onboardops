@@ -11,6 +11,7 @@ import { loadSmsConfig, sendSms, toE164 } from "@/lib/sms";
 import { open, seal } from "@/lib/secret-box";
 import { enforceRate } from "@/lib/rate-limit";
 import { importEmployeesAction } from "./import";
+import { DEFAULT_SCOPES, isScope } from "@/lib/api-scopes";
 import { run } from "./_util";
 
 const done = () => revalidatePath("/app", "layout");
@@ -20,12 +21,15 @@ const hashKey = (k: string) => createHash("sha256").update(k).digest("hex");
 export async function createApiKeyAction(input: unknown) {
   return run(async () => {
     const ctx = await requireWorkspaceRole(ADMIN_ROLES);
-    const d = z.object({ name: z.string().trim().min(2, "Name the key").max(60) }).parse(input);
+    const d = z.object({ name: z.string().trim().min(2, "Name the key").max(60), scopes: z.array(z.string()).optional(), expiresInDays: z.number().int().min(1).max(3650).nullish() }).parse(input);
+    const scopes = [...new Set(d.scopes && d.scopes.length ? d.scopes : DEFAULT_SCOPES)];
+    if (!scopes.every(isScope)) throw new Error("Unknown scope.");
+    const expiresAt = d.expiresInDays ? new Date(Date.now() + d.expiresInDays * 86400000) : null;
     if ((await prisma.apiKey.count({ where: { workspaceId: ctx.workspaceId, revokedAt: null } })) >= 10) throw new Error("You can have at most 10 active keys. Revoke one first.");
     const key = `oo_live_${randomBytes(24).toString("hex")}`;
     await prisma.$transaction(async (tx) => {
-      const k = await tx.apiKey.create({ data: { workspaceId: ctx.workspaceId, name: d.name, prefix: key.slice(0, 15), keyHash: hashKey(key), createdByName: ctx.user.name } });
-      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "API_KEY_CREATED", targetType: "ApiKey", targetId: k.id, summary: `API key "${d.name}" created` });
+      const k = await tx.apiKey.create({ data: { workspaceId: ctx.workspaceId, name: d.name, prefix: key.slice(0, 15), keyHash: hashKey(key), createdByName: ctx.user.name, createdByMemberId: ctx.id, scopes, expiresAt } });
+      await writeAudit(tx, { workspaceId: ctx.workspaceId, actorMemberId: ctx.id, actorName: ctx.user.name, actionType: "API_KEY_CREATED", targetType: "ApiKey", targetId: k.id, summary: `API key "${d.name}" created with scopes: ${scopes.join(", ")}${expiresAt ? `; expires ${expiresAt.toISOString().slice(0, 10)}` : ""}`, metadata: { scopes, expiresAt: expiresAt?.toISOString() ?? null } });
     });
     done();
     return { key };

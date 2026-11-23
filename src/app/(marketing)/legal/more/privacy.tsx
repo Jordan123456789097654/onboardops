@@ -20,7 +20,7 @@ export const privacyMore: Section[] = [
   { title: "Information by feature", body: <>
     <p>The table below describes, feature by feature, what information the Service handles. A Customer chooses which features to turn on, so a given Workspace may not use all of them.</p>
     <T head={["Feature", "What is handled", "Who sees it in the Workspace"]} rows={[
-      ["Account and sign-in", "Name, nickname, email addresses, password hash, profile picture, sign-in times, and for each signed-in session a device label, approximate IP address and last-seen time.", "You. Customer Admins see your name and work email as a member."],
+      ["Account and sign-in", "Name, nickname, email addresses, password hash, profile picture, sign-in times, and for each signed-in session a device label, approximate IP address and last-seen time. If you turn on two-factor authentication: an encrypted authenticator secret, hashed backup codes and a count of wrong codes. If you connect Google or GitHub, or your employer turns on single sign-on: the provider's account identifier and the email and name it reports.", "You. Customer Admins see your name and work email as a member."],
       ["Staff directory and employee record", "Name, staff ID, email, phone, emergency contact, department, job role, location, status, hire date, shift availability, and custom fields the Customer defines.", "Roles with permission to view employees."],
       ["Training", "Course assignments, lesson progress, quiz answers and scores, attempts, certificate codes, due dates.", "The employee and roles that manage training."],
       ["Infractions and appeals", "Case number, severity, points, policy cited, summary, evidence links, witness statements, the employee&rsquo;s written response, appeals and decisions, and an append-only timeline.", "Managers and above as the Customer configures. The employee sees the employee-visible parts."],
@@ -96,6 +96,8 @@ export const privacyMore: Section[] = [
       ["Signed-in session records", "Recent sessions are shown in Account settings so you can end them. Session records are removed when the account is deleted."],
       ["Email delivery logs", "Kept for as long as needed to troubleshoot delivery and abuse."],
       ["Support messages", "Kept while needed to resolve the matter and for a reasonable time afterward."],
+      ["Two-factor secret and backup codes", "Until you turn two-factor authentication off, which deletes them, or you delete your account."],
+      ["Connected Google or GitHub accounts, single sign-on identities", "Until you disconnect them, your employer removes single sign-on, or you delete your account."],
       ["Rate-limit counters", "Short-lived and removed automatically."],
       ["Page-view counts", "Aggregate counts by page and day, with no personal identifiers, kept in summary form."],
     ]} />

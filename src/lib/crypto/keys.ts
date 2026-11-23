@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 import { basePrisma } from "../prisma-base";
+import { open } from "../secret-box";
 
 /**
  * Envelope encryption. Every workspace has its own random 256-bit data key. That key is stored only in locked form
@@ -40,8 +41,36 @@ export function unwrapDek(wrapped: string, masters = masterKeys()): Buffer {
   throw new Error("The master key does not unlock this workspace key.");
 }
 
+/** Thrown when a workspace uses a customer-supplied key and that key has been revoked. Its records cannot be read or written until the owner provides it again. */
+export class KeyRevokedError extends Error {
+  constructor() { super("This workspace's encryption key was revoked. The owner must provide the key again to unlock its records."); this.name = "KeyRevokedError"; }
+}
+
+/** Wraps the workspace data key with a customer-supplied 256-bit key. Format c1.<iv>.<tag>.<ciphertext>. */
+export function wrapWithCustomerKey(dek: Buffer, kek: Buffer): string {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", kek, iv);
+  c.setAAD(Buffer.from("dek-cmk"));
+  const ct = Buffer.concat([c.update(dek), c.final()]);
+  return `c1.${[iv, c.getAuthTag(), ct].map((b) => b.toString("base64")).join(".")}`;
+}
+
+/** Throws if the key is not the one that wrapped this data key (the GCM tag proves it). */
+export function unwrapWithCustomerKey(wrapped: string, kek: Buffer): Buffer {
+  const [v, a, b, c] = wrapped.split(".");
+  if (v !== "c1" || !a || !b || !c) throw new Error("Unreadable workspace key.");
+  const d = createDecipheriv("aes-256-gcm", kek, Buffer.from(a, "base64"));
+  d.setAAD(Buffer.from("dek-cmk"));
+  d.setAuthTag(Buffer.from(b, "base64"));
+  return Buffer.concat([d.update(Buffer.from(c, "base64")), d.final()]);
+}
+
+export const isCustomerWrapped = (wrapped: string | null | undefined) => !!wrapped && wrapped.startsWith("c1.");
+
 const cache = new Map<string, { key: Buffer; exp: number }>();
 const TTL = 10 * 60 * 1000;
+/** Workspaces with their own key keep the data key in memory only briefly, so revoking takes effect within seconds. */
+const CMK_TTL = 30 * 1000;
 
 /** The data key for a workspace. Created the first time it is needed. */
 export async function getDek(workspaceId: string): Promise<Buffer> {
@@ -55,6 +84,15 @@ export async function getDek(workspaceId: string): Promise<Buffer> {
     row = await basePrisma.workspace.findUnique({ where: { id: workspaceId }, select: { dataKeyEnc: true } });
   }
   if (!row?.dataKeyEnc) throw new Error("Could not create a workspace key.");
+  if (isCustomerWrapped(row.dataKeyEnc)) {
+    const cmk = await basePrisma.workspaceCmk.findUnique({ where: { workspaceId } });
+    const kek = cmk && cmk.status === "ACTIVE" && cmk.kekSealed ? open(cmk.kekSealed) : null;
+    if (!kek) { cache.delete(workspaceId); throw new KeyRevokedError(); }
+    let dek: Buffer;
+    try { dek = unwrapWithCustomerKey(row.dataKeyEnc, Buffer.from(kek, "base64")); } catch { cache.delete(workspaceId); throw new KeyRevokedError(); }
+    cache.set(workspaceId, { key: dek, exp: Date.now() + CMK_TTL });
+    return dek;
+  }
   const key = unwrapDek(row.dataKeyEnc);
   cache.set(workspaceId, { key, exp: Date.now() + TTL });
   return key;

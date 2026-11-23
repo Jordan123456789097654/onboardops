@@ -3,6 +3,7 @@ import type { Role, Severity } from "@prisma/client";
 import { getActiveMembership, unauthPath, type Membership } from "./auth";
 import { can } from "./perms";
 import { featureOn } from "./features";
+import { isWorkspaceLocked } from "./cmk";
 
 export class AuthzError extends Error {
   constructor(message = "You do not have permission to do that.") {
@@ -18,12 +19,18 @@ export const ALL_ROLES: Role[] = ["OWNER", "ADMIN", "MANAGER", "SUPERVISOR", "EM
 
 export type Ctx = Membership;
 
+/** The workspace requires two-factor sign-in and this member has not set it up yet (staff support access is exempt). */
+export const mfaBlocked = (m: Ctx) => !m.support && m.workspace.require2fa && !m.user.totpEnabledAt;
+const MFA_REQUIRED = "Your workspace requires two-factor authentication. Turn it on in Account settings, then come back.";
+
 /** For server actions / route handlers: throws AuthzError. */
-export async function requireWorkspaceRole(allowed: Role[], opts?: { allowSuspended?: boolean }): Promise<Ctx> {
+export async function requireWorkspaceRole(allowed: Role[], opts?: { allowSuspended?: boolean; allowLocked?: boolean }): Promise<Ctx> {
   const m = await getActiveMembership();
   if (!m) throw new AuthzError("Not signed in.");
   if (m.support) throw new AuthzError("Support access is read-only.");
   if (m.workspace.suspendedAt && !opts?.allowSuspended) throw new AuthzError("This workspace is locked by OnboardOps. Contact support to resolve it.");
+  if (mfaBlocked(m)) throw new AuthzError(MFA_REQUIRED);
+  if (!opts?.allowLocked && (await isWorkspaceLocked(m.workspace))) throw new AuthzError("This workspace's encryption key was revoked, so its records are locked. The owner can unlock it by providing the key.");
   if (!allowed.includes(m.role)) throw new AuthzError();
   return m;
 }
@@ -32,6 +39,7 @@ export async function requireWorkspaceRole(allowed: Role[], opts?: { allowSuspen
 export async function requirePageRole(allowed: Role[]): Promise<Ctx> {
   const m = await getActiveMembership();
   if (!m) redirect(await unauthPath());
+  if (mfaBlocked(m)) redirect("/account?need2fa=1");
   if (!allowed.includes(m.role)) redirect(m.role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview");
   return m;
 }

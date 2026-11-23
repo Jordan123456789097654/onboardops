@@ -25,7 +25,7 @@ const tos: Extra = {
         <li><strong>Conduct records:</strong> infraction cases with timelines, acknowledgments, incident reports, performance reviews and 1:1 notes.</li>
         <li><strong>Policies:</strong> publishing, versioning and tracking employee acknowledgments.</li>
         <li><strong>Requests:</strong> leave of absence, retirement and resignation requests, with manager decisions.</li>
-        <li><strong>Accounts and access:</strong> invites, magic-link sign-in, workplace staff sign-in pages, optional custom domains and account settings.</li>
+        <li><strong>Accounts and access:</strong> invites, magic-link sign-in, optional two-factor authentication, optional sign-in with Google or GitHub, optional single sign-on for a Workspace, scoped API keys, workplace staff sign-in pages, optional custom domains and account settings.</li>
         <li><strong>Notifications:</strong> in-app alerts, email and webhooks to Discord, Slack or Microsoft Teams that a Customer configures.</li>
         <li><strong>Records and audit:</strong> an append-only audit log, exports and printable documents.</li>
       </ul>
@@ -45,6 +45,9 @@ const tos: Extra = {
         <li>You may add more email addresses to your account in account settings. Only verified addresses can be used to sign in or to match you to employer records, and you should remove addresses you no longer control.</li>
         <li>After repeated wrong passwords, we temporarily lock sign-in for that account to protect it. You can still use a sign-in link or reset your password.</li>
         <li>Changing your password signs out your other devices. You can also sign out other devices from account settings at any time.</li>
+        <li>Two-factor authentication is optional unless a Workspace Owner requires it. If you turn it on, keep your backup codes somewhere safe. If you lose both your phone and your backup codes, a Workspace Owner can reset your two-factor setup; we cannot verify you to them.</li>
+        <li>If you sign in with Google, GitHub or your company&apos;s single sign-on, the security of that account is between you and that provider. We rely on the provider&apos;s confirmation of who you are and of your email address, and we let you in only to Workspaces you already belong to.</li>
+        <li>Owners and Admins who create API keys should give each key only the access it needs, keep it secret, and revoke any key that may have leaked. Anything done with a key is treated as done by the person who created it, and it is recorded in the audit log.</li>
       </ul>
       <p>Tell us immediately through the <C /> if you believe your account has been compromised. We may require you to reset credentials or verify your identity before restoring access.</p>
     </> },
@@ -62,6 +65,10 @@ const tos: Extra = {
     </> },
   ],
   "Customer Data": [
+    { title: "Customer-supplied encryption keys", body: <>
+      <p>An Owner may choose to protect a Workspace&apos;s encrypted records with a key that the Owner supplies instead of the key we manage. While that key is active, we keep a copy of it in encrypted form so the Service can work. If the Owner revokes the key, we delete that copy and the Workspace&apos;s encrypted records are locked: nobody, including OnboardOps, can read or change them until the Owner provides the same key again. Nothing is deleted by revoking.</p>
+      <p>The Owner is responsible for keeping the key. If it is lost or destroyed after it is revoked, we cannot recover the encrypted records, and we cannot restore access for you. A key you replace stops working for new data, but backups that the database provider made earlier remain until they expire under the provider&apos;s normal cycle. Choosing this option is optional, and you can return to the key we manage while your key is active.</p>
+    </> },
     { title: "Exporting, retention and deletion", body: <>
       <p>Owners and Admins can export Workspace data at any time using the export tools, and every export is recorded in the audit log. Exports can include confidential information, so the Customer is responsible for storing them securely.</p>
       <p>Customers are responsible for deciding how long to keep each kind of record. The Service keeps infraction cases, timeline notes and audit entries in append-only form while the Workspace is active. When a Workspace is closed, we delete or de-identify its data as described in the <Link href="/legal/retention">Data Retention and Deletion Policy</Link>.</p>
@@ -139,7 +146,7 @@ const privacy: Extra = {
         <li><strong>Staff access:</strong> support access is read-only, time-limited, supervisor-level, announced to the Owner and logged. Staff accounts require a verified email.</li>
         <li><strong>Integrity:</strong> cases, timeline notes and audit entries are append-only, and audit entries are hash-chained.</li>
       </ul>
-      <p>We are in beta and do not currently hold third-party security certifications. The <Link href="/security">Security page</Link> lists what is not yet available, including two-factor authentication.</p>
+      <p>We are in beta and do not currently hold third-party security certifications. The <Link href="/security">Security page</Link> lists what is available and what is not yet available.</p>
     </> },
     { title: "If something goes wrong", body: <p>If we confirm a breach of security that affects your Personal Information, we will tell you without undue delay, describe what happened and what we are doing, and notify authorities where the law requires. We will tell Customers about incidents affecting their Workspace data so they can meet their own obligations.</p> },
   ],
@@ -266,7 +273,7 @@ export const employeeNotice: Doc = {
     </> },
     { title: "Reporting concerns safely", body: <p>You can file an incident report from your portal. Reports made in good faith, such as safety concerns, near misses and conduct concerns, must not be used against you, and our <Link href="/legal/acceptable-use">Acceptable Use Policy</Link> forbids employers from using the service to retaliate. If you think a record is being used to retaliate against you, you may also contact the relevant government agency or an attorney.</p> },
     { title: "Your own account", body: <>
-      <p>You can create your own OnboardOps account, add more email addresses, set a nickname and picture, change your password or use email links to sign in. You control these in account settings. If you work for more than one employer, your account can show every workplace you belong to.</p>
+      <p>You can create your own OnboardOps account, add more email addresses, set a nickname and picture, change your password, turn on two-factor authentication, connect Google or GitHub, or use email links to sign in. You control these in account settings. Your employer may require two-factor authentication or single sign-on for its workplace. If you work for more than one employer, your account can show every workplace you belong to.</p>
       <p>When your employment ends, your employer may close your record and you lose access to their workplace. Your personal account stays open until you ask us to delete it.</p>
     </> },
     { title: "Questions and requests", body: <p>For questions about a record, talk to your manager or HR contact first. For questions about OnboardOps itself or your own account, use the <C /> and choose the topic that fits, such as &ldquo;Privacy request.&rdquo; We are based in the State of {SITE.state}, USA.</p> },
@@ -286,6 +293,10 @@ export const retention: Doc = {
       ["Additional email addresses", "Until you remove them", "Removed with the account."],
       ["Profile picture", "Until you remove it", "Removed with the account."],
       ["Password hashes and one-time link hashes", "Passwords until changed; links until used or expired", "Expired links are removed with the account."],
+      ["Two-factor secret and backup codes", "Until you turn two-factor authentication off, or the account is deleted", "Turning it off deletes the secret and every backup code."],
+      ["Connected Google or GitHub accounts and single sign-on identities", "Until you disconnect them, the Customer removes single sign-on, or the account is deleted", "Removed with the account."],
+      ["API keys", "Until revoked; revoked keys stay listed with their dates", "A revoked key stops working at once. Changes made through a key stay in the audit log."],
+      ["Customer-supplied encryption key", "While active; the stored copy is deleted when the key is revoked or replaced", "Only a short fingerprint and the dates remain."],
       ["Support messages and replies", "Up to 3 years after the last message", "Longer if needed to resolve a dispute or comply with law."],
       ["Email delivery log (recipient, subject, status)", "Up to 12 months", "Message bodies are not stored."],
       ["Staff activity log", "Up to 7 years", "Records who at OnboardOps did what; needed to show accountability."],

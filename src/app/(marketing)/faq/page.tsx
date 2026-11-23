@@ -5,6 +5,8 @@ export const metadata = { title: "FAQ", description: "Answers about pricing, sec
 
 const faqs: [string, string][] = [
   ["Is OnboardOps really free?", "Yes. It is in beta and every feature is free for beta testers, with no card on file. Any future paid plan will be announced in the changelog before it applies to you."],
+  ["Does OnboardOps support two-factor authentication?", "Yes. Anyone can turn it on in Account settings with an authenticator app such as Google Authenticator, Microsoft Authenticator or 1Password, and you get backup codes to save. A workspace owner can require it for every member. If someone loses their phone and codes, the owner can reset their two-factor setup."],
+  ["Can I sign in with Google or GitHub?", "When your OnboardOps instance has them switched on, yes. You can sign up with either, or connect one from Account settings. If you use two-factor authentication, it is still asked for after Google or GitHub. You cannot disconnect your only way to sign in."],
   ["How many employees can I add?", "There is no cap during the beta."],
   ["Who can see confidential manager notes?", "Owners, admins and managers. Supervisors and employees never receive them, because the server strips them out before sending the page."],
   ["Can an infraction be deleted?", "No. Cases, timeline notes and audit entries are append-only. If something was entered by mistake, add a note explaining the correction."],

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
-import { getDek } from "./keys";
+import { getDek, KeyRevokedError } from "./keys";
 
 /** Text: enc1:<workspaceId>:<base64url(iv).base64url(tag).base64url(ciphertext)>. The workspace id is bound in as authenticated data. */
 export const PREFIX = "enc1:";
@@ -66,7 +66,7 @@ export async function deepDecrypt<T>(value: T): Promise<T> {
   const v = value as unknown;
   if (typeof v === "string") {
     if (!isEncryptedString(v)) return value;
-    try { return (await decryptString(v)) as unknown as T; } catch (e) { console.error("decrypt failed", e instanceof Error ? e.message : e); return UNREADABLE as unknown as T; }
+    try { return (await decryptString(v)) as unknown as T; } catch (e) { if (e instanceof KeyRevokedError) throw e; console.error("decrypt failed", e instanceof Error ? e.message : e); return UNREADABLE as unknown as T; }
   }
   if (Buffer.isBuffer(v)) {
     if (!isEncryptedBytes(v)) return value;
@@ -75,7 +75,7 @@ export async function deepDecrypt<T>(value: T): Promise<T> {
   if (Array.isArray(v)) return (await Promise.all(v.map((x) => deepDecrypt(x)))) as unknown as T;
   if (v && typeof v === "object") {
     if (isEncryptedJson(v)) {
-      try { return JSON.parse(await decryptString(v.$enc)) as T; } catch (e) { console.error("decrypt failed", e instanceof Error ? e.message : e); return null as unknown as T; }
+      try { return JSON.parse(await decryptString(v.$enc)) as T; } catch (e) { if (e instanceof KeyRevokedError) throw e; console.error("decrypt failed", e instanceof Error ? e.message : e); return null as unknown as T; }
     }
     const proto = Object.getPrototypeOf(v);
     if (proto !== Object.prototype && proto !== null) return value; // Date, Decimal and similar

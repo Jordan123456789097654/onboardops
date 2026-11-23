@@ -15,8 +15,29 @@ const h = (v: string): Block => ({ t: "h", v });
 const ol = (...v: string[]): Block => ({ t: "ol", v });
 const ul = (...v: string[]): Block => ({ t: "ul", v });
 const note = (v: string): Block => ({ t: "note", v });
+const table = (head: string[], rows: string[][]): Block => ({ t: "table", head, rows });
 
 export const articles: Article[] = [
+  {
+    slug: "api-reference", cat: "Integrations", title: "API reference (read and write)", summary: "Keys, scopes, every endpoint, errors, rate limits and examples.",
+    body: [
+      p("The API lets your own systems read and change data in your workspace. Everything it does is checked on the server the same way the app checks it, and every write is recorded in your audit log under the name of the key."),
+      h("Keys and scopes"),
+      ol("An owner or admin opens Settings, Integrations, and creates a key.", "Tick only the scopes the key needs. A key shows once; copy it then.", "Send it as Authorization: Bearer oo_live_... on every request. Revoke it any time and it stops working immediately."),
+      table(["Scope", "Allows"], [["employees:read", "GET /api/v1/employees and /api/v1/employees/{id}"], ["employees:write", "POST /api/v1/employees, PATCH /api/v1/employees/{id}"], ["shifts:read", "GET /api/v1/shifts"], ["shifts:write", "POST /api/v1/shifts"], ["courses:assign", "POST /api/v1/assignments"], ["infractions:write", "POST /api/v1/infractions (verbal warning, written infraction, strike points)"], ["audit:read", "GET /api/v1/audit"]]),
+      note("A key can never do more than the person who created it. If that person is demoted, the key's writes are limited to their new role. If they leave the workspace, the key can no longer write. Keys created before scopes existed are read-only."),
+      h("Write endpoints"),
+      ul("POST /api/v1/employees: fullName, email, and optionally phone, emergencyContact, departmentId, jobRoleId, hireDate (YYYY-MM-DD). Send an object, or an array of up to 100.", "PATCH /api/v1/employees/{id}: send only the fields to change. To change status, also send statusReason. Only an owner or admin can terminate.", "POST /api/v1/assignments: courseId, employeeIds (up to 100), reason, and optionally dueDate.", "POST /api/v1/infractions: employeeId, severity, policyViolated, summary, and optionally pointsAdded, evidenceUrls, confidentialManagerNotes. Suspensions and terminations cannot be logged through the API.", "POST /api/v1/shifts: startsAt and endsAt (ISO 8601), and optionally employeeId, departmentId, label, notes. Send an object or an array of up to 100."),
+      p("Example: curl -X POST https://onboardops.org/api/v1/employees -H \"Authorization: Bearer oo_live_...\" -H \"Content-Type: application/json\" -d '{\"fullName\":\"Maya Chen\",\"email\":\"maya@example.com\"}'"),
+      p("Bulk requests (an array) return one result per item: { index, ok, ... } or { index, ok: false, error }. One bad item does not stop the others."),
+      h("Responses and errors"),
+      p("Success: { data, requestId }. Lists: { data, nextCursor }. Errors: { error, code, requestId } with a matching HTTP status. Quote the requestId when you contact support."),
+      table(["Status", "code", "Meaning"], [["400", "invalid_json, request_failed", "The body was not valid JSON, or the change could not be made"], ["401", "missing_key, invalid_key, key_expired", "The key is missing, wrong, revoked or expired"], ["403", "insufficient_scope, forbidden, key_owner_missing, workspace_suspended, severity_not_allowed", "The key or its creator may not do that"], ["404", "not_found, course_not_found", "No such record in your workspace"], ["409", "duplicate_email", "An employee with that email already exists"], ["413", "body_too_large", "Bodies are limited to 256 KB"], ["422", "validation_failed, unknown_department, unknown_job_role, unknown_employee, too_many_items", "A field failed validation"], ["429", "rate_limited", "Wait for the Retry-After seconds"]]),
+      h("Limits"),
+      ul("120 requests a minute per key, and 30 writes a minute per key.", "Up to 100 items in one bulk request, and 256 KB per request.", "Only your own workspace's records are ever visible or changeable. IDs from another workspace return not found."),
+      note("Writes are not idempotent: sending the same create twice makes two records (duplicate emails are refused). Keep your own record of what you sent."),
+    ],
+  },
   {
     slug: "create-your-workspace", cat: "Getting started", title: "Create your workspace", summary: "Sign up, accept the terms and land in your Command Center.",
     body: [

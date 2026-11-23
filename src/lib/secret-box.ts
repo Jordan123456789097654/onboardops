@@ -1,4 +1,9 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "crypto";
+
+/** Keyed digest (HMAC-SHA256) for values that must be matched but never read back, such as backup codes. The key never leaves the server. */
+export function keyedDigest(purpose: string, value: string): string {
+  return createHmac("sha256", key()).update(`${purpose}\0${value}`).digest("hex");
+}
 
 /** Encrypts customer-supplied credentials (such as their SMS auth token) before they are stored. AES-256-GCM. */
 function key() {
