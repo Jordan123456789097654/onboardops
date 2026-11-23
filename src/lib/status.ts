@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "./prisma";
 import { getMaintenanceState, isSimulatedDown } from "./maintenance";
+import { getApiHost, isApiService } from "./service-role";
 
 export type ComponentHealth = {
   service: string;
@@ -33,8 +34,53 @@ async function probeDb(): Promise<Probe> {
   try { await prisma.$queryRaw`SELECT 1`; return { ok: true, ms: Date.now() - t }; } catch (e) { return { ok: false, ms: Date.now() - t, error: e instanceof Error ? e.message : "Database unreachable" }; }
 }
 
+const SLOW_FRONTEND_MS = 2500;
+
 async function real_checkFrontend(): Promise<ComponentHealth> {
   const start = Date.now();
+  // On the dedicated API deployment, probe the web deployment over HTTP so frontend outages are detected independently.
+  if (isApiService()) {
+    const webOrigin = (process.env.APP_URL || "https://www.onboardops.org").trim().replace(/\/+$/, "");
+    let sameAsApi = false;
+    try { sameAsApi = new URL(webOrigin).hostname.toLowerCase() === getApiHost(); } catch { sameAsApi = true; }
+    if (!sameAsApi) {
+      try {
+        const res = await fetch(`${webOrigin}/api/status/frontend`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+        const ms = Date.now() - start;
+        const body = (await res.json().catch(() => null)) as Partial<ComponentHealth> | null;
+        if (!res.ok || body?.ok === false) {
+          return {
+            service: "frontend",
+            status: "down",
+            ok: false,
+            latencyMs: ms,
+            message: body?.message || `Frontend health check returned HTTP ${res.status}`,
+            timestamp: new Date().toISOString(),
+          };
+        }
+        const rawStatus = body?.status === "maintenance" || body?.status === "degraded" ? body.status : "up";
+        const status = rawStatus === "up" && ms >= SLOW_FRONTEND_MS ? "degraded" : rawStatus;
+        return {
+          service: "frontend",
+          status,
+          ok: true,
+          maintenance: !!body?.maintenance,
+          latencyMs: ms,
+          message: status === "degraded" && rawStatus === "up" ? `Frontend is responding slowly (${ms} ms)` : (body?.message || "Next.js App Router frontend and SSR operational"),
+          timestamp: new Date().toISOString(),
+        };
+      } catch (err: any) {
+        return {
+          service: "frontend",
+          status: "down",
+          ok: false,
+          latencyMs: Date.now() - start,
+          message: err?.message ?? "Frontend unreachable",
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+  }
   const maint = await getMaintenanceState();
   return {
     service: "frontend",
@@ -196,6 +242,7 @@ export async function checkAllServices() {
   const all = Object.values(services);
   const allOk = all.every((s) => s.ok);
   const anyDegraded = all.some((s) => s.status === "degraded");
+  const prefix = isApiService() ? "" : "/api";
   return {
     ok: allOk,
     status: !allOk ? "down" : anyDegraded ? "degraded" : maint.enabled ? "maintenance" : "up",
@@ -206,15 +253,15 @@ export async function checkAllServices() {
     latencyMs: Date.now() - start,
     timestamp: new Date().toISOString(),
     endpoints: [
-      "/api/status",
-      "/api/status/frontend",
-      "/api/status/database",
-      "/api/status/auth",
-      "/api/status/api",
-      "/api/status/email",
-      "/api/status/storage",
-      "/api/status/domains",
-      "/api/health",
+      `${prefix}/status`,
+      `${prefix}/status/frontend`,
+      `${prefix}/status/database`,
+      `${prefix}/status/auth`,
+      `${prefix}/status/api`,
+      `${prefix}/status/email`,
+      `${prefix}/status/storage`,
+      `${prefix}/status/domains`,
+      `${prefix}/health`,
     ],
     services,
   };

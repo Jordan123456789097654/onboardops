@@ -6,6 +6,7 @@ import { Megaphone, Wrench, X } from "lucide-react";
 import { MaintenanceScreen } from "./maintenance-screen";
 import type { AnnouncementState, MaintenanceState } from "@/lib/maintenance";
 import { areaFor, areasSentence, fmtLeft, lockedFor } from "@/lib/maintenance-areas";
+import { apiUrl } from "@/lib/service-role";
 
 type Live = Pick<MaintenanceState, "enabled" | "upcoming" | "areas" | "noticeMinutes" | "message" | "eta" | "startsAt" | "endsAt">;
 
@@ -69,7 +70,7 @@ export function MaintenanceGate({
   useEffect(() => {
     if (!pathname || pathname === lastTracked.current || pathname.startsWith("/admin")) return;
     lastTracked.current = pathname;
-    fetch("/api/track", {
+    fetch(apiUrl("/api/track"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: pathname }),

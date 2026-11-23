@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaffPage, SUPPORT_STAFF } from "@/lib/platform";
+import { apiUrl } from "@/lib/service-role";
 import { PageHeader } from "@/components/ui";
 import { TestimonialsAdmin } from "./testimonials-admin";
 
@@ -17,7 +18,7 @@ export default async function AdminTestimonials() {
       {rows === null ? (
         <div className="card border-amber-400/50 bg-amber-500/5 p-4 text-[13px]"><b>The testimonials table is not in the database yet.</b> Run <span className="mono">npx prisma db push</span> against the production database, then reload this page.</div>
       ) : (
-        <TestimonialsAdmin canEdit={staff.role === "OWNER"} items={rows.map((r) => ({ id: r.id, quote: r.quote, name: r.name, jobTitle: r.jobTitle, company: r.company, rating: r.rating, visible: r.visible, photoUrl: r.photoMime ? `/api/testimonial-photo/${r.id}?v=${r.updatedAt.getTime()}` : null }))} />
+        <TestimonialsAdmin canEdit={staff.role === "OWNER"} items={rows.map((r) => ({ id: r.id, quote: r.quote, name: r.name, jobTitle: r.jobTitle, company: r.company, rating: r.rating, visible: r.visible, photoUrl: r.photoMime ? apiUrl(`/api/testimonial-photo/${r.id}?v=${r.updatedAt.getTime()}`) : null }))} />
       )}
     </>
   );

@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const t = await prisma.testimonial.findUnique({ where: { id: params.id }, select: { photo: true, photoMime: true, visible: true } }).catch(() => null);
   if (!t?.photo || !t.photoMime) return new Response("Not found", { status: 404 });
-  return new Response(Buffer.from(t.photo), { headers: { "Content-Type": t.photoMime, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
+  return new Response(Buffer.from(t.photo), { headers: { "Content-Type": t.photoMime, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff", "Access-Control-Allow-Origin": "*" } });
 }

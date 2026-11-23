@@ -1,5 +1,6 @@
 import { Star } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { apiUrl } from "@/lib/service-role";
 import { Reveal } from "@/components/motion";
 
 /** Homepage testimonials, managed in the staff console. Shows nothing if there are none, or if the table is not in the database yet. */
@@ -21,7 +22,7 @@ export async function Testimonials() {
             <figcaption className="mt-5 flex items-center gap-3">
               {t.photoMime
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={`/api/testimonial-photo/${t.id}?v=${t.updatedAt.getTime()}`} width={40} height={40} alt="" className="h-10 w-10 shrink-0 rounded-full border border-line object-cover" />
+                ? <img src={apiUrl(`/api/testimonial-photo/${t.id}?v=${t.updatedAt.getTime()}`)} width={40} height={40} alt="" className="h-10 w-10 shrink-0 rounded-full border border-line object-cover" />
                 : <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-muted text-sm font-semibold text-soft">{t.name.slice(0, 1).toUpperCase()}</span>}
               <div className="min-w-0 text-[13px]"><div className="font-medium text-ink">{t.name}</div>{(t.jobTitle || t.company) && <div className="text-soft">{[t.jobTitle, t.company].filter(Boolean).join(", ")}</div>}</div>
             </figcaption>

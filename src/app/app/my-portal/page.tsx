@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePageRole, ALL_ROLES, serializeInfraction, hasFeature } from "@/lib/rbac";
 import { allowanceOf, usage, TIMEOFF_TYPES } from "@/lib/timeoff";
 import { hasSmsConfig } from "@/lib/sms";
+import { apiUrl, getApiOrigin } from "@/lib/service-role";
 import { Empty } from "@/components/ui";
 import { Portal } from "./portal";
 
@@ -51,7 +52,7 @@ export default async function MyPortal() {
       weekEntries={weekEntries.map((e) => ({ clockIn: e.clockIn.toISOString(), clockOut: e.clockOut?.toISOString() ?? null }))}
       credentials={creds.map((c) => ({ id: c.id, name: c.name, expires: c.expiresAt!.toISOString() }))}
       submittedTemplates={subs.map((s) => ({ id: s.templateId, at: s.submittedAt.toISOString() }))}
-      calendarUrl={p.calendarToken ? `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/api/calendar/${p.calendarToken}.ics` : ""}
+      calendarUrl={p.calendarToken ? (getApiOrigin() ? apiUrl(`/api/calendar/${p.calendarToken}.ics`) : `${(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "")}/api/calendar/${p.calendarToken}.ics`) : ""}
       sms={{ configured: hasSmsConfig(ctx.workspace), optIn: p.smsOptIn, phone: p.phone ?? "" }}
       balances={TIMEOFF_TYPES.map((t) => ({ type: t, allowance: allow[t], used: use[t].used, pending: use[t].pending }))}
       shifts={myShifts.map((s) => ({ id: s.id, label: s.label, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString(), swap: s.swapStatus }))}
