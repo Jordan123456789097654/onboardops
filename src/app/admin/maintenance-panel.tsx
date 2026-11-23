@@ -6,40 +6,8 @@ import { setMaintenanceModeAction } from "@/actions/admin";
 import { Badge, Field, Modal, useAction } from "@/components/ui";
 import type { MaintenanceState } from "@/lib/maintenance";
 import { ALL_AREAS, AREA_LABEL, type MaintArea } from "@/lib/maintenance-areas";
+import { MAINTENANCE_PRESETS } from "@/lib/status-presets";
 import { fmtDateTime } from "@/lib/utils";
-
-const PRESETS: { label: string; message: string; eta: string }[] = [
-  {
-    label: "Scheduled Upgrade",
-    message: "OnboardOps is currently undergoing scheduled system upgrades and performance improvements. All workspace data is safe and we will be back online shortly.",
-    eta: "~30 minutes",
-  },
-  {
-    label: "Database Maintenance",
-    message: "We are performing scheduled database maintenance and indexing to keep OnboardOps fast and reliable. Your employee records and audit logs remain completely intact.",
-    eta: "~45 minutes",
-  },
-  {
-    label: "Security Patch",
-    message: "We are deploying routine security patches and infrastructure hardening updates. Services will resume shortly.",
-    eta: "~20 minutes",
-  },
-  {
-    label: "New Feature Rollout",
-    message: "We are rolling out a new OnboardOps release with updated workspace tools and features. Hang tight while we finish the deployment!",
-    eta: "~15 minutes",
-  },
-  {
-    label: "Emergency Hotfix",
-    message: "Our team is applying an urgent hotfix to resolve a service issue. Thank you for your patience while we restore full operations.",
-    eta: "Shortly",
-  },
-  {
-    label: "Infrastructure Migration",
-    message: "We are upgrading server infrastructure to expand capacity. Workspaces are temporarily locked during the transition to keep records consistent.",
-    eta: "~1 hour",
-  },
-];
 
 function toLocalInput(iso: string | null) {
   if (!iso) return "";
@@ -86,7 +54,7 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
 
   return (
     <>
-      <section className={`card mb-4 p-4 ${initial.enabled ? "border-amber-400 bg-amber-500/5" : ""}`}>
+      <section className={`card p-4 ${initial.enabled ? "border-amber-400 bg-amber-500/5" : ""}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${initial.enabled ? "border-amber-400/50 bg-amber-500/15 text-amber-600 dark:text-amber-400" : "border-line bg-muted text-soft"}`}>
@@ -156,9 +124,11 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
             <p className="mt-2 text-xs text-soft">The staff console and sign-in always stay open. Anything not ticked keeps working.</p>
           </div>
           <div>
-            <div className="mb-1.5 text-xs font-medium text-soft">Premade reasons (click to fill)</div>
-            <div className="flex flex-wrap gap-1.5">
-              {PRESETS.map((p) => (
+            <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-soft">
+              <span>Premade reasons ({MAINTENANCE_PRESETS.length} templates — click to fill)</span>
+            </div>
+            <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-line bg-muted/30 p-2">
+              {MAINTENANCE_PRESETS.map((p) => (
                 <button
                   key={p.label}
                   type="button"
@@ -176,7 +146,7 @@ export function MaintenancePanel({ initial, canManage }: { initial: MaintenanceS
           <Field label="Message shown on maintenance screen">
             <textarea
               className="textarea"
-              rows={3}
+              rows={5}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="OnboardOps is currently undergoing scheduled maintenance and upgrades..."

@@ -6,7 +6,7 @@ export const AREA_LABEL: Record<MaintArea, string> = { site: "Website", app: "Wo
 export const AREA_PHRASE: Record<MaintArea, string> = { site: "our website", app: "the workspace app", portal: "the employee portal", api: "the API" };
 
 /** Paths that stay open no matter what: the staff console, sign-in and the status endpoints the lock screen itself relies on. */
-const ALWAYS_OPEN = ["/admin", "/login", "/magic", "/api/maintenance", "/api/version", "/api/track", "/api/admin"];
+const ALWAYS_OPEN = ["/admin", "/login", "/magic", "/api/maintenance", "/api/incidents", "/api/version", "/api/track", "/api/admin"];
 
 export function areaFor(pathname: string): MaintArea {
   if (pathname === "/api/v1" || pathname.startsWith("/api/v1/")) return "api";

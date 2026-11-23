@@ -7,10 +7,8 @@ import { UpdateOverlay } from "@/components/update-overlay";
 import { MaintenanceGate } from "@/components/maintenance-gate";
 import { getAnnouncementState, getMaintenanceState } from "@/lib/maintenance";
 import { getStaff } from "@/lib/platform";
-import { getOutageTest } from "@/lib/maintenance";
-import { checkAllServices } from "@/lib/status";
-import { getOpenIncidents } from "@/lib/incidents";
-import { OutageGate, type OutageView } from "@/components/outage-gate";
+import { buildOutageView } from "@/lib/incidents";
+import { OutageGate } from "@/components/outage-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +28,13 @@ export const metadata: Metadata = {
 const themeScript = `document.documentElement.classList.add('js');(function(){try{var t=localStorage.getItem('oo-theme');if(t==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}else if(t!=='dark'){t='light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [maintenance, announcement, staff, outageTest, incidents] = await Promise.all([getMaintenanceState(), getAnnouncementState(), getStaff(), getOutageTest(), getOpenIncidents()]);
+  const [maintenance, announcement, staff, outage] = await Promise.all([
+    getMaintenanceState(),
+    getAnnouncementState(),
+    getStaff(),
+    buildOutageView(),
+  ]);
   const isOwner = staff?.role === "OWNER";
-  let outage: OutageView = { active: false, services: [], until: null, components: [], incidents: [] };
-  if (outageTest.active || incidents.length) {
-    const r = await checkAllServices().catch(() => null);
-    outage = { active: true, services: outageTest.services, until: outageTest.active ? outageTest.until : null, components: r ? Object.values(r.services) : [], incidents };
-  }
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
@@ -47,7 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <UpdateOverlay />
         <ToastProvider>
           <MaintenanceGate maintenance={maintenance} announcement={announcement} isOwner={isOwner}>
-            <OutageGate outage={outage}>{children}</OutageGate>
+            <OutageGate outage={outage} isOwner={isOwner}>{children}</OutageGate>
           </MaintenanceGate>
         </ToastProvider>
       </body>

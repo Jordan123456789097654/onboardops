@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Mail, ShieldAlert, Wrench } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaffPage, ALL_STAFF } from "@/lib/platform";
-import { getAnnouncementState, getMaintenanceState, getSiteVisits, PLATFORM_META_IDS } from "@/lib/maintenance";
+import { getAnnouncementState, getMaintenanceState, getOutageTest, getSiteVisits, PLATFORM_META_IDS } from "@/lib/maintenance";
+import { getIncidentSettings, getOpenIncidents } from "@/lib/incidents";
 import { PageHeader, Badge } from "@/components/ui";
 import { CountUp } from "@/components/motion";
 import { StackedBars } from "@/components/charts";
@@ -44,6 +46,9 @@ export default async function AdminHome() {
     maintenance,
     announcement,
     visits,
+    openIncidents,
+    outageTest,
+    incidentSettings,
   ] = await Promise.all([
     prisma.workspace.count(),
     prisma.workspace.count({ where: { createdAt: { gte: week } } }),
@@ -75,6 +80,9 @@ export default async function AdminHome() {
     getMaintenanceState(),
     getAnnouncementState(),
     getSiteVisits(),
+    getOpenIncidents(),
+    getOutageTest(),
+    getIncidentSettings(),
   ]);
 
   const topWsIds = topAuditWs.map((x) => x.workspaceId);
@@ -100,129 +108,214 @@ export default async function AdminHome() {
   const weekly = buckets.map((start, i) => signups.filter((s) => s.createdAt >= start && (i === 7 || s.createdAt < buckets[i + 1])).length);
   const labels = buckets.map((d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`);
 
-  const kpis: [string, number, string, string?][] = [
+  const growthKpis: [string, number, string, string?][] = [
     ["Site Visits", visits.total, `${visits.today} today · ${visits.last7d} (7d) · ${visits.last30d} (30d)`],
     ["Workspaces", workspaces, `${newWs} new this week · ${active7.length} active (7d)`],
-    ["People Under Management", employees, `${users} user accounts`],
-    ["30d / 90d Retention", retention30, `${active30.length}/${workspaces} (30d) · ${retention90}% (90d)`, "%"],
+    ["People Managed", employees, `${users} user accounts`],
+    ["30d Retention", retention30, `${active30.length}/${workspaces} (30d) · ${retention90}% (90d)`, "%"],
   ];
 
   const usageKpis: [string, number, string][] = [
     ["Quizzes Graded", totalQuizAttempts, `${quizzesPassed} courses passed`],
-    ["Checklists Completed", checklistsDone, "across all workspaces"],
-    ["Emails Sent (30d / 90d)", sentEmails30, `${sentEmails90} in last 90d · ${sentEmails7} in 7d`],
-    ["Open Support", openReq, `${privacyOpen} privacy requests open`],
+    ["Checklists Done", checklistsDone, "across all workspaces"],
+    ["Emails Sent (30d)", sentEmails30, `${sentEmails90} in 90d · ${sentEmails7} in 7d`],
+    ["Open Queue", openReq + privacyOpen, `${openReq} support · ${privacyOpen} privacy`],
   ];
 
+  const hasIncident = openIncidents.length > 0 || outageTest.active;
+
   return (
-    <>
-      <PageHeader title="Dashboard" sub="Platform health, site visits, growth analytics and site-wide controls." />
-      <MaintenancePanel initial={maintenance} canManage={staff.role === "OWNER"} />
-      <AnnouncementPanel initial={announcement} canManage={staff.role === "OWNER"} />
+    <div className="space-y-8">
+      <PageHeader title="Dashboard" sub="Platform status, site-wide controls, growth analytics, and operational health." />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map(([l, v, n, sfx], i) => (
-          <div key={l} style={{ "--i": i } as React.CSSProperties} className="card anim-fade-up p-4">
-            <div className="text-xs text-soft">{l}</div>
-            <div className="mono mt-1 text-3xl font-semibold"><CountUp to={v} suffix={sfx ?? ""} /></div>
-            <div className="mt-1 text-xs text-soft">{n}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {usageKpis.map(([l, v, n], i) => (
-          <div key={l} style={{ "--i": i + 4 } as React.CSSProperties} className="card anim-fade-up p-4">
-            <div className="text-xs text-soft">{l}</div>
-            <div className="mono mt-1 text-2xl font-semibold"><CountUp to={v} /></div>
-            <div className="mt-1 text-xs text-soft">{n}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <section className="card p-4">
-          <h2 className="mb-3 text-sm font-semibold">Daily Site Visits (Last 14 Days)</h2>
-          <StackedBars labels={visits.dailyLabels} series={[{ name: "Visits", values: visits.dailyCounts }]} />
-          {visits.topPaths.length > 0 && (
-            <div className="mt-4 border-t border-line pt-3">
-              <h3 className="mb-2 text-xs font-semibold text-soft">Top visited pages</h3>
-              <div className="grid gap-1.5 sm:grid-cols-2 text-xs">
-                {visits.topPaths.map((tp) => (
-                  <div key={tp.path} className="flex items-center justify-between rounded border border-line bg-muted/40 px-2.5 py-1">
-                    <span className="mono truncate">{tp.path}</span>
-                    <span className="mono ml-2 font-semibold">{tp.count}</span>
-                  </div>
-                ))}
+      {/* 1. Needs Attention / Live Status Strip */}
+      <section aria-label="Platform status">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Link
+            href="/admin/status"
+            className={`card flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/40 ${
+              hasIncident ? "border-rose-400/60 bg-rose-500/5" : ""
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${hasIncident ? "border-rose-400/50 bg-rose-500/15 text-rose-600 dark:text-rose-400" : "border-emerald-400/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"}`}>
+                {hasIncident ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">Incidents &amp; Status</span>
+                  <Badge value={hasIncident ? "SUSPENDED" : "ACTIVE"} label={outageTest.active ? "TEST ACTIVE" : openIncidents.length ? `${openIncidents.length} OPEN` : "OPERATIONAL"} />
+                </div>
+                <p className="mt-0.5 truncate text-xs text-soft">
+                  {openIncidents[0]?.name ?? (outageTest.active ? "Outage simulator running" : `In-app gate: ${incidentSettings.overrideMode}`)}
+                </p>
               </div>
             </div>
-          )}
-        </section>
+            <ArrowRight className="h-4 w-4 shrink-0 text-soft" />
+          </Link>
 
-        <section className="card p-4">
-          <h2 className="mb-3 text-sm font-semibold">New Workspaces Per Week</h2>
-          <StackedBars labels={labels} series={[{ name: "Signups", values: weekly }]} />
-          <div className="mt-4 border-t border-line pt-3">
-            <h3 className="mb-2 text-xs font-semibold text-soft">Top Active Workspaces (Last 30 Days)</h3>
-            {topActive.length === 0 ? (
-              <p className="text-xs text-soft">No workspace activity recorded in the last 30 days.</p>
-            ) : (
-              <div className="divide-y divide-line text-[13px]">
-                {topActive.map((w) => (
-                  <div key={w.id} className="flex items-center justify-between py-1.5">
-                    <div>
-                      <Link href={`/admin/workspaces/${w.id}`} className="font-medium text-accent hover:underline">{w.name}</Link>
-                      <span className="mono ml-2 text-xs text-soft">{w.employees} staff</span>
+          <Link
+            href="/admin/inbox"
+            className={`card flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/40 ${
+              openReq + privacyOpen > 0 ? "border-amber-400/50 bg-amber-500/5" : ""
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-muted text-soft">
+                <ShieldAlert className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">Support &amp; Privacy</span>
+                  <Badge value={openReq + privacyOpen > 0 ? "PENDING" : "ACTIVE"} label={openReq + privacyOpen > 0 ? `${openReq + privacyOpen} OPEN` : "CLEAR"} />
+                </div>
+                <p className="mt-0.5 text-xs text-soft">{openReq} support tickets · {privacyOpen} privacy requests</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-soft" />
+          </Link>
+
+          <Link
+            href="/admin/email"
+            className={`card flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/40 ${
+              failedEmails > 0 ? "border-rose-400/50 bg-rose-500/5" : ""
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-muted text-soft">
+                <Mail className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">Email Delivery (7d)</span>
+                  <Badge value={failedEmails > 0 ? "SUSPENDED" : "ACTIVE"} label={failedEmails > 0 ? `${failedEmails} FAILED` : "HEALTHY"} />
+                </div>
+                <p className="mt-0.5 text-xs text-soft">{sentEmails7} delivered · {failedEmails} failed · {locked} locked ws</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-soft" />
+          </Link>
+        </div>
+      </section>
+
+      {/* 2. Site-Wide Controls */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-soft">
+          <Wrench className="h-3.5 w-3.5" />
+          Site-Wide Controls
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <MaintenancePanel initial={maintenance} canManage={staff.role === "OWNER"} />
+          <AnnouncementPanel initial={announcement} canManage={staff.role === "OWNER"} />
+        </div>
+      </section>
+
+      {/* 3. Platform Metrics */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-soft">
+          <Activity className="h-3.5 w-3.5" />
+          Growth &amp; Usage
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {growthKpis.map(([l, v, n, sfx], i) => (
+            <div key={l} style={{ "--i": i } as React.CSSProperties} className="card anim-fade-up p-4">
+              <div className="text-xs text-soft">{l}</div>
+              <div className="mono mt-1 text-3xl font-semibold"><CountUp to={v} suffix={sfx ?? ""} /></div>
+              <div className="mt-1 text-xs text-soft">{n}</div>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {usageKpis.map(([l, v, n], i) => (
+            <div key={l} style={{ "--i": i + 4 } as React.CSSProperties} className="card anim-fade-up p-4">
+              <div className="text-xs text-soft">{l}</div>
+              <div className="mono mt-1 text-2xl font-semibold"><CountUp to={v} /></div>
+              <div className="mt-1 text-xs text-soft">{n}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. Analytics & System Health */}
+      <section className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="card p-4">
+            <h2 className="mb-3 text-sm font-semibold">Daily Site Visits (Last 14 Days)</h2>
+            <StackedBars labels={visits.dailyLabels} series={[{ name: "Visits", values: visits.dailyCounts }]} />
+            {visits.topPaths.length > 0 && (
+              <div className="mt-4 border-t border-line pt-3">
+                <h3 className="mb-2 text-xs font-semibold text-soft">Top visited pages</h3>
+                <div className="grid gap-1.5 text-xs sm:grid-cols-2">
+                  {visits.topPaths.map((tp) => (
+                    <div key={tp.path} className="flex items-center justify-between rounded border border-line bg-muted/40 px-2.5 py-1">
+                      <span className="mono truncate">{tp.path}</span>
+                      <span className="mono ml-2 font-semibold">{tp.count}</span>
                     </div>
-                    <span className="mono text-xs">{w.events} actions</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </section>
-      </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <section className="card p-4">
-          <h2 className="mb-3 text-sm font-semibold">Health (Last 7 Days)</h2>
-          <dl className="divide-y divide-line text-[13px]">
-            {[
-              ["Emails sent", sentEmails7, false],
-              ["Emails failed", failedEmails, failedEmails > 0],
-              ["Webhook or email delivery failures inside workspaces", notifyFails, notifyFails > 0],
-              ["Locked workspaces", locked, locked > 0],
-            ].map(([l, v, bad]) => (
-              <div key={String(l)} className="flex items-center justify-between py-2">
-                <dt className="text-soft">{l}</dt>
-                <dd className={`mono ${bad ? "text-rose-600" : ""}`}>{String(v)}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+          <div className="card p-4">
+            <h2 className="mb-3 text-sm font-semibold">New Workspaces Per Week</h2>
+            <StackedBars labels={labels} series={[{ name: "Signups", values: weekly }]} />
+            <div className="mt-4 border-t border-line pt-3">
+              <h3 className="mb-2 text-xs font-semibold text-soft">Top Active Workspaces (Last 30 Days)</h3>
+              {topActive.length === 0 ? (
+                <p className="text-xs text-soft">No workspace activity recorded in the last 30 days.</p>
+              ) : (
+                <div className="divide-y divide-line text-[13px]">
+                  {topActive.map((w) => (
+                    <div key={w.id} className="flex items-center justify-between py-1.5">
+                      <div>
+                        <Link href={`/admin/workspaces/${w.id}`} className="font-medium text-accent hover:underline">{w.name}</Link>
+                        <span className="mono ml-2 text-xs text-soft">{w.employees} staff</span>
+                      </div>
+                      <span className="mono text-xs">{w.events} actions</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-        <section className="card p-4">
-          <h2 className="mb-3 text-sm font-semibold">Recent Job Runs</h2>
-          {jobs.length === 0 ? (
-            <p className="text-[13px] text-soft">No job runs recorded yet.</p>
-          ) : (
-            <ul className="space-y-1.5 text-[13px]">
-              {jobs.map((j) => (
-                <li key={j.id} className="flex items-center justify-between gap-2">
-                  <span>{j.name} <span className="mono text-xs text-soft">{fmtDateTime(j.createdAt)} · {j.durationMs}ms</span></span>
-                  <Badge value={j.ok ? "PASSED" : "FAILED"} label={j.ok ? "OK" : "Failed"} />
-                </li>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="card p-4">
+            <h2 className="mb-3 text-sm font-semibold">System Health (Last 7 Days)</h2>
+            <dl className="divide-y divide-line text-[13px]">
+              {[
+                ["Emails sent", sentEmails7, false],
+                ["Emails failed", failedEmails, failedEmails > 0],
+                ["Workspace webhook / email delivery failures", notifyFails, notifyFails > 0],
+                ["Locked workspaces", locked, locked > 0],
+              ].map(([l, v, bad]) => (
+                <div key={String(l)} className="flex items-center justify-between py-2">
+                  <dt className="text-soft">{l}</dt>
+                  <dd className={`mono ${bad ? "font-semibold text-rose-600" : ""}`}>{String(v)}</dd>
+                </div>
               ))}
-            </ul>
-          )}
-        </section>
-      </div>
+            </dl>
+          </div>
 
-      {staff.role !== "VIEWER" && (openReq + privacyOpen > 0) && (
-        <p className="mt-6 text-[13px]">
-          <Link className="text-accent underline" href="/admin/inbox">Open the support inbox</Link> · <Link className="text-accent underline" href="/admin/privacy">Privacy requests</Link>
-        </p>
-      )}
-    </>
+          <div className="card p-4">
+            <h2 className="mb-3 text-sm font-semibold">Recent Job Runs</h2>
+            {jobs.length === 0 ? (
+              <p className="text-[13px] text-soft">No job runs recorded yet.</p>
+            ) : (
+              <ul className="space-y-1.5 text-[13px]">
+                {jobs.map((j) => (
+                  <li key={j.id} className="flex items-center justify-between gap-2">
+                    <span>{j.name} <span className="mono text-xs text-soft">{fmtDateTime(j.createdAt)} · {j.durationMs}ms</span></span>
+                    <Badge value={j.ok ? "PASSED" : "FAILED"} label={j.ok ? "OK" : "Failed"} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }

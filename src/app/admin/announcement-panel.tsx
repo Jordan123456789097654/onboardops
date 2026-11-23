@@ -5,12 +5,7 @@ import { Megaphone } from "lucide-react";
 import { setAnnouncementAction } from "@/actions/admin";
 import { Badge, Field, Modal, useAction } from "@/components/ui";
 import type { AnnouncementState } from "@/lib/maintenance";
-
-const QUICK_BANNERS: { label: string; message: string; tone: "info" | "warning" | "success"; linkUrl?: string; linkLabel?: string }[] = [
-  { label: "New Release", message: "New update v0.9 is live! Check out Shift Handoff Notes, 1-click role assignment, and more.", tone: "success", linkUrl: "/changelog", linkLabel: "See changelog" },
-  { label: "Maintenance Notice", message: "Scheduled maintenance tonight at 11:00 PM EST (~20 min expected downtime).", tone: "warning", linkUrl: "https://status.onboardops.org", linkLabel: "System status" },
-  { label: "Beta Feedback", message: "We're actively building OnboardOps with our beta teams—click Feedback in the top bar anytime!", tone: "info" },
-];
+import { ANNOUNCEMENT_PRESETS } from "@/lib/status-presets";
 
 export function AnnouncementPanel({ initial, canManage }: { initial: AnnouncementState; canManage: boolean }) {
   const router = useRouter();
@@ -24,7 +19,7 @@ export function AnnouncementPanel({ initial, canManage }: { initial: Announcemen
 
   return (
     <>
-      <section className={`card mb-6 p-4 ${initial.enabled ? "border-accent/50 bg-accent/5" : ""}`}>
+      <section className={`card p-4 ${initial.enabled ? "border-accent/50 bg-accent/5" : ""}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${initial.enabled ? "border-accent/50 bg-accent/15 text-accent" : "border-line bg-muted text-soft"}`}>
@@ -71,7 +66,7 @@ export function AnnouncementPanel({ initial, canManage }: { initial: Announcemen
           <div>
             <div className="mb-1.5 text-xs font-medium text-soft">Quick presets</div>
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_BANNERS.map((b) => (
+              {ANNOUNCEMENT_PRESETS.map((b) => (
                 <button
                   key={b.label}
                   type="button"

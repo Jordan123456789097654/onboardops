@@ -6,7 +6,8 @@ export const ANNOUNCEMENT_ROW_ID = "__platform_announcement__";
 export const VISITS_ROW_ID = "__platform_visits__";
 export const BETTERSTACK_ROW_ID = "__platform_betterstack__";
 export const SIMULATION_ROW_ID = "__platform_outage_test__";
-export const PLATFORM_META_IDS = [MAINTENANCE_ROW_ID, ANNOUNCEMENT_ROW_ID, VISITS_ROW_ID, BETTERSTACK_ROW_ID, SIMULATION_ROW_ID, "__platform_betterstack_incidents__"];
+export const INCIDENT_SETTINGS_ROW_ID = "__platform_incident_settings__";
+export const PLATFORM_META_IDS = [MAINTENANCE_ROW_ID, ANNOUNCEMENT_ROW_ID, VISITS_ROW_ID, BETTERSTACK_ROW_ID, SIMULATION_ROW_ID, "__platform_betterstack_incidents__", INCIDENT_SETTINGS_ROW_ID];
 
 /**
  * Outage test. While active, the health checks for the chosen services report "down" (HTTP 503), so monitors and the public status
