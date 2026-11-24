@@ -78,10 +78,8 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     const d = registerSchema.parse(input);
     if (d.accountType === "OWNER" && d.workspaceName.length < 2) throw new Error("Enter a company name");
     let parsedLogo: ReturnType<typeof parseLogoDataUrl> | null = null;
-    if (d.accountType === "OWNER") {
-      if (!d.logoDataUrl) throw new Error("Upload a company logo (PNG, JPG, or WebP) to create your workspace.");
-      parsedLogo = parseLogoDataUrl(d.logoDataUrl);
-    }
+    // The logo is optional: owners can add it later in settings.
+    if (d.accountType === "OWNER" && d.logoDataUrl) parsedLogo = parseLogoDataUrl(d.logoDataUrl);
     const email = d.email.toLowerCase();
     if (await emailTaken(email)) throw new Error("An account with that email already exists. Sign in instead.");
     const passwordHash = await hashPassword(d.password);
@@ -101,9 +99,7 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
         data: {
           name: d.workspaceName,
           slug,
-          logoData: parsedLogo!.data,
-          logoMime: parsedLogo!.mime,
-          logoUpdatedAt: new Date(),
+          ...(parsedLogo ? { logoData: parsedLogo.data, logoMime: parsedLogo.mime, logoUpdatedAt: new Date() } : {}),
         },
       });
       const member = await tx.workspaceMember.create({ data: { workspaceId: ws.id, userId: user.id, role: "OWNER" } });

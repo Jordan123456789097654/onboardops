@@ -142,10 +142,6 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === "register" && kind === "OWNER" && !logoDataUrl) {
-      setLogoErr("Upload a company logo (PNG, JPG, or WebP) to create your workspace.");
-      return;
-    }
     exec(
       () =>
         mode === "login"
@@ -153,7 +149,7 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
           : registerAction({
               ...f,
               accountType: kind,
-              logoDataUrl: kind === "OWNER" ? logoDataUrl : undefined,
+              logoDataUrl: kind === "OWNER" && logoDataUrl ? logoDataUrl : undefined,
               acceptTerms: accept,
               ref: (() => {
                 try {
@@ -180,7 +176,7 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
   const submitDisabled =
     pending ||
     logoBusy ||
-    (mode === "register" && (!accept || (kind === "OWNER" && !logoDataUrl)));
+    (mode === "register" && !accept);
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.1fr]">
@@ -209,7 +205,7 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
                 <>
                   <Field label="Company name"><input className="input" value={f.workspaceName} onChange={set("workspaceName")} required /></Field>
                   <div className="block">
-                    <span className="label">Company logo <span className="text-rose-600" aria-hidden="true">*</span></span>
+                    <span className="label">Company logo <span className="font-normal text-soft">(optional, you can add it later)</span></span>
                     <input
                       ref={logoInputRef}
                       type="file"
@@ -269,7 +265,6 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
             <button
               className="btn-primary !h-10 w-full !text-sm"
               disabled={submitDisabled}
-              title={mode === "register" && kind === "OWNER" && !logoDataUrl ? "Upload a company logo first" : undefined}
             >
               {pending ? "Working…" : mode === "login" ? "Sign in" : kind === "OWNER" ? "Create workspace" : "Create account"}
             </button>
