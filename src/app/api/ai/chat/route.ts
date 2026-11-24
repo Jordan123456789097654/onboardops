@@ -9,6 +9,7 @@ import { getActiveMembership } from "@/lib/auth";
 import { entries as changelog } from "@/lib/changelog";
 import { getSupportConfig, hoursStatus } from "@/lib/support-config";
 import { bumpDaily } from "@/lib/support";
+import { clientIp, hit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -274,6 +275,18 @@ export async function POST(req: Request) {
       { error: "The website assistant is not available right now. Browse /support for help." },
       { status: 503 }
     );
+  }
+
+  // Abuse and cost protection. Normal visitors ask a handful of questions, so these are generous for people and hard on bots.
+  if (Number(req.headers.get("content-length") ?? 0) > 24_000) {
+    return NextResponse.json({ error: "That message is too large." }, { status: 413 });
+  }
+  const wait = await hit(`ai-chat:ip:${clientIp(req.headers)}`, 60, 3600);
+  if (wait) {
+    return NextResponse.json({ error: "You've asked a lot of questions in a short time. Please try again a bit later, or talk to a person." }, { status: 429, headers: { "Retry-After": String(wait) } });
+  }
+  if (await hit("ai-chat:global-day", 6000, 86400)) {
+    return NextResponse.json({ error: "The assistant has reached its daily limit. Browse /support or talk to a person." }, { status: 503 });
   }
 
   const rawBody = await req.json().catch(() => null);

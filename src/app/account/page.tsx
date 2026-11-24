@@ -30,8 +30,8 @@ export default async function AccountPage({ searchParams }: { searchParams: { ne
           me={{ id: user.id, name: user.name, nickname: user.nickname ?? "", email: user.email, verified: !!user.emailVerifiedAt, avatarUrl: user.avatarUrl, hasPassword: !!user.passwordSetAt, createdAt: user.createdAt.toISOString() }}
           sessions={sessions.map((s) => ({ id: s.id, device: s.device, ip: s.ip, at: s.lastSeenAt.toISOString(), current: s.id === sid }))}
           extras={extras.map((e) => ({ id: e.id, email: e.email, verified: !!e.verifiedAt }))}
-          mfa={{ enabled: !!user.totpEnabledAt, backupLeft, hasPassword: !!user.passwordSetAt, requiredBy: required?.workspace.name ?? null }}
-          need2fa={searchParams.need2fa === "1"}
+          mfa={{ enabled: !!user.totpEnabledAt, backupLeft, hasPassword: !!user.passwordSetAt, requiredBy: searchParams.need2fa === "staff" ? "The staff console" : required?.workspace.name ?? null }}
+          need2fa={searchParams.need2fa === "1" || searchParams.need2fa === "staff"}
           oauth={{ providers: PROVIDERS.map((p) => { const l = linked.find((x) => x.provider === p); return { provider: p, label: providerLabel[p], configured: isConfigured(p), connected: l ? { email: l.email, since: l.createdAt.toISOString() } : null }; }), canUnlink: !!user.passwordSetAt || linked.length > 1, notice: searchParams.oauth, error: searchParams.oauth_error ? OAUTH_ERRORS[searchParams.oauth_error] ?? OAUTH_ERRORS.exchange : undefined }}
         />
         <NotifyPrefs quietStart={user.quietStart ?? null} quietEnd={user.quietEnd ?? null} timezone={user.timezone ?? ""} prefs={(user.emailPrefs ?? {}) as Record<string, boolean>} />

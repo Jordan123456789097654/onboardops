@@ -22,7 +22,7 @@ export async function unmetPrerequisites(db: Db, p: { workspaceId: string; emplo
   const done = new Set(passed.map((x) => x.courseId));
   const missing = ids.filter((id) => !done.has(id));
   if (missing.length === 0) return [];
-  return db.course.findMany({ where: { id: { in: missing } }, select: { id: true, title: true } });
+  return db.course.findMany({ where: { id: { in: missing }, workspaceId: p.workspaceId }, select: { id: true, title: true } });
 }
 
 /** A fair shuffle (Fisher-Yates) using a cryptographic random source. */

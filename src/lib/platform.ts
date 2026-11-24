@@ -8,24 +8,39 @@ import { resolvePlatformRole, type PlatformRole } from "./platform-role";
 
 export type Staff = { id: string; name: string; email: string; role: PlatformRole };
 
+/**
+ * The signed-in staff member, or null. Staff must have two-step sign-in turned on: with it off they get no staff access at all,
+ * so a stolen staff password alone is never enough to reach the console.
+ */
 export async function getStaff(): Promise<Staff | null> {
   const u = await getCurrentUser();
   if (!u) return null;
   const role = resolvePlatformRole(u);
-  return role ? { id: u.id, name: u.name, email: u.email, role } : null;
+  if (!role || !u.totpEnabledAt) return null;
+  return { id: u.id, name: u.name, email: u.email, role };
 }
+
+const NEEDS_2FA = "Turn on two-step sign-in in your account to use the staff console.";
 
 /** For server actions: throws unless the caller is staff with one of the allowed roles. */
 export async function requireStaff(allowed: PlatformRole[]): Promise<Staff> {
   const s = await getStaff();
+  if (!s) {
+    const u = await getCurrentUser();
+    if (u && resolvePlatformRole(u) && !u.totpEnabledAt) throw new AuthzError(NEEDS_2FA);
+  }
   if (!s || !allowed.includes(s.role)) throw new AuthzError("You do not have access to the staff console.");
   return s;
 }
 
-/** For pages: redirects non-staff away. */
+/** For pages: redirects non-staff away, and staff without two-step sign-in to set it up. */
 export async function requireStaffPage(allowed: PlatformRole[]): Promise<Staff> {
   const s = await getStaff();
-  if (!s) redirect("/login");
+  if (!s) {
+    const u = await getCurrentUser();
+    if (u && resolvePlatformRole(u) && !u.totpEnabledAt) redirect("/account?need2fa=staff");
+    redirect("/login");
+  }
   if (!allowed.includes(s.role)) redirect(s.role === "VIEWER" ? "/admin" : "/admin");
   return s;
 }

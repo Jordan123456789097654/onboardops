@@ -59,6 +59,13 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    if (isApiRole) return [];
+    return [
+      { source: "/.well-known/security.txt", destination: "/api/security-txt" },
+      { source: "/security.txt", destination: "/api/security-txt" },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

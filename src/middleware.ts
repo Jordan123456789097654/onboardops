@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { edgeLimit } from "@/lib/edge-limit";
 import { cleanHost, isMainHost, MARKETING_PREFIXES } from "@/lib/host-shared";
 import { getApiOrigin, isApiService, resolveApiHostPath, webRedirectPathForApi } from "@/lib/service-role";
 
@@ -20,6 +21,10 @@ function applyCors(res: NextResponse) {
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const host = cleanHost(req.headers.get("x-forwarded-host") || req.headers.get("host"));
+
+  // First line of defense against floods: a cheap in-memory limit on every API route, before any database work.
+  const limited = edgeLimit(req, pathname, isApiService(host));
+  if (limited) return limited;
 
   // Dedicated API deployment (SERVICE_ROLE=api or api.onboardops.org): serve only moved API routes.
   if (isApiService(host)) {

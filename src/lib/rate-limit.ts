@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { prisma } from "./prisma";
+import { trustedClientIp } from "./client-ip";
 
 export class RateLimitError extends Error {
   retryAfter: number;
@@ -11,7 +12,7 @@ export class RateLimitError extends Error {
 
 export function clientIp(h?: Headers): string {
   const hh = h ?? headers();
-  return (hh.get("x-forwarded-for") ?? hh.get("x-real-ip") ?? "unknown").split(",")[0].trim().slice(0, 64) || "unknown";
+  return trustedClientIp((n) => hh.get(n));
 }
 
 /**

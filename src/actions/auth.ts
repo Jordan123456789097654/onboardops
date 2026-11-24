@@ -17,6 +17,7 @@ import { emails, sendEmail } from "@/lib/email";
 import { enforceRate } from "@/lib/rate-limit";
 import { autoClaimSubdomain, subdomainHost } from "@/lib/subdomain";
 import { parseLogoDataUrl } from "@/lib/logo";
+import { rejectBreachedPassword } from "@/lib/pwned";
 import { run, type Result } from "./_util";
 
 const loginSchema = z.object({ email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") });
@@ -82,6 +83,7 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     if (d.accountType === "OWNER" && d.logoDataUrl) parsedLogo = parseLogoDataUrl(d.logoDataUrl);
     const email = d.email.toLowerCase();
     if (await emailTaken(email)) throw new Error("An account with that email already exists. Sign in instead.");
+    await rejectBreachedPassword(d.password);
     const passwordHash = await hashPassword(d.password);
 
     if (d.accountType === "EMPLOYEE") {
@@ -192,6 +194,7 @@ export async function resetPasswordAction(input: unknown): Promise<Result<{ to: 
     const d = z.object({ token: z.string().min(10), password: z.string().min(8, "Password must be at least 8 characters") }).parse(input);
     const t = await findValidToken(d.token);
     if (!t) throw new Error("This link is invalid or has expired. Request a new one.");
+    await rejectBreachedPassword(d.password);
     const passwordHash = await hashPassword(d.password);
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: t.userId }, data: { passwordHash, passwordChangedAt: new Date(), passwordSetAt: new Date(), failedLogins: 0, lockedUntil: null, emailVerifiedAt: t.user.emailVerifiedAt ?? new Date() } });

@@ -7,6 +7,7 @@ import { createToken } from "@/lib/tokens";
 import { emails, sendEmail } from "@/lib/email";
 import { emailTaken, norm } from "@/lib/user-emails";
 import { OPTIONAL_EMAIL_KINDS } from "@/lib/notify-prefs";
+import { rejectBreachedPassword } from "@/lib/pwned";
 import { run } from "./_util";
 
 async function me() {
@@ -66,6 +67,7 @@ export async function changePasswordAction(input: unknown) {
       if (!(await verifyPassword(d.current, u.passwordHash))) throw new Error("Your current password is incorrect.");
     }
     if (d.current && d.current === d.next) throw new Error("Choose a password you have not used just now.");
+    await rejectBreachedPassword(d.next);
     await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(d.next), passwordSetAt: new Date(), passwordChangedAt: new Date(), failedLogins: 0, lockedUntil: null } });
     await createSession(u.id); // keeps this device signed in; every other device is signed out
     done();

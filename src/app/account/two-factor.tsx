@@ -24,7 +24,7 @@ export function TwoFactor({ mfa, need2fa }: { mfa: MfaState; need2fa: boolean })
     <section className="card mt-5 p-5" id="2fa">
       <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold">Two-factor authentication</h2>{mfa.enabled ? <Badge value="PASSED" label="On" /> : <Badge value="PENDING" label="Off" />}</div>
       <p className="mt-0.5 text-[13px] text-soft">Adds a 6-digit code from an authenticator app to every sign-in, so a stolen password is not enough.</p>
-      {need2fa && !mfa.enabled && <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">{mfa.requiredBy ?? "Your workspace"} requires two-factor authentication. Turn it on below, then go back to your workspace.</p>}
+      {need2fa && !mfa.enabled && <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">{mfa.requiredBy ?? "Your workspace"} requires two-factor authentication. Turn it on below, then go back.</p>}
       <div className="mt-4 space-y-4 text-[13px]">
         {codes ? (
           <div>
