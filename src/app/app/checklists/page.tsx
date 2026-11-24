@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/perms";
-import { requirePageRole, STAFF_ROLES, MANAGEMENT_ROLES } from "@/lib/rbac";
+import { requirePageRole, STAFF_ROLES } from "@/lib/rbac";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
 import { Checklists } from "./checklists";
 
 export const metadata = { title: "Shift Checklists" };
+export const maxDuration = 60;
 
 export default async function ChecklistsPage() {
   const ctx = await requirePageRole(STAFF_ROLES);
@@ -15,6 +18,7 @@ export default async function ChecklistsPage() {
   return (
     <Checklists
       canEdit={can(ctx, "checklists.manage")}
+      ai={aiConfigured() && featureOn(ctx.workspace.features, "ai")}
       departments={departments.map((d) => ({ id: d.id, name: d.name }))}
       templates={templates.map((t) => ({ id: t.id, title: t.title, shiftType: t.shiftType, departmentId: t.departmentId ?? "", scheduleDays: t.scheduleDays, dueTime: t.dueTime ?? "", department: t.department?.name ?? "All departments", items: t.items as { id: string; label: string; required: boolean }[] }))}
       submissions={subs.map((s) => {

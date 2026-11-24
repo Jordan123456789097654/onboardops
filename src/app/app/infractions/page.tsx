@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, STAFF_ROLES, serializeInfraction, canSeeConfidential, canIssueSeverity } from "@/lib/rbac";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
+import { careOpen } from "@/lib/ai/guard";
 import { Ledger, type CaseRow } from "./ledger";
 
 export const metadata = { title: "Infractions" };
+export const maxDuration = 60;
 
 export default async function Infractions({ searchParams }: { searchParams: { log?: string } }) {
   const ctx = await requirePageRole(STAFF_ROLES);
@@ -24,5 +28,6 @@ export default async function Infractions({ searchParams }: { searchParams: { lo
     };
   });
   const severities = (["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"] as const).filter((s) => canIssueSeverity(ctx.role, s));
-  return <Ledger rows={rows} employees={employees.map((e) => ({ id: e.id, label: `${e.staffCode} ${e.fullName}` }))} templates={templates.map((t) => ({ id: t.id, name: t.name, severity: t.severity, points: t.points, policy: t.policy, summary: t.summary }))} severities={[...severities]} rules={rules.map((r) => ({ id: r.id, whenSeverity: r.whenSeverity, count: r.count, withinDays: r.withinDays, escalateTo: r.escalateTo }))} isAdmin={["OWNER", "ADMIN"].includes(ctx.role)} canConfidential={canSeeConfidential(ctx.role)} defaultOpen={searchParams.log === "1"} />;
+  const aiCare = aiConfigured() && featureOn(ctx.workspace.features, "ai") && featureOn(ctx.workspace.features, "aiPeople") && careOpen();
+  return <Ledger rows={rows} employees={employees.map((e) => ({ id: e.id, label: `${e.staffCode} ${e.fullName}` }))} templates={templates.map((t) => ({ id: t.id, name: t.name, severity: t.severity, points: t.points, policy: t.policy, summary: t.summary }))} severities={[...severities]} rules={rules.map((r) => ({ id: r.id, whenSeverity: r.whenSeverity, count: r.count, withinDays: r.withinDays, escalateTo: r.escalateTo }))} isAdmin={["OWNER", "ADMIN"].includes(ctx.role)} canConfidential={canSeeConfidential(ctx.role)} aiCare={aiCare} defaultOpen={searchParams.log === "1"} />;
 }

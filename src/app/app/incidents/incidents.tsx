@@ -1,15 +1,20 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { convertIncidentAction, updateIncidentAction } from "@/actions/incidents";
-import { Badge, Drawer, Empty, Field, PageHeader, useAction } from "@/components/ui";
+import { runAiTaskAction } from "@/actions/ai";
+import { Badge, Drawer, Empty, Field, PageHeader, useAction, useToast } from "@/components/ui";
 import { fmtDateTime } from "@/lib/utils";
 
 type Row = { id: string; type: string; status: string; at: string; filedAt: string; location: string; description: string; by: string; notes: string; caseNumber: string | null; anonymous: boolean; photos: string[]; investigatorId: string; investigator: string; due: string; injury: { bodyPart?: string; treatment?: string; daysAway?: number } };
 const tone: Record<string, string> = { NEW: "PENDING", REVIEWING: "IN_PROGRESS", CLOSED: "PASSED", CONVERTED: "WRITTEN_INFRACTION" };
 
-export function Incidents({ rows, employees, members = [], severities, canManage }: { members?: { id: string; name: string }[]; rows: Row[]; employees: { id: string; label: string }[]; severities: string[]; canManage: boolean }) {
+type AiIncidentDraft = { target: "reviewer_notes" | "case_summary"; rewritten: string; followUpChecklist: string[]; flags: string[] };
+
+export function Incidents({ rows, employees, members = [], severities, canManage, aiCare = false }: { members?: { id: string; name: string }[]; rows: Row[]; employees: { id: string; label: string }[]; severities: string[]; canManage: boolean; aiCare?: boolean }) {
   const router = useRouter();
+  const toast = useToast();
   const { exec, pending } = useAction();
   const [status, setStatus] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -17,9 +22,33 @@ export function Incidents({ rows, employees, members = [], severities, canManage
   const [conv, setConv] = useState(false);
   const [inv, setInv] = useState({ investigatorMemberId: "", investigationDue: "", bodyPart: "", treatment: "", daysAway: 0 });
   const [f, setF] = useState({ employeeId: "", severity: severities[0] ?? "VERBAL_WARNING", pointsAdded: 0, policyViolated: "", summary: "", confidentialManagerNotes: "" });
+  const [aiDraft, setAiDraft] = useState<AiIncidentDraft | null>(null);
   const shown = useMemo(() => rows.filter((r) => !status || r.status === status), [rows, status]);
   const open = rows.find((r) => r.id === openId) ?? null;
-  const select = (r: Row) => { setOpenId(r.id); setNotes(r.notes); setInv({ investigatorMemberId: r.investigatorId, investigationDue: r.due, bodyPart: r.injury.bodyPart ?? "", treatment: r.injury.treatment ?? "", daysAway: r.injury.daysAway ?? 0 }); setConv(false); setF((x) => ({ ...x, summary: r.description, policyViolated: "" })); };
+  const select = (r: Row) => { setOpenId(r.id); setNotes(r.notes); setAiDraft(null); setInv({ investigatorMemberId: r.investigatorId, investigationDue: r.due, bodyPart: r.injury.bodyPart ?? "", treatment: r.injury.treatment ?? "", daysAway: r.injury.daysAway ?? 0 }); setConv(false); setF((x) => ({ ...x, summary: r.description, policyViolated: "" })); };
+
+  const runIncidentAi = (target: "reviewer_notes" | "case_summary") => {
+    if (!open) return;
+    const empName = employees.find((e) => e.id === f.employeeId)?.label.replace(/^EMP-\d+\s*/i, "");
+    const names = [open.by, open.investigator, empName].filter((x): x is string => !!x && x !== "Anonymous");
+    exec(
+      () =>
+        runAiTaskAction("incident.rewrite", {
+          incidentType: open.type,
+          location: open.location || undefined,
+          description: target === "case_summary" ? (f.summary || open.description) : open.description,
+          reviewerNotes: notes || undefined,
+          target,
+          names,
+        }) as Promise<{ ok: true; data: { rewritten: string; followUpChecklist: string[]; flags: string[] } } | { ok: false; error: string }>,
+      {
+        onOk: (res) => {
+          setAiDraft({ target, ...res });
+          toast("ok", "Neutral summary ready — review before applying.");
+        },
+      }
+    );
+  };
 
   return (
     <>
@@ -61,6 +90,37 @@ export function Incidents({ rows, employees, members = [], severities, canManage
                   </div>
                 )}
                 <Field label="Reviewer notes (internal)"><textarea className="textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+                {aiCare && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button type="button" className="btn !h-7 !text-xs" disabled={pending} onClick={() => runIncidentAi("reviewer_notes")}>
+                        <Sparkles className="h-3.5 w-3.5 text-accent" />{pending ? "Drafting…" : "Structure & neutralize with AI"}
+                      </button>
+                      <span className="text-[11px] text-soft">Names &amp; contact details scrubbed before AI. Draft only.</span>
+                    </div>
+                    {aiDraft && aiDraft.target === "reviewer_notes" && (
+                      <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/5 p-3 text-xs">
+                        <div className="flex items-center justify-between gap-2 font-semibold">
+                          <span className="inline-flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-accent" />Structured review draft</span>
+                          <button type="button" className="font-normal text-soft underline" onClick={() => setAiDraft(null)}>Discard</button>
+                        </div>
+                        <p className="whitespace-pre-wrap rounded border border-line bg-surface p-2.5 text-[13px] text-ink">{aiDraft.rewritten}</p>
+                        {aiDraft.followUpChecklist.length > 0 && (
+                          <div>
+                            <div className="font-medium text-soft">Suggested investigator follow-ups:</div>
+                            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-soft">{aiDraft.followUpChecklist.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                          </div>
+                        )}
+                        {aiDraft.flags.length > 0 && (
+                          <ul className="list-disc space-y-0.5 pl-4 text-amber-800 dark:text-amber-300">{aiDraft.flags.map((fl, i) => <li key={i}>{fl}</li>)}</ul>
+                        )}
+                        <button type="button" className="btn-primary !h-8 w-full text-xs" onClick={() => { setNotes(aiDraft.rewritten); setAiDraft(null); toast("ok", "Applied draft to reviewer notes."); }}>
+                          Apply to reviewer notes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {(["REVIEWING", "CLOSED"] as const).map((s) => <button key={s} className="btn" disabled={pending} onClick={() => exec(() => updateIncidentAction(open.id, { status: s, reviewerNotes: notes, investigatorMemberId: inv.investigatorMemberId, investigationDue: inv.investigationDue, ...(open.type === "INJURY" ? { injury: { bodyPart: inv.bodyPart, treatment: inv.treatment, daysAway: inv.daysAway } } : {}) }), { success: `Marked ${s.toLowerCase()}`, onOk: () => router.refresh() })}>{s === "REVIEWING" ? "Start review" : "Close"}</button>)}
                   <button className="btn-primary" onClick={() => setConv(!conv)}>Turn into a case</button>
@@ -72,6 +132,28 @@ export function Incidents({ rows, employees, members = [], severities, canManage
                     <div className="grid grid-cols-2 gap-3"><Field label="Severity"><select className="input" value={f.severity} onChange={(e) => setF({ ...f, severity: e.target.value })}>{severities.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></Field><Field label="Strike points"><input className="input mono" type="number" min={0} value={f.pointsAdded} onChange={(e) => setF({ ...f, pointsAdded: Number(e.target.value) })} /></Field></div>
                     <Field label="Policy violated"><input className="input" value={f.policyViolated} onChange={(e) => setF({ ...f, policyViolated: e.target.value })} /></Field>
                     <Field label="Summary (visible to the employee)"><textarea className="textarea" rows={3} value={f.summary} onChange={(e) => setF({ ...f, summary: e.target.value })} /></Field>
+                    {aiCare && (
+                      <div className="space-y-2">
+                        <button type="button" className="btn !h-7 !text-xs" disabled={pending || (f.summary || open.description).trim().length < 10} onClick={() => runIncidentAi("case_summary")}>
+                          <Sparkles className="h-3.5 w-3.5 text-accent" />{pending ? "Rewriting…" : "Rewrite case summary neutrally with AI"}
+                        </button>
+                        {aiDraft && aiDraft.target === "case_summary" && (
+                          <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/5 p-3 text-xs">
+                            <div className="flex items-center justify-between gap-2 font-semibold">
+                              <span className="inline-flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-accent" />Neutral case summary draft</span>
+                              <button type="button" className="font-normal text-soft underline" onClick={() => setAiDraft(null)}>Discard</button>
+                            </div>
+                            <p className="whitespace-pre-wrap rounded border border-line bg-surface p-2.5 text-[13px] text-ink">{aiDraft.rewritten}</p>
+                            {aiDraft.flags.length > 0 && (
+                              <ul className="list-disc space-y-0.5 pl-4 text-amber-800 dark:text-amber-300">{aiDraft.flags.map((fl, i) => <li key={i}>{fl}</li>)}</ul>
+                            )}
+                            <button type="button" className="btn-primary !h-8 w-full text-xs" onClick={() => { setF({ ...f, summary: aiDraft.rewritten }); setAiDraft(null); toast("ok", "Applied neutral summary."); }}>
+                              Use this summary
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <Field label="Confidential manager notes"><textarea className="textarea" rows={2} value={f.confidentialManagerNotes} onChange={(e) => setF({ ...f, confidentialManagerNotes: e.target.value })} /></Field>
                     <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => convertIncidentAction(open.id, { ...f, pointsAdded: Number(f.pointsAdded) }), { success: "Case created", onOk: () => { setConv(false); router.refresh(); } })}>Create case</button>
                   </div>

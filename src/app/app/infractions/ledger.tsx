@@ -1,8 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { addCaseAttachmentAction, applyStrikeDecayAction, decideAppealAction, deleteDisciplineRuleAction, saveDisciplineRuleAction } from "@/actions/discipline2";
 import { addCaseNoteAction, issueInfractionAction, logAppealAction } from "@/actions/infractions";
+import { runAiTaskAction } from "@/actions/ai";
 import { Badge, Drawer, Empty, Field, Modal, PageHeader, useAction, useToast } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 
@@ -17,7 +19,9 @@ export type CaseRow = {
 type RuleRow = { id: string; whenSeverity: string; count: number; withinDays: number; escalateTo: string };
 type TemplateOpt = { id: string; name: string; severity: string; points: number; policy: string; summary: string };
 
-export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = false, severities, canConfidential, defaultOpen }: { rules?: RuleRow[]; isAdmin?: boolean; rows: CaseRow[]; employees: { id: string; label: string }[]; templates?: TemplateOpt[]; severities: string[]; canConfidential: boolean; defaultOpen: boolean }) {
+type AiRewriteDraft = { policyViolated: string; summary: string; coachingTip: string; flags: string[] };
+
+export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = false, severities, canConfidential, aiCare = false, defaultOpen }: { rules?: RuleRow[]; isAdmin?: boolean; rows: CaseRow[]; employees: { id: string; label: string }[]; templates?: TemplateOpt[]; severities: string[]; canConfidential: boolean; aiCare?: boolean; defaultOpen: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -35,6 +39,26 @@ export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = 
   const [rule, setRule] = useState({ whenSeverity: "VERBAL_WARNING", count: 3, withinDays: 90, escalateTo: "WRITTEN_INFRACTION" });
   const SEVS = ["VERBAL_WARNING", "WRITTEN_INFRACTION", "STRIKE_POINTS", "SUSPENSION", "TERMINATION"];
   const [f, setF] = useState({ employeeId: "", severity: severities[0] ?? "VERBAL_WARNING", pointsAdded: 0, policyViolated: "", summary: "", evidence: "", confidentialManagerNotes: "" });
+  const [aiDraft, setAiDraft] = useState<AiRewriteDraft | null>(null);
+
+  const rewriteNeutrally = () => {
+    const selectedEmp = employees.find((e) => e.id === f.employeeId)?.label.replace(/^EMP-\d+\s*/i, "");
+    exec(
+      () =>
+        runAiTaskAction("infraction.rewrite", {
+          notes: f.summary,
+          policy: f.policyViolated || undefined,
+          severity: f.severity,
+          employeeName: selectedEmp || undefined,
+        }) as Promise<{ ok: true; data: AiRewriteDraft } | { ok: false; error: string }>,
+      {
+        onOk: (res) => {
+          setAiDraft(res);
+          toast("ok", "Neutral rewrite ready — review before applying.");
+        },
+      }
+    );
+  };
 
   const shown = useMemo(() => rows.filter((r) => (!q || (r.caseNumber + r.employee + r.policy).toLowerCase().includes(q.toLowerCase())) && (!sev || r.severity === sev) && (!ack || (ack === "yes") === r.acknowledged)), [rows, q, sev, ack]);
   const open = rows.find((r) => r.id === openId) ?? null;
@@ -94,7 +118,59 @@ export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = 
             <Field label="Strike points"><input className="input mono" type="number" min={0} max={20} value={f.pointsAdded} onChange={(e) => setF({ ...f, pointsAdded: Number(e.target.value) })} /></Field>
           </div>
           <Field label="Policy violated"><input className="input" value={f.policyViolated} onChange={(e) => setF({ ...f, policyViolated: e.target.value })} placeholder="e.g. Attendance, Policy 2.1" /></Field>
-          <Field label="What happened (visible to the employee)"><textarea className="textarea" rows={4} value={f.summary} onChange={(e) => setF({ ...f, summary: e.target.value })} /></Field>
+          <Field label="What happened (visible to the employee)"><textarea className="textarea" rows={4} value={f.summary} onChange={(e) => setF({ ...f, summary: e.target.value })} placeholder="Type rough factual notes or what happened…" /></Field>
+          {aiCare && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="btn !h-7 !text-xs"
+                  disabled={pending || f.summary.trim().length < 15}
+                  onClick={rewriteNeutrally}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-accent" />{pending ? "Rewriting…" : "Rewrite neutrally with AI"}
+                </button>
+                <span className="text-[11px] text-soft">Names &amp; contact details are scrubbed first. Human review required.</span>
+              </div>
+              {aiDraft && (
+                <div className="rounded-lg border border-accent/40 bg-accent/5 p-3 text-xs space-y-2">
+                  <div className="flex items-center justify-between gap-2 font-semibold">
+                    <span className="inline-flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-accent" />Neutral HR draft (review before applying)</span>
+                    <button type="button" className="font-normal text-soft underline" onClick={() => setAiDraft(null)}>Discard</button>
+                  </div>
+                  <p className="whitespace-pre-wrap rounded border border-line bg-surface p-2.5 text-[13px] text-ink">{aiDraft.summary}</p>
+                  {aiDraft.policyViolated && !f.policyViolated.trim() && (
+                    <div className="text-soft">Suggested policy: <span className="font-medium text-ink">{aiDraft.policyViolated}</span></div>
+                  )}
+                  {aiDraft.flags.length > 0 && (
+                    <ul className="list-disc space-y-0.5 pl-4 text-soft">
+                      {aiDraft.flags.map((fl, i) => <li key={i}>{fl}</li>)}
+                    </ul>
+                  )}
+                  {aiDraft.coachingTip && (
+                    <div className="rounded border border-amber-400/40 bg-amber-500/10 px-2.5 py-1.5 text-amber-950 dark:text-amber-200">
+                      <b>1:1 conversation tip (not saved to case):</b> {aiDraft.coachingTip}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-primary !h-8 w-full text-xs"
+                    onClick={() => {
+                      setF({
+                        ...f,
+                        summary: aiDraft.summary,
+                        policyViolated: f.policyViolated.trim() ? f.policyViolated : aiDraft.policyViolated,
+                      });
+                      setAiDraft(null);
+                      toast("ok", "Applied draft to write-up.");
+                    }}
+                  >
+                    Use this wording
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <Field label="Evidence links (one per line)"><textarea className="textarea mono" rows={2} value={f.evidence} onChange={(e) => setF({ ...f, evidence: e.target.value })} /></Field>
           {canConfidential && <Field label="Confidential manager notes (never shown to the employee)"><textarea className="textarea" rows={3} value={f.confidentialManagerNotes} onChange={(e) => setF({ ...f, confidentialManagerNotes: e.target.value })} /></Field>}
           <button className="btn-primary w-full" disabled={pending} onClick={submit}>{pending ? "Logging…" : "Log infraction"}</button>

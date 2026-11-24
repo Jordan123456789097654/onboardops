@@ -136,4 +136,147 @@ export const lessonClarity: TaskDef<{ lessons: z.infer<typeof LessonIn>[] }, { s
   user: (i) => `Review these lessons.\n${doc(lessonsText(i.lessons))}`,
 };
 
-export const TASKS: Record<string, TaskDef<any, any>> = Object.fromEntries([courseDraft, policyLesson, quizMore, quizOptions, lessonSimplify, courseTranslate, courseMeta, lessonClarity].map((t) => [t.id, t]));
+export const policyDraft: TaskDef<
+  { topic: string; bullets: string; businessType?: string; tone: "friendly" | "standard" | "formal" },
+  { title: string; description: string; contentMarkdown: string }
+> = {
+  id: "policy.draft",
+  label: "Draft a workplace policy",
+  risk: "low",
+  tier: "smart",
+  perm: "policies.manage",
+  maxTokens: 4500,
+  effort: "medium",
+  input: z.object({
+    topic: z.string().trim().min(2, "Enter a policy topic").max(140),
+    bullets: z.string().trim().min(15, "Add at least a few bullet points or rules you want included").max(12000),
+    businessType: z.string().trim().max(120).optional(),
+    tone: z.enum(["friendly", "standard", "formal"]).default("standard"),
+  }),
+  output: z.object({
+    title: z.string().trim().min(3).max(140),
+    description: z.string().trim().max(320).default(""),
+    contentMarkdown: z.string().trim().min(80).max(14000),
+  }),
+  shape: `{"title": "Attendance & Punctuality Policy", "description": "One-sentence summary of what this policy covers", "contentMarkdown": "## Purpose\\n..."}`,
+  system:
+    "Draft a clear, practical workplace policy in Markdown that employees can read and sign. Use clean ## section headings (such as Purpose, Scope, Expectations, Procedures, Exceptions & Reporting, and Accountability) and concise bullet lists. Include ONLY rules, numbers, notice periods, and procedures grounded in the manager's notes; use bracketed placeholders like [insert hours] if a key operational number was not provided rather than inventing one. Never cite statutes, labor laws, or give legal advice.",
+  user: (i) => {
+    const toneDesc =
+      i.tone === "friendly"
+        ? "warm, approachable, plain English"
+        : i.tone === "formal"
+          ? "structured, formal handbook style"
+          : "clear, direct, everyday workplace English";
+    return `Draft a workplace policy about "${i.topic}"${i.businessType ? ` for a ${i.businessType}` : ""} in a ${toneDesc} tone based on these notes.\n${doc(i.bullets)}`;
+  },
+};
+
+const ShiftType = z.enum(["OPENING", "MID_SHIFT", "CLOSING"]);
+export const checklistDraft: TaskDef<
+  { prompt: string; shiftType: z.infer<typeof ShiftType>; itemCount: number },
+  { title: string; shiftType: z.infer<typeof ShiftType>; suggestedDueTime: string; items: { label: string; required: boolean }[] }
+> = {
+  id: "checklist.draft",
+  label: "Generate a shift checklist",
+  risk: "low",
+  tier: "fast",
+  perm: "checklists.manage",
+  maxTokens: 2200,
+  input: z.object({
+    prompt: z.string().trim().min(10, "Describe the shift, space, or equipment to cover").max(4000),
+    shiftType: ShiftType.default("OPENING"),
+    itemCount: z.coerce.number().int().min(4).max(25).default(10),
+  }),
+  output: z.object({
+    title: z.string().trim().min(3).max(100),
+    shiftType: ShiftType,
+    suggestedDueTime: z.string().trim().regex(/^$|^\d{2}:\d{2}$/).default(""),
+    items: z.array(z.object({ label: z.string().trim().min(3).max(180), required: z.boolean().default(true) })).min(3).max(25),
+  }),
+  shape: `{"title": "Closing Shift Checklist", "shiftType": "CLOSING", "suggestedDueTime": "22:00", "items": [{"label": "Count register drawer and seal deposit bag", "required": true}]}`,
+  system:
+    "Create an actionable, chronological shift checklist for frontline staff. Each item must start with a clear action verb, be specific and verifiable (something a worker can check off and a supervisor can verify), and fit on one line. Mark safety, security, cash, and sanitation steps as required: true; mark nice-to-have prep/stocking tasks as required: false. Only set suggestedDueTime (24-hour HH:MM) if the description mentions a time; otherwise leave it as an empty string.",
+  user: (i) => `Create a ${i.shiftType.replace("_", " ").toLowerCase()} checklist with about ${i.itemCount} items for this shift:\n${doc(i.prompt)}`,
+};
+
+export const infractionRewrite: TaskDef<
+  { notes: string; policy?: string; severity?: string; employeeName?: string },
+  { policyViolated: string; summary: string; coachingTip: string; flags: string[] }
+> = {
+  id: "infraction.rewrite",
+  label: "Rewrite write-up in neutral HR language",
+  risk: "care",
+  tier: "smart",
+  perm: "staff",
+  maxTokens: 2000,
+  effort: "low",
+  input: z.object({
+    notes: z.string().trim().min(15, "Write at least a sentence of rough notes first").max(8000),
+    policy: z.string().trim().max(140).optional(),
+    severity: z.string().trim().max(40).optional(),
+    employeeName: z.string().trim().max(120).optional(),
+  }),
+  output: z.object({
+    policyViolated: z.string().trim().max(140).default(""),
+    summary: z.string().trim().min(15).max(3000),
+    coachingTip: z.string().trim().max(450).default(""),
+    flags: z.array(z.string().trim().min(3).max(180)).max(5).default([]),
+  }),
+  shape: `{"policyViolated": "Attendance Policy", "summary": "On [date], ...", "coachingTip": "One or two calm sentences for the manager's 1:1 conversation.", "flags": ["Removed subjective wording about attitude", "Consider adding the exact shift start time"]}`,
+  system:
+    "Rewrite a manager's rough notes into a calm, objective, factual workplace write-up that will be shown directly to the employee. Focus strictly on observable actions, stated times/dates, and the policy expectation going forward. Remove emotional language, sarcasm, diagnoses, assumptions about intent/attitude, profanity, and legal conclusions. Never invent dates, times, witnesses, or prior incidents that are not in the notes—if an important factual detail is missing (like date or shift time), note it in flags instead. Keep placeholder tokens like [Person 1], [email], or [phone] verbatim if present. Suggest a concise policyViolated label only if the notes clearly indicate one or one was provided.",
+  user: (i) =>
+    [
+      i.severity ? `Severity selected: ${i.severity.replace(/_/g, " ")}` : "",
+      i.policy ? `Policy field currently says: ${i.policy}` : "",
+      "Manager's rough notes:",
+      doc(i.notes),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+};
+
+export const incidentRewrite: TaskDef<
+  { incidentType: string; location?: string; description: string; reviewerNotes?: string; target: "reviewer_notes" | "case_summary"; names?: string[] },
+  { rewritten: string; followUpChecklist: string[]; flags: string[] }
+> = {
+  id: "incident.rewrite",
+  label: "Structure & neutralize incident summary",
+  risk: "care",
+  tier: "smart",
+  perm: "incidents.review",
+  maxTokens: 2000,
+  effort: "low",
+  input: z.object({
+    incidentType: z.string().trim().min(2).max(40),
+    location: z.string().trim().max(160).optional(),
+    description: z.string().trim().min(10, "Incident description is too short").max(8000),
+    reviewerNotes: z.string().trim().max(8000).optional(),
+    target: z.enum(["reviewer_notes", "case_summary"]).default("reviewer_notes"),
+    names: z.array(z.string().max(120)).max(20).default([]),
+  }),
+  output: z.object({
+    rewritten: z.string().trim().min(15).max(3000),
+    followUpChecklist: z.array(z.string().trim().min(3).max(180)).max(5).default([]),
+    flags: z.array(z.string().trim().min(3).max(180)).max(4).default([]),
+  }),
+  shape: `{"rewritten": "Factual summary...", "followUpChecklist": ["Verify camera footage from loading dock"], "flags": ["No injuries reported; confirm if first aid was declined"]}`,
+  system:
+    "Organize and rewrite workplace incident information into clear, neutral, factual documentation. Use ONLY facts present in the report and manager notes—never speculate about fault, medical diagnoses, legal liability, or OSHA recordability. Keep placeholder tokens like [Person 1], [email], or [phone] verbatim if present. When target is reviewer_notes, write a structured internal review summary (What happened, Immediate actions noted, Open questions) and up to 5 practical follow-up items. When target is case_summary, write an objective, non-punitive conduct summary suitable to show the employee, reminding in flags not to penalize good-faith safety or near-miss reporters.",
+  user: (i) =>
+    [
+      `Incident type: ${i.incidentType}`,
+      i.location ? `Location: ${i.location}` : "",
+      `Target output: ${i.target}`,
+      "Incident report description:",
+      doc(i.description),
+      i.reviewerNotes ? `Manager's current reviewer notes:\n${doc(i.reviewerNotes)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+};
+
+export const TASKS: Record<string, TaskDef<any, any>> = Object.fromEntries(
+  [courseDraft, policyLesson, quizMore, quizOptions, lessonSimplify, courseTranslate, courseMeta, lessonClarity, policyDraft, checklistDraft, infractionRewrite, incidentRewrite].map((t) => [t.id, t])
+);

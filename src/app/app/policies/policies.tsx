@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Paperclip } from "lucide-react";
+import { FileText, Paperclip, Sparkles } from "lucide-react";
 import { savePolicyAction } from "@/actions/policies";
-import { Badge, Empty, Field, Modal, PageHeader, useAction } from "@/components/ui";
+import { runAiTaskAction } from "@/actions/ai";
+import { Badge, Empty, Field, Modal, PageHeader, useAction, useToast } from "@/components/ui";
 import { Bar } from "@/components/motion";
 import { ACCEPT_ATTR } from "@/lib/files-client";
 
@@ -12,13 +13,83 @@ type Draft = { externalUrl: string; id?: string; title: string; description: str
 
 const blank = (): Draft => ({ title: "", description: "", contentMarkdown: "", appliesToAll: true, requiredJobRoleIds: [], publish: true, newVersion: false, externalUrl: "" });
 
-export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: string; title: string }[]; canEdit: boolean }) {
+const POLICY_STARTERS: { label: string; topic: string; bullets: string }[] = [
+  {
+    label: "Attendance & Tardiness",
+    topic: "Attendance & Punctuality",
+    bullets: "- Arrive ready to work at shift start; 5-minute grace period\n- Call or message the shift manager at least 2 hours before shift if sick or running late\n- No-call/no-show is treated as a serious infraction\n- Repeated unexcused absences follow progressive discipline",
+  },
+  {
+    label: "Cash Handling",
+    topic: "Cash Handling & Register Accountability",
+    bullets: "- Count register drawer with a supervisor at start and end of shift\n- Never share register logins or leave cash unattended\n- Variances over $5 must be reported immediately\n- Safe drops required when drawer exceeds $300",
+  },
+  {
+    label: "Workplace Safety",
+    topic: "Workplace Safety & Incident Reporting",
+    bullets: "- Wear required PPE and slip-resistant footwear at all times\n- Keep walkways and emergency exits completely clear\n- Report any hazard, near miss, or injury immediately in My Portal—good-faith safety reports are never punished\n- Do not operate equipment you have not been certified on",
+  },
+  {
+    label: "Cell Phones & Social Media",
+    topic: "Cell Phone Use & Social Media Conduct",
+    bullets: "- Keep personal phones silent and stored away during active floor shifts; breaks only\n- Emergency family calls may be routed through the manager desk\n- Never post photos of customers, confidential records, or back-of-house areas on social media",
+  },
+  {
+    label: "Dress Code & Uniforms",
+    topic: "Dress Code, Uniforms & Hygiene",
+    bullets: "- Clean company shirt/apron, closed-toe non-slip shoes, name badge visible\n- Tie back long hair in food/production areas; follow handwashing standards\n- Ask a manager for replacement gear if uniforms are damaged",
+  },
+  {
+    label: "Opening & Closing Security",
+    topic: "Opening, Closing & Facility Security",
+    bullets: "- Never leave back doors propped open\n- Verify all exterior doors, windows, safes, and alarms before exiting\n- Close in pairs when possible and walk out together after dark\n- Lost keys or access badges must be reported immediately",
+  },
+];
+
+export function Policies({ rows, roles, canEdit, ai = false }: { rows: Row[]; roles: { id: string; title: string }[]; canEdit: boolean; ai?: boolean }) {
   const router = useRouter();
+  const toast = useToast();
   const { exec, pending } = useAction();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const close = () => { setDraft(null); setFile(null); };
+
+  // AI Policy Drafter state
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiBiz, setAiBiz] = useState("");
+  const [aiTone, setAiTone] = useState<"friendly" | "standard" | "formal">("standard");
+  const [aiBullets, setAiBullets] = useState("");
+  const [aiDrafted, setAiDrafted] = useState(false);
+
+  const close = () => { setDraft(null); setFile(null); setAiOpen(false); setAiDrafted(false); };
+  const openNew = (withAi = false) => {
+    setDraft(blank());
+    setAiOpen(withAi);
+    setAiDrafted(false);
+  };
+
+  const generatePolicy = () => {
+    if (!draft) return;
+    exec(
+      () => runAiTaskAction("policy.draft", { topic: aiTopic, bullets: aiBullets, businessType: aiBiz || undefined, tone: aiTone }) as Promise<{ ok: true; data: { title: string; description: string; contentMarkdown: string } } | { ok: false; error: string }>,
+      {
+        onOk: (res) => {
+          setDraft({
+            ...draft,
+            title: res.title,
+            description: res.description,
+            contentMarkdown: res.contentMarkdown,
+            publish: draft.id ? draft.publish : false,
+          });
+          setAiOpen(false);
+          setAiDrafted(true);
+          toast("ok", "Policy draft generated — review before publishing.");
+        },
+      }
+    );
+  };
+
   const save = () => {
     if (!draft) return;
     const fd = new FormData();
@@ -27,12 +98,18 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
     if (file) fd.set("file", file);
     exec(() => savePolicyAction(fd), { success: draft.publish ? "Policy saved. Employees in scope were notified if this needs a new signature." : "Draft saved", onOk: () => { close(); router.refresh(); } });
   };
+
   return (
     <>
       <PageHeader title="Policies" sub="Publish a policy or handbook, assign it to job roles, and track who has signed the current version.">
-        {canEdit && <button className="btn-primary" onClick={() => setDraft(blank())}>New policy</button>}
+        {canEdit && ai && (
+          <button className="btn" onClick={() => openNew(true)}>
+            <Sparkles className="h-3.5 w-3.5 text-accent" />Draft with AI
+          </button>
+        )}
+        {canEdit && <button className="btn-primary" onClick={() => openNew(false)}>New policy</button>}
       </PageHeader>
-      {rows.length === 0 ? <Empty title="No policies yet" hint="Upload a PDF or write the policy text, choose who must sign it, and publish." /> : (
+      {rows.length === 0 ? <Empty title="No policies yet" hint="Upload a PDF, write a policy, or click Draft with AI to generate a policy from bullet points." /> : (
         <div className="space-y-3">
           {rows.map((p) => {
             const pct = p.total ? Math.round((p.signed / p.total) * 100) : 0;
@@ -46,7 +123,7 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
                     {p.externalUrl && <a className="btn" href={p.externalUrl} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />Linked file</a>}
                     {p.fileId && <a className="btn" href={`/api/files/${p.fileId}`} target="_blank" rel="noreferrer"><Paperclip className="h-3.5 w-3.5" />PDF</a>}
                     <button className="btn" onClick={() => setOpen(open === p.id ? null : p.id)}>{p.unsigned.length} unsigned</button>
-                    {canEdit && <button className="btn" onClick={() => setDraft({ id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, appliesToAll: p.appliesToAll, requiredJobRoleIds: p.requiredJobRoleIds, publish: p.isPublished, newVersion: false, fileName: p.fileName, externalUrl: p.externalUrl })}>Edit</button>}
+                    {canEdit && <button className="btn" onClick={() => { setDraft({ id: p.id, title: p.title, description: p.description, contentMarkdown: p.contentMarkdown, appliesToAll: p.appliesToAll, requiredJobRoleIds: p.requiredJobRoleIds, publish: p.isPublished, newVersion: false, fileName: p.fileName, externalUrl: p.externalUrl }); setAiOpen(false); setAiDrafted(false); }}>Edit</button>}
                   </span>
                 </div>
                 {p.description && <p className="mt-1 text-[13px] text-soft">{p.description}</p>}
@@ -60,9 +137,80 @@ export function Policies({ rows, roles, canEdit }: { rows: Row[]; roles: { id: s
       <Modal open={!!draft} onClose={close} title={draft?.id ? "Edit policy" : "New policy"}>
         {draft && (
           <div className="space-y-3">
+            {ai && (
+              <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-[13px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                    <Sparkles className="h-3.5 w-3.5 text-accent" />AI Policy &amp; Handbook Drafter
+                  </span>
+                  <button type="button" className="text-xs text-accent underline" onClick={() => setAiOpen((v) => !v)}>
+                    {aiOpen ? "Hide" : "Draft from bullets"}
+                  </button>
+                </div>
+                {aiOpen && (
+                  <div className="mt-3 space-y-2.5">
+                    <div>
+                      <div className="mb-1 text-[11px] font-medium text-soft">Quick topic starters</div>
+                      <div className="flex flex-wrap gap-1">
+                        {POLICY_STARTERS.map((s) => (
+                          <button
+                            key={s.label}
+                            type="button"
+                            className="btn !h-6 !px-2 !text-[11px]"
+                            onClick={() => { setAiTopic(s.topic); setAiBullets(s.bullets); }}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Field label="Policy topic">
+                        <input className="input" value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="e.g. Attendance & Tardiness" />
+                      </Field>
+                      <Field label="Business type (optional)">
+                        <input className="input" value={aiBiz} onChange={(e) => setAiBiz(e.target.value)} placeholder="e.g. coffee shop, warehouse" />
+                      </Field>
+                    </div>
+                    <Field label="Tone">
+                      <select className="input" value={aiTone} onChange={(e) => setAiTone(e.target.value as typeof aiTone)}>
+                        <option value="friendly">Friendly &amp; approachable</option>
+                        <option value="standard">Clear standard workplace English</option>
+                        <option value="formal">Formal employee handbook</option>
+                      </select>
+                    </Field>
+                    <Field label="Rules & bullet points to include">
+                      <textarea
+                        className="textarea"
+                        rows={4}
+                        value={aiBullets}
+                        onChange={(e) => setAiBullets(e.target.value)}
+                        placeholder="- Call out at least 2 hours before shift&#10;- Keep phones stored during floor shifts&#10;- Report safety hazards right away"
+                      />
+                    </Field>
+                    <button
+                      type="button"
+                      className="btn-primary w-full"
+                      disabled={pending || aiTopic.trim().length < 2 || aiBullets.trim().length < 15}
+                      onClick={generatePolicy}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />{pending ? "Drafting policy…" : "Generate policy draft"}
+                    </button>
+                    <p className="text-[11px] text-soft">Creates an editable draft only—nothing is saved or published until you review it. Not legal advice.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {aiDrafted && (
+              <div className="rounded-md border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-200">
+                AI draft loaded below (saved as Draft by default). Review every rule and replace any <span className="mono">[bracketed]</span> placeholders before ticking Published for staff signatures.
+              </div>
+            )}
+
             <Field label="Title"><input className="input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
             <Field label="Short description"><input className="input" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></Field>
-            <Field label="Policy text (Markdown, optional if you upload a PDF)"><textarea className="textarea" rows={6} value={draft.contentMarkdown} onChange={(e) => setDraft({ ...draft, contentMarkdown: e.target.value })} /></Field>
+            <Field label="Policy text (Markdown, optional if you upload a PDF)"><textarea className="textarea" rows={8} value={draft.contentMarkdown} onChange={(e) => setDraft({ ...draft, contentMarkdown: e.target.value })} /></Field>
             <Field label="Or link a file from Google Drive, SharePoint, Dropbox or Box (optional)"><input className="input mono" placeholder="https://drive.google.com/…" value={draft.externalUrl} onChange={(e) => setDraft({ ...draft, externalUrl: e.target.value })} /></Field>
             <Field label={`PDF or document (max 4 MB)${draft.fileName ? `. Current: ${draft.fileName}` : ""}`}><input type="file" accept={ACCEPT_ATTR} className="text-xs" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
             <div>

@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/perms";
-import { requirePageRole, STAFF_ROLES, MANAGEMENT_ROLES, requirePageRoleFeature } from "@/lib/rbac";
+import { requirePageRoleFeature, STAFF_ROLES } from "@/lib/rbac";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
 import { Policies } from "./policies";
 
 export const metadata = { title: "Policies" };
+export const maxDuration = 60;
 
 export default async function PoliciesPage() {
   const ctx = await requirePageRoleFeature(STAFF_ROLES, "policies");
@@ -22,5 +25,5 @@ export default async function PoliciesPage() {
       unsigned: scope.filter((e) => !signedIds.has(e.id)).map((e) => `${e.staffCode} ${e.fullName}`),
     };
   });
-  return <Policies rows={rows} roles={roles.map((r) => ({ id: r.id, title: r.title }))} canEdit={can(ctx, "policies.manage")} />;
+  return <Policies rows={rows} roles={roles.map((r) => ({ id: r.id, title: r.title }))} canEdit={can(ctx, "policies.manage")} ai={aiConfigured() && featureOn(ctx.workspace.features, "ai")} />;
 }
