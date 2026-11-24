@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { prisma } from "./prisma";
 
 /** Emails that must never carry a reply link: sign-in links, codes, confirmations, and the reply flow's own mail. */
-const NO_REPLY_KINDS = new Set(["login", "signin", "magic-link", "mfa", "verify", "verify-additional", "verify-retry", "recovery", "support-code", "linked", "linked-signin", "newsletter-confirm", "reply-forward", "reply-ack", "admin-test"]);
+const NO_REPLY_KINDS = new Set(["login", "signin", "magic-link", "mfa", "verify", "verify-additional", "verify-retry", "recovery", "support-code", "linked", "linked-signin", "newsletter-confirm", "reply-forward", "reply-ack", "admin-test", "moderation"]);
 const NO_REPLY_SUBJECT = /sign-in link|sign in to|verify your email|verify email|reset your|confirm (this|your)|support code|verification code|your code|backup codes|password (was )?changed|new (device|sign-in)/i;
 
 export const REPLY_URL_MARK = "%%OO_REPLY_URL%%";

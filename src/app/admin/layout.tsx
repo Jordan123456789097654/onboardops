@@ -37,6 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { href: "/admin/support-analytics", label: "Support analytics", icon: "analytics" },
           { href: "/admin/support-settings", label: "Support settings", icon: "settings" },
           { href: "/admin/feedback", label: "Beta feedback", icon: "feedback" },
+          { href: "/admin/moderation", label: "Moderation & appeals", icon: "privacy" },
           { href: "/admin/privacy", label: "Privacy requests", icon: "privacy", badge: openPrivacy, badgeTone: "warn" },
         ],
       },

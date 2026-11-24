@@ -11,7 +11,8 @@ import { MFA_COOKIE, MFA_TTL_SECONDS, signMfaPending, verifyMfaPending, type Mfa
  * If a second factor is needed it sets a short-lived pending cookie instead of a session and says where to send the person.
  */
 export async function beginSession(userId: string, opts: { workspaceId?: string | null; method: MfaPending["method"] }): Promise<{ done: true } | { done: false; to: string }> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpEnabledAt: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpEnabledAt: true, bannedAt: true } });
+  if (user?.bannedAt) return { done: false, to: "/banned" };
   const ws = opts.workspaceId ? await prisma.workspace.findUnique({ where: { id: opts.workspaceId }, select: { require2fa: true, duoConfig: true } }) : null;
   const need = loginRequirement({ totpEnabledAt: user?.totpEnabledAt ?? null }, ws);
   const duoOn = isDuoEnabled(ws);

@@ -147,6 +147,7 @@ export async function suspendWorkspaceAction(input: unknown) {
       await tx.workspace.update({ where: { id: ws.id }, data: { suspendedAt: new Date(), suspendedReason: d.reason } });
       await writeAudit(tx, { workspaceId: ws.id, actorName: "OnboardOps", actionType: "WORKSPACE_LOCKED", targetType: "Workspace", targetId: ws.id, summary: `Workspace locked by OnboardOps. Reason: ${d.reason}` });
       await staffAudit(tx, staff, { action: "WORKSPACE_LOCK", targetType: "Workspace", targetId: ws.id, workspaceId: ws.id, summary: `Locked ${ws.name}. Reason: ${d.reason}` });
+      await tx.moderationCase.create({ data: { targetType: "WORKSPACE", workspaceId: ws.id, action: "SUSPEND", reason: d.reason, actorName: staff.name } });
     });
     for (const o of owners) { const m = emails.workspaceLocked(o.user.name, ws.name, d.reason); await sendEmail(o.user.email, m.subject, m.text, { html: m.html, kind: "workspace-locked", workspaceId: ws.id }); }
     refresh();
@@ -164,6 +165,7 @@ export async function unsuspendWorkspaceAction(workspaceId: string) {
       await tx.workspace.update({ where: { id: ws.id }, data: { suspendedAt: null, suspendedReason: "" } });
       await writeAudit(tx, { workspaceId: ws.id, actorName: "OnboardOps", actionType: "WORKSPACE_UNLOCKED", targetType: "Workspace", targetId: ws.id, summary: "Workspace unlocked by OnboardOps" });
       await staffAudit(tx, staff, { action: "WORKSPACE_UNLOCK", targetType: "Workspace", targetId: ws.id, workspaceId: ws.id, summary: `Unlocked ${ws.name}` });
+      await tx.moderationCase.create({ data: { targetType: "WORKSPACE", workspaceId: ws.id, action: "UNSUSPEND", reason: "Unlocked by staff", actorName: staff.name } });
     });
     for (const o of owners) { const m = emails.workspaceUnlocked(o.user.name, ws.name); await sendEmail(o.user.email, m.subject, m.text, { html: m.html, kind: "workspace-unlocked", workspaceId: ws.id }); }
     refresh();

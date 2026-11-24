@@ -118,6 +118,18 @@ export const emails = {
   report: (name: string, workspace: string, lines: string[]) =>
     mail(`${workspace}: workforce summary`, { icon: "calendar", preheader: "Your workforce summary.", title: "Workforce summary", paragraphs: [`Hi ${name}, here is where ${workspace} stands right now.`], details: lines.map((l) => { const i = l.indexOf(": "); return [l.slice(0, i), l.slice(i + 2)] as [string, string]; }), button: { label: "Open Command Center", url: `${appUrl()}/app/overview` } }),
 
+  accountBanned: (name: string, reason: string) =>
+    mail("Your OnboardOps account has been suspended", { icon: "alert", preheader: "Your account is suspended. You can appeal.", title: "Your account is suspended", paragraphs: [`Hi ${name}, your OnboardOps account has been suspended, so you cannot sign in.`, `Reason: ${reason}`, "If you think this is a mistake, you can appeal and a person will review it."], button: { label: "Appeal this decision", url: `${appUrl()}/appeal` }, note: "Your records are not deleted." }),
+
+  accountUnbanned: (name: string) =>
+    mail("Your OnboardOps account is active again", { icon: "verify", preheader: "Your account has been restored.", title: "Your account is active again", paragraphs: [`Hi ${name}, your OnboardOps account has been restored and you can sign in again.`], button: { label: "Sign in", url: `${appUrl()}/login` } }),
+
+  moderationWarning: (name: string, reason: string) =>
+    mail("A notice about your OnboardOps account", { icon: "alert", preheader: "Please read this notice.", title: "A notice about your account", paragraphs: [`Hi ${name}, we are writing about your OnboardOps account.`, reason, "Please make sure your use follows our acceptable use policy. Repeated problems can lead to suspension."], button: { label: "Read the policy", url: `${appUrl()}/legal/acceptable-use` } }),
+
+  appealDecided: (name: string, overturned: boolean, note: string) =>
+    mail("Your appeal has been decided", { icon: "seal", preheader: overturned ? "Your appeal was upheld." : "Your appeal was reviewed.", title: overturned ? "Your appeal was upheld" : "Your appeal was reviewed", paragraphs: [`Hi ${name}, we have reviewed your appeal.`, overturned ? "The decision has been reversed and access is restored." : "The decision stays in place.", note ? `Reason: ${note}` : ""].filter(Boolean), button: overturned ? { label: "Sign in", url: `${appUrl()}/login` } : undefined }),
+
   supportReply: (name: string, ref: string, body: string) =>
     mail(`Re: your OnboardOps support request (${ref})`, { icon: "chat", preheader: "We replied to your support request.", title: "We replied to your request", paragraphs: [`Hi ${name},`, ...body.split(/\n{2,}/)], details: [["Reference", ref]], button: { label: "Contact support", url: `${appUrl()}/contact` }, note: "You can reply to this email or use the contact form.", align: "left" }),
 

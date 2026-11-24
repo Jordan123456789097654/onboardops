@@ -77,8 +77,8 @@ export async function getSessionUserId(checkRevocation = true): Promise<string |
     const { payload } = await jwtVerify(t, secret());
     if (typeof payload.uid !== "string") return null;
     if (checkRevocation && typeof payload.iat === "number") {
-      const u = await prisma.user.findUnique({ where: { id: payload.uid }, select: { passwordChangedAt: true } });
-      if (!u) return null;
+      const u = await prisma.user.findUnique({ where: { id: payload.uid }, select: { passwordChangedAt: true, bannedAt: true } });
+      if (!u || u.bannedAt) return null;
       if (u.passwordChangedAt && payload.iat * 1000 < u.passwordChangedAt.getTime() - 1000) return null;
     }
     if (checkRevocation && typeof payload.sid === "string") {

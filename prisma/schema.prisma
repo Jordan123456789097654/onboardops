@@ -99,6 +99,10 @@ model User {
   quietStart        Int?
   quietEnd          Int?
   timezone          String?
+  /// Set when a moderator bans the account. A banned account cannot sign in or keep a session.
+  bannedAt          DateTime?
+  banReason         String            @default("")
+  moderationCases   ModerationCase[]
 }
 
 /// A Google or GitHub identity linked to a user. Sign-in matches on (provider, providerAccountId), never on email alone.
@@ -1698,4 +1702,39 @@ model EmailReplyLink {
   expiresAt   DateTime
 
   @@index([expiresAt])
+}
+
+/// Every moderation decision (bans, suspensions, warnings and their reversals). Append-only in practice: rows are never edited or deleted.
+model ModerationCase {
+  id          String   @id @default(cuid())
+  targetType  String
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspaceId String?
+  action      String
+  reason      String
+  actorName   String
+  createdAt   DateTime @default(now())
+  appeals     ModerationAppeal[]
+
+  @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([createdAt])
+}
+
+/// An appeal against a moderation decision, from the affected person or workspace owner.
+model ModerationAppeal {
+  id           String          @id @default(cuid())
+  caseId       String
+  case         ModerationCase  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  email        String
+  message      String
+  status       String          @default("PENDING")
+  decisionNote String          @default("")
+  decidedBy    String          @default("")
+  decidedAt    DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([status, createdAt])
+  @@index([caseId])
 }
