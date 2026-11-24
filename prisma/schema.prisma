@@ -1683,3 +1683,19 @@ model BulkJob {
 
   @@index([workspaceId, createdAt])
 }
+
+/// One row per email we send that carries a reply button. Only a hash of the token is stored.
+model EmailReplyLink {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  to          String
+  subject     String
+  kind        String   @default("")
+  workspaceId String?
+  requestId   String?
+  replies     Int      @default(0)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+}

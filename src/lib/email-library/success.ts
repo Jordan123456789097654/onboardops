@@ -128,7 +128,7 @@ You can also have alerts sent to your manager channel in Discord, Slack or Teams
 
   tpl(C, "feedback-request", "How are we doing?", "Ask customers for feedback", "chat",
     "Two minutes of your time? Tell us how we are doing", "Your feedback shapes what we build.",
-    ["Give feedback", "{{action_url}}"], `
+    ["Give feedback", "{{app_url}}/feedback"], `
 Hi {{name}},
 
 You have been using OnboardOps for a while, and we would like to know how it is going for you.
@@ -149,7 +149,7 @@ Thank you. Feedback from real teams is how we make this better.
 
   tpl(C, "nps", "Would you recommend us?", "A simple recommendation survey", "chat",
     "How likely are you to recommend OnboardOps?", "One question, ten seconds.",
-    ["Answer in 10 seconds", "{{action_url}}"], `
+    ["Answer in 10 seconds", "{{app_url}}/survey"], `
 Hi {{name}},
 
 One question: **how likely are you to recommend OnboardOps to a friend or colleague who runs a team?**
@@ -170,7 +170,7 @@ Thank you for helping us improve.
 
   tpl(C, "case-study", "Share your story", "Ask a happy customer for a testimonial or case study", "pen",
     "Would you share how OnboardOps helps your team?", "We would love to tell your story, with your approval.",
-    ["Tell us your story", "{{action_url}}"], `
+    ["Tell us your story", "{{app_url}}/story"], `
 Hi {{name}},
 
 You have been getting real results from OnboardOps, and we would love to share your story, if you are happy to.
@@ -240,7 +240,7 @@ There is no pressure at all. Thank you for the support you have already shown us
 
   tpl(C, "roadmap-vote", "Help us choose what to build next", "Ask customers to vote on priorities", "chat",
     "Help us decide what to build next", "Vote on what matters most to you.",
-    ["Vote now", "{{action_url}}"], `
+    ["Vote now", "{{app_url}}/roadmap"], `
 Hi {{name}},
 
 We cannot build everything at once, so we would like your help choosing what comes next.

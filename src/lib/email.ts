@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { EMAIL_IMAGES } from "./email-assets";
 import { buildEmail } from "./email-template";
 import { emailOptedOut } from "./notify-prefs";
+import { REPLY_URL_MARK, applyReplyLink, createReplyLink, wantsReplyLink } from "./email-reply";
 
 const appUrl = () => (process.env.APP_URL || "https://onboardops.org").trim().replace(/^["']+|["']+$/g, "").replace(/\/$/, "");
 
@@ -24,6 +25,12 @@ async function resolveFromHeader(opts: SendOpts): Promise<string> {
  * Always forces notifications@onboardops.org as the sender address.
  */
 export async function sendEmail(to: string, subject: string, text: string, opts: SendOpts = {}): Promise<{ ok: boolean; error?: string }> {
+  if (text.includes(REPLY_URL_MARK) || (opts.html && opts.html.includes(REPLY_URL_MARK))) {
+    const url = wantsReplyLink(opts.kind, subject) ? await createReplyLink(to, subject, opts.kind ?? "", opts.workspaceId) : null;
+    const done = applyReplyLink({ html: opts.html, text }, url);
+    text = done.text;
+    opts = { ...opts, html: done.html };
+  }
   const redirect = process.env.EMAIL_REDIRECT_TO?.trim().replace(/^["']+|["']+$/g, "").trim();
   const realTo = redirect || to;
   const finalSubject = redirect ? `[to: ${to}] ${subject}` : subject;

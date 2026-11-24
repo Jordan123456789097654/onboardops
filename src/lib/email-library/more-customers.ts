@@ -215,7 +215,7 @@ You can follow and vote on what we build on the public roadmap. We write down wh
 
   tpl(CS, "churn-survey", "Before you go", "One question to someone who has left or is leaving", "chat",
     "One question before you go", "Thirty seconds, and it really helps us.",
-    ["Share your reason", "{{action_url}}"], `
+    ["Share your reason", "{{app_url}}/goodbye"], `
 Hi {{name}},
 
 Sorry to see {{workspace}} go. You do not owe us a reason, and this is not a sales pitch.
