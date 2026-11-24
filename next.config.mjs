@@ -22,7 +22,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' ${apiOriginList} data: blob:`,
   "font-src 'self' data:",
-  "frame-src https://www.youtube-nocookie.com",
+  "frame-src https://www.youtube-nocookie.com https://status.onboardops.org",
   `connect-src 'self' ${apiOriginList}${isDev ? " ws: wss:" : ""}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",

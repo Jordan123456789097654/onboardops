@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, Lock, MapPin } from "lucide-react";
 import { Brand } from "@/components/ui";
+import { StatusBadge } from "@/components/status-badge";
 import { FacebookIcon, YouTubeIcon } from "@/components/social-icons";
 import { legalPages, SITE } from "@/lib/site";
 
@@ -68,7 +69,7 @@ export function SiteFooter() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-xs text-soft">
           <span>© 2026 {SITE.legalEntity}. All rights reserved.</span>
           <span className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <a href={STATUS_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:text-ink"><span className="h-2 w-2 rounded-full bg-emerald-500" /> System status</a>
+            <StatusBadge />
             <Link href="/login" className="hover:text-ink">Sign in</Link>
             {SITE.contactEmail && <a href={`mailto:${SITE.contactEmail}`} className="hover:text-ink">{SITE.contactEmail}</a>}
             {build && <span className="mono">v{build}</span>}
