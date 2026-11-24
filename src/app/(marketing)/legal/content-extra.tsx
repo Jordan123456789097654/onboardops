@@ -66,7 +66,7 @@ const tos: Extra = {
   ],
   "Customer Data": [
     { title: "AI features", body: <>
-      <p>Some features use an AI provider to draft text, such as a course from a procedure you paste, simpler wording, a translation, or quiz questions. They are on by default, and a Workspace Owner or Admin can turn them off in Settings. When you use one, the text or image you submit is sent to the provider to produce the draft.</p>
+      <p>Some features use an AI provider to draft text, such as a course from a procedure you paste, simpler wording, a translation, or quiz questions. The website chat bubble uses the same provider to answer questions. AI features are on by default, and a Workspace Owner or Admin can turn them off in Settings. The website chat is available to visitors and may be stopped by us. When you use an AI feature, the text or image you submit is sent to the provider to produce the draft. If you ask the chat about your own account, your own name, role, workspace name and support requests are sent too.</p>
       <p>AI output can be wrong, incomplete or unsuitable. It is a draft for you to read and change, not advice. You are responsible for what you save and publish, and for checking translations with a fluent speaker. Do not submit anything you are not allowed to share, and do not use AI output as legal, medical or safety advice. We do not use AI to decide anything about an employee, and an AI feature never saves, sends or changes a record on its own.</p>
     </> },
     { title: "Customer-supplied encryption keys", body: <>
@@ -266,7 +266,7 @@ export const employeeNotice: Doc = {
         <li>Documents your employer uploaded for you, such as licenses or signed forms.</li>
       </ul>
     </> },
-    { title: "AI helpers", body: <p>Some OnboardOps features let a manager use an AI provider to help draft text, such as training courses. Anything sent is limited to what the manager chooses to submit, and the result is a draft that a person reviews. AI is not used to make decisions about you, to score you, or to change your record.</p> },
+    { title: "AI helpers", body: <p>Some OnboardOps features let a manager use an AI provider to help draft text, such as training courses. Anything sent is limited to what the manager chooses to submit. If you ask the website chat about your own account, your own name, role, workspace and support requests are sent to the provider. The result is a draft that a person reviews. AI is not used to make decisions about you, to score you, or to change your record.</p> },
     { title: "What you can and cannot see", body: <>
       <p>In your portal you can see your training, certificates, policies, checklists, requests, incident reports you filed, notices that need your signature, documents your employer chose to share and reviews that were shared with you.</p>
       <p>Managers can keep <strong>confidential notes</strong> on conduct cases and reviews that are not shown to you in the service. Employers may have separate legal obligations to show you or correct some records. If you think a record is wrong or you want a copy of your file, ask your employer directly. OnboardOps cannot decide that for them.</p>

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpDown, BookOpen, Loader2, Sparkles } from "lucide-react";
-import { addInternalNoteAction, replyToRequestAction, startSupportAccessAction, updateRequestAction } from "@/actions/admin";
+import { addInternalNoteAction, moveRequestToEmailAction, replyToRequestAction, startSupportAccessAction, updateRequestAction } from "@/actions/admin";
 import {
   draftSupportReplyAction,
   triageSupportInboxAction,
@@ -270,7 +270,7 @@ export function Inbox({
           <div className="space-y-4 text-[13px]">
             <div className="flex flex-wrap items-center gap-2">
               <Badge value={tone[cur.status] ?? "PENDING"} label={cur.status} />
-              <span className="text-soft">{cur.topic} · {cur.source === "IN_APP" ? "sent from inside the app" : "contact form"}</span>
+              <span className="text-soft">{cur.topic} · {cur.source === "IN_APP" ? "sent from inside the app" : cur.source === "CHAT" ? "started in the website chat" : cur.source === "EMAIL" ? "continuing by email" : "contact form"}</span>
               <span className="mono ml-auto text-xs text-soft">{fmtDateTime(cur.createdAt)}</span>
             </div>
 
@@ -305,11 +305,15 @@ export function Inbox({
                 className={
                   m.kind === "NOTE"
                     ? "rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
-                    : "rounded-lg border border-line p-3"
+                    : m.kind === "VISITOR"
+                      ? "rounded-lg border border-accent/40 bg-accent/5 p-3"
+                      : m.kind === "SYSTEM"
+                        ? "rounded-lg border border-dashed border-line p-3 text-soft"
+                        : "rounded-lg border border-line p-3"
                 }
               >
                 <div className="mono mb-1 text-[11px] uppercase text-soft">
-                  {m.kind === "NOTE" ? "Internal note" : `Reply${m.emailed ? " (emailed)" : " (email failed)"}`} · {m.author} · {fmtDateTime(m.at)}
+                  {m.kind === "NOTE" ? "Internal note" : m.kind === "VISITOR" ? "Customer (from chat)" : m.kind === "SYSTEM" ? "System" : `Reply${m.emailed ? " (emailed)" : " (email failed)"}`} · {m.author} · {fmtDateTime(m.at)}
                 </div>
                 <p className="whitespace-pre-wrap">{m.body}</p>
               </div>
@@ -381,6 +385,18 @@ export function Inbox({
                 </div>
               )}
 
+              {cur.source === "CHAT" && (
+                <button
+                  className="btn"
+                  disabled={pending}
+                  onClick={() => {
+                    if (confirm(`Move this chat to email? ${cur.email} gets an email with the conversation, and the chat will say it continues by email.`))
+                      exec(() => moveRequestToEmailAction(cur.id), { success: "Moved to email", onOk: () => router.refresh() });
+                  }}
+                >
+                  Move to email
+                </button>
+              )}
               <Field label={`Reply to ${cur.email} (sent by email)`}>
                 <textarea className="textarea" rows={draftMeta ? 7 : 4} value={reply} onChange={(e) => setReply(e.target.value)} />
               </Field>

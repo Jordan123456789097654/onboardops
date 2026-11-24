@@ -38,6 +38,29 @@ export async function replyToRequestAction(id: string, input: unknown) {
   });
 }
 
+/** Moves a chat ticket to email: the customer gets an email with the conversation, and the chat shows that it continues by email. */
+export async function moveRequestToEmailAction(id: string) {
+  return run(async () => {
+    const staff = await requireStaff(SUPPORT_STAFF);
+    const req = await prisma.supportRequest.findUnique({ where: { id } });
+    if (!req) throw new Error("Request not found.");
+    const ref = req.id.slice(-8).toUpperCase();
+    const body = `We are continuing your conversation by email. Reply to this email with anything else you need, and ${staff.name} will pick it up from here.
+
+Your original message:
+${req.message.slice(0, 2000)}`;
+    const m = emails.supportReply(req.name, ref, body);
+    const sent = await sendEmail(req.email, m.subject, m.text, { html: m.html, kind: "support-reply", workspaceId: req.workspaceId });
+    await prisma.$transaction(async (tx) => {
+      await tx.supportRequest.update({ where: { id }, data: { source: "EMAIL", assignee: req.assignee ?? staff.name } });
+      await tx.supportMessage.create({ data: { requestId: id, kind: "SYSTEM", authorName: staff.name, body: "This conversation continues by email.", emailed: sent.ok } });
+      await staffAudit(tx, staff, { action: "SUPPORT_MOVED_TO_EMAIL", targetType: "SupportRequest", targetId: id, workspaceId: req.workspaceId, summary: `Moved request ${ref} from chat to email${sent.ok ? "" : " (email failed)"}` });
+    });
+    refresh();
+    return { emailed: sent.ok, error: sent.error };
+  });
+}
+
 export async function addInternalNoteAction(id: string, input: unknown) {
   return run(async () => {
     const staff = await requireStaff(SUPPORT_STAFF);

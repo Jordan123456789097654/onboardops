@@ -9,6 +9,8 @@ import { getAnnouncementState, getMaintenanceState } from "@/lib/maintenance";
 import { getStaff } from "@/lib/platform";
 import { buildOutageView } from "@/lib/incidents";
 import { OutageGate } from "@/components/outage-gate";
+import { ChatMount } from "@/components/chat-mount";
+import { aiConfigured } from "@/lib/ai/groq";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <MaintenanceGate maintenance={maintenance} announcement={announcement} isOwner={isOwner}>
             <OutageGate outage={outage} isOwner={isOwner}>{children}</OutageGate>
           </MaintenanceGate>
+          <ChatMount enabled={aiConfigured()} />
         </ToastProvider>
       </body>
     </html>

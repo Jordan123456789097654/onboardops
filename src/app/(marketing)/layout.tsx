@@ -3,10 +3,8 @@ import { getSessionUserId } from "@/lib/auth";
 import { SITE } from "@/lib/site";
 import { JsonLd } from "@/components/json-ld";
 import { CookieNotice } from "@/components/cookie-notice";
-import { MarketingChat } from "@/components/marketing-chat";
 import { RefCapture } from "@/components/ref-capture";
 import { SiteFooter } from "@/components/site-footer";
-import { aiConfigured } from "@/lib/ai/groq";
 
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
   const signedIn = !!(await getSessionUserId(false));
@@ -20,7 +18,6 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <main>{children}</main>
       <RefCapture />
       <CookieNotice />
-      {aiConfigured() && <MarketingChat />}
       <SiteFooter />
     </div>
   );

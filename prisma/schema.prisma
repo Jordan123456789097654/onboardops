@@ -652,6 +652,7 @@ model SupportRequest {
   message     String
   status      String   @default("OPEN")
   source      String   @default("CONTACT")
+  chatTokenHash String?
   workspaceId String?
   userId      String?
   assignee    String?

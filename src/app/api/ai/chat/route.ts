@@ -4,7 +4,9 @@ import { AiError, aiConfigured, chat } from "@/lib/ai/groq";
 import { extractJson } from "@/lib/ai/run";
 import { articles, type Article, type Block } from "@/lib/docs";
 import { notYet, securityGroups } from "@/lib/security-facts";
-import { clientIp, hit } from "@/lib/rate-limit";
+import { prisma } from "@/lib/prisma";
+import { getActiveMembership } from "@/lib/auth";
+import { entries as changelog } from "@/lib/changelog";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -34,6 +36,7 @@ const reqSchema = z
 
 const resSchema = z.object({
   reply: z.string().trim().min(1).max(3000),
+  escalate: z.boolean().optional().default(false),
   suggestedLinks: z
     .array(
       z.object({
@@ -199,19 +202,62 @@ function buildPublicKnowledge(queryText: string): string {
   ].join("\n");
 }
 
-const SYSTEM_PROMPT = `You are the OnboardOps website assistant helping prospective visitors learn about OnboardOps.
+/** Recent changelog entries and the list of legal pages. The legal text itself is linked, not paraphrased. */
+async function changelogAndLegal(): Promise<string> {
+  const recent = changelog.slice(0, 5).map((e) => `- v${e.v} (${e.date}): ${e.highlight ?? ""}. ${(e.bullets ?? e.items).join("; ")}`).join("\n");
+  return [
+    "",
+    "=== RECENT RELEASES (/changelog) ===",
+    recent,
+    "",
+    "=== LEGAL PAGES (link to them; do not restate their wording) ===",
+    "Privacy Policy (/legal/privacy), Terms of Service (/legal/terms), Beta Terms (/legal/beta-terms), Data Processing Addendum (/legal/data-processing), Cookies (/legal/cookies). For any legal question, say you can't give legal advice and link the right page.",
+  ].join("\n");
+}
+
+/** Only the signed-in visitor's own account facts: their name, role, workspace and their own support requests. Never other people's data. */
+async function accountFacts(): Promise<string> {
+  try {
+    const m = await getActiveMembership();
+    if (!m) return "";
+    const tickets = await prisma.supportRequest.findMany({
+      where: { userId: m.userId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { id: true, topic: true, status: true, createdAt: true },
+    });
+    return [
+      "",
+      "=== SIGNED-IN USER (their own account only) ===",
+      `Name: ${m.user.name}`,
+      `Workspace: ${m.workspace.name}`,
+      `Role in this workspace: ${m.role}`,
+      "Plan: free beta (no paid plans yet).",
+      tickets.length
+        ? "Their recent support requests: " + tickets.map((t) => `#${t.id.slice(-8).toUpperCase()} ${t.topic} (${t.status})`).join("; ")
+        : "Their recent support requests: none.",
+      "Answer only about this user's own account. You cannot see other people's records, employee data or case text, and must say so if asked.",
+    ].join("\n");
+  } catch {
+    return "";
+  }
+}
+
+const SYSTEM_PROMPT = `You are the OnboardOps support assistant. Be friendly, warm and conversational, and keep it helpful.
 
 STRICT RULES:
 1. Answer ONLY using the public help docs, pricing summary, and security facts provided in the prompt.
 2. NEVER invent prices, paid tiers, SLAs, certifications (do NOT claim SOC 2, ISO 27001, or HIPAA compliance), or features not explicitly stated in the provided context.
 3. NEVER give legal, HR, compliance, or employment-law advice. If asked for legal/HR advice, politely note that OnboardOps cannot provide legal or HR advice and suggest consulting qualified counsel.
-4. NEVER pretend to inspect, look up, or change any user account, workspace, password, or employee record. You have zero access to customer accounts or databases. For account-specific issues, direct the visitor to /contact.
+4. You can read only the signed-in visitor's own account facts when they are provided. You cannot change any account, password, workspace or record, and you never see other people's data. For changes or account problems, set "escalate" to true.
 5. Keep replies concise, helpful, and easy to scan (2–5 sentences or short bullets). If the public docs do not cover a question, say so honestly and point to /support or /contact.
 6. Reply with ONLY a valid JSON object matching:
 {
   "reply": "string (clear plain-text answer)",
+  "escalate": true or false,
   "suggestedLinks": [{ "label": "short link label", "href": "/path or https://status.onboardops.org" }]
 }
+If the context does not answer the question, or the visitor asks for a person, a refund, an account change or anything you cannot check, set "escalate" to true and say a support teammate will be connected. Otherwise set "escalate" to false.
 Include at most 3 relevant links in suggestedLinks. Every href MUST be a relative path starting with "/" from the provided context (such as "/pricing", "/tutorial", "/security", "/contact", "/support/<slug>") or "https://status.onboardops.org".`;
 
 export async function POST(req: Request) {
@@ -219,15 +265,6 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "The website assistant is not available right now. Browse /support or reach us at /contact." },
       { status: 503 }
-    );
-  }
-
-  const wait = await hit(`vchat:${clientIp(req.headers)}`, 20, 3600);
-  if (wait > 0) {
-    const waitLabel = wait > 90 ? `${Math.ceil(wait / 60)} minutes` : `${wait} seconds`;
-    return NextResponse.json(
-      { error: `You have asked several questions this hour. Please try again in ${waitLabel}, or browse the help center at /support.` },
-      { status: 429, headers: { "Retry-After": String(wait) } }
     );
   }
 
@@ -247,7 +284,7 @@ export async function POST(req: Request) {
     .map((m) => m.content)
     .join(" ");
 
-  const knowledge = buildPublicKnowledge(recentUserText);
+  const knowledge = buildPublicKnowledge(recentUserText) + (await changelogAndLegal()) + (await accountFacts());
   const transcript = messages
     .map((m) => `${m.role === "user" ? "Visitor" : "Assistant"}: ${m.content}`)
     .join("\n");
@@ -284,6 +321,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       reply: out.data.reply,
+      escalate: out.data.escalate,
       suggestedLinks,
     });
   } catch (e) {
