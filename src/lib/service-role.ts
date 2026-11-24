@@ -68,7 +68,7 @@ type MatchResult = { cleanPath: string; internalPath: string; cors: boolean };
 function matchMovedCleanPath(clean: string): { cors: boolean } | null {
   if (clean === "/v1" || clean.startsWith("/v1/")) return { cors: true };
   if (clean === "/status" || clean.startsWith("/status/")) return { cors: true };
-  if (clean === "/health") return { cors: true };
+  if (clean === "/health" || clean.startsWith("/health/")) return { cors: true };
   if (clean === "/track") return { cors: true };
   if (clean.startsWith("/testimonial-photo/")) return { cors: true };
   if (clean.startsWith("/betterstack/")) return { cors: false };
