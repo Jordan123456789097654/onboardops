@@ -52,6 +52,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {
         heading: "System & Audit",
         items: [
+          { href: "/admin/emails", label: "Emails", icon: "compose" },
           { href: "/admin/email", label: "Email log", icon: "email" },
           { href: "/admin/activity", label: "Staff activity", icon: "activity" },
           ...(s.role === "OWNER" ? [{ href: "/admin/staff", label: "Staff & roles", icon: "staff" }] : []),

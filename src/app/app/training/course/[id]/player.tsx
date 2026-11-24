@@ -3,7 +3,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
+import { Sparkles } from "lucide-react";
 import { startCourseAction, startQuizAction, submitQuizAction } from "@/actions/courses";
+import { lessonTutorAction } from "@/actions/ai-insights";
+import { ReadAloud } from "@/components/read-aloud";
 import { Badge, Modal, PageHeader, useAction } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { QuizQuestionOut, QuizResult } from "@/lib/automations";
@@ -16,6 +19,7 @@ type Props = {
   bank: { asked: number; total: number; shuffled: boolean } | null;
   locked: { id: string; title: string }[];
   enrollment: { id: string; status: string; best: number | null; cert: string | null; lastAttemptAt: string | null } | null;
+  tutor?: boolean;
 };
 
 function embed(url: string) {
@@ -28,7 +32,32 @@ function embed(url: string) {
   return null;
 }
 
-export function CoursePlayer({ course, lessons, previewQuestions, bank, locked, enrollment }: Props) {
+/** A patient helper that explains the lessons in simpler words. It sees only the lesson text, never the quiz. */
+function LessonTutor({ courseId, lesson }: { courseId: string; lesson: string }) {
+  const { exec, pending } = useAction();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [res, setRes] = useState<{ answer: string; example: string } | null>(null);
+  if (!open) return <button type="button" className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-accent hover:underline" onClick={() => setOpen(true)}><Sparkles className="h-3.5 w-3.5" />Confused? Ask about this lesson</button>;
+  return (
+    <div className="mt-4 space-y-2 rounded-lg border border-line bg-muted/50 p-3 text-[13px]">
+      <p className="text-xs text-soft">Ask anything about &ldquo;{lesson}&rdquo; or the other lessons. It explains in simple words and won&apos;t give quiz answers.</p>
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (q.trim().length >= 3) exec(() => lessonTutorAction({ courseId, question: q }), { onOk: setRes }); }}>
+        <input className="input flex-1" value={q} onChange={(e) => setQ(e.target.value)} maxLength={400} placeholder="e.g. What does lockout mean?" aria-label="Your question about the lesson" />
+        <button className="btn-primary" disabled={pending || q.trim().length < 3}>{pending ? "Thinking…" : "Ask"}</button>
+      </form>
+      {res && (
+        <div className="space-y-1.5 rounded-md border border-accent/30 bg-accent/5 p-3">
+          <p className="whitespace-pre-wrap leading-relaxed">{res.answer}</p>
+          {res.example && <p className="text-xs text-soft">For example: {res.example}</p>}
+          <div className="flex items-center gap-3"><ReadAloud text={res.answer} /><span className="text-[11.5px] text-soft">AI can be wrong. Ask a supervisor if you&apos;re unsure.</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CoursePlayer({ course, lessons, previewQuestions, bank, locked, enrollment, tutor }: Props) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [step, setStep] = useState(0); // 0..lessons-1 lessons, lessons.length = quiz
@@ -88,6 +117,8 @@ export function CoursePlayer({ course, lessons, previewQuestions, bank, locked, 
               <h2 className="mb-3 text-lg font-semibold">{lessons[step].title}</h2>
               {lessons[step].video && (embed(lessons[step].video!) ? <iframe className="mb-4 aspect-video w-full rounded-md border border-line" src={embed(lessons[step].video!)!} allowFullScreen title="Lesson video" /> : <a className="mb-4 inline-block text-accent" href={lessons[step].video!} target="_blank" rel="noreferrer">Watch lesson video</a>)}
               <div className="space-y-3 text-[13px] leading-relaxed [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"><ReactMarkdown>{lessons[step].md}</ReactMarkdown></div>
+              <div className="mt-4"><ReadAloud text={`${lessons[step].title}. ${lessons[step].md}`} /></div>
+              {tutor && enrollment && <LessonTutor courseId={course.id} lesson={lessons[step].title} />}
               <div className="mt-6 flex items-center justify-between">
                 <button className="btn" disabled={step === 0} onClick={() => setStep(step - 1)}>Previous</button>
                 <button className="btn-primary" disabled={left > 0 && !passed} onClick={next}>{left > 0 && !passed ? <span className="mono">Read for {left}s</span> : step === lessons.length - 1 ? "Continue to quiz" : "Next lesson"}</button>
@@ -127,7 +158,12 @@ export function CoursePlayer({ course, lessons, previewQuestions, bank, locked, 
           <p className="mt-3 text-lg font-semibold">{course.title}</p>
           <p className="mono mt-2 text-sm">{result?.score ?? enrollment?.best}% · {result?.certificateCode ?? enrollment?.cert}</p>
         </div>
-        {enrollment && <Link target="_blank" href={`/print/certificate/${enrollment.id}`} className="btn-primary mt-4 w-full">Open printable certificate</Link>}
+        {enrollment && (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <a href={`/api/certificate/${enrollment.id}/pdf`} download className="btn-primary justify-center">Download PDF</a>
+            <Link target="_blank" href={`/print/certificate/${enrollment.id}`} className="btn justify-center">View and print</Link>
+          </div>
+        )}
       </Modal>
     </>
   );

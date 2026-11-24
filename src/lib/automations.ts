@@ -197,7 +197,7 @@ export async function submitQuiz(ctx: Ctx, employeeId: string, courseId: string,
 
     if (passed) {
       for (let i = 0; i < 6 && !certificateCode; i++) {
-        const code = `CERT-${randomInt(10000, 99999)}`;
+        const code = `CERT-${randomInt(10_000_000, 99_999_999)}`;
         if (!(await tx.courseEnrollment.findUnique({ where: { certificateCode: code } }))) certificateCode = code;
       }
       await tx.courseEnrollment.update({

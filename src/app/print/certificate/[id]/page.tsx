@@ -1,35 +1,37 @@
-import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { getActiveMembership } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { mfaBlocked } from "@/lib/rbac";
-import { fmtDate } from "@/lib/utils";
-import { PrintButton } from "../../print-button";
+import { notFound, redirect } from "next/navigation";
+import { Download } from "lucide-react";
+import { CertificateSheet } from "@/components/certificate-sheet";
+import { loadCertificate, qrDataUrl } from "@/lib/certificate";
+import { CertPrintButton } from "../cert-print-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Certificate" };
 
 export default async function Certificate({ params }: { params: { id: string } }) {
-  const m = await getActiveMembership();
-  if (!m) redirect("/login");
-  if (mfaBlocked(m)) redirect("/account?need2fa=1");
-  const e = await prisma.courseEnrollment.findFirst({ where: { id: params.id, workspaceId: m.workspaceId, status: "PASSED" }, include: { course: true, employee: true } });
-  if (!e || !e.certificateCode) notFound();
-  // Employees may only open their own certificates.
-  if (m.role === "EMPLOYEE" && m.profile?.id !== e.employeeId) notFound();
+  const found = await loadCertificate(params.id);
+  if (found.kind === "login") redirect("/login");
+  if (found.kind === "mfa") redirect("/account?need2fa=1");
+  if (found.kind !== "ok") notFound();
+  const qr = await qrDataUrl(found.data.verifyUrl);
   return (
-    <div className="mx-auto max-w-3xl p-8">
-      <div className="no-print mb-4 flex justify-end"><PrintButton /></div>
-      <div className="rounded-lg border-2 border-ink p-10 text-center">
-        <p className="mono text-xs uppercase text-soft">{m.workspace.name}</p>
-        <h1 className="mt-4 text-3xl font-semibold">Certificate of Completion</h1>
-        <p className="mt-6 text-soft">This certifies that</p>
-        <p className="mt-2 text-2xl font-semibold">{e.employee.fullName}</p>
-        <p className="mono text-xs text-soft">{e.employee.staffCode}</p>
-        <p className="mt-6 text-soft">passed</p>
-        <p className="mt-2 text-xl font-medium">{e.course.title}</p>
-        <p className="mono mt-2">Score {e.bestScore}% (required {e.course.passingScore}%)</p>
-        <div className="mono mt-8 flex justify-between text-xs"><span>{e.certificateCode}</span><span>{fmtDate(e.completedAt)}</span></div>
+    <div className="cert-page mx-auto max-w-5xl p-4 sm:p-8">
+      <style>{`
+        @page { size: 11in 8.5in; margin: 0; }
+        @media print {
+          html, body { background: #fff !important; }
+          .cert-page { max-width: none !important; padding: 0 !important; }
+          .cert-sheet { width: 11in !important; height: 8.5in !important; aspect-ratio: auto !important; }
+        }
+      `}</style>
+      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px] text-soft">Certificate {found.data.code}. Print it, or download it as a PDF to email or keep.</p>
+        <div className="flex gap-2">
+          <a href={`/api/certificate/${found.data.id}/pdf`} className="btn" download><Download className="h-3.5 w-3.5" />Download PDF</a>
+          <CertPrintButton />
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-sm shadow-[0_8px_30px_rgba(0,0,0,0.15)] print:rounded-none print:shadow-none">
+        <CertificateSheet c={found.data} qr={qr} />
       </div>
     </div>
   );

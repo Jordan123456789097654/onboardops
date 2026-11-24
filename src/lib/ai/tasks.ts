@@ -674,6 +674,117 @@ export const portalResponse: TaskDef<
       .join("\n"),
 };
 
+/* ---------------- manager insights ---------------- */
+
+/** The only questions "Ask your data" can answer. The model picks one; our code runs it with the asker's own access. It never writes SQL. */
+export const DATA_QUERIES = [
+  "overdue_training", "training_due_soon", "expiring_certificates", "expiring_credentials", "expired_credentials",
+  "new_hires_progress", "staff_without_training", "failed_quizzes", "incidents_by_type", "headcount_by_department",
+] as const;
+export type DataQueryId = (typeof DATA_QUERIES)[number];
+
+export const dataPlan: TaskDef<{ question: string }, { query: DataQueryId | "none"; days: number; note: string }> = {
+  id: "data.plan", label: "Pick the right report for a question", risk: "low", tier: "fast", perm: "reports.view", maxTokens: 300,
+  input: z.object({ question: z.string().trim().min(3, "Ask a question").max(300) }),
+  output: z.object({ query: z.enum([...DATA_QUERIES, "none"]), days: z.coerce.number().int().min(1).max(365).default(30), note: z.string().trim().max(240).default("") }),
+  shape: `{"query": "overdue_training", "days": 30, "note": "Shows everyone with training past its due date."}`,
+  system: [
+    "You choose which ready-made report answers a manager's question about their team. You do not answer it yourself.",
+    "Reports: overdue_training (training past its due date); training_due_soon (training due within the next N days); expiring_certificates (training certificates expiring within N days); expiring_credentials (licenses and credentials expiring within N days); expired_credentials (credentials already expired); new_hires_progress (staff still onboarding and how many courses they passed); staff_without_training (active staff with no courses assigned); failed_quizzes (quizzes failed in the last N days); incidents_by_type (counts of incident reports by type in the last N days); headcount_by_department (people per department).",
+    "Set days to the time window in the question (default 30). Use \"none\" when none of the reports fits, for example questions about one named person, discipline or infractions, pay, or anything else. For \"none\", the note says in one short sentence what can be asked instead.",
+    "For any other choice, the note is one short sentence describing what the report shows.",
+  ].join("\n"),
+  user: (i) => `Manager's question:\n${doc(i.question)}`,
+};
+
+export const quizInsight: TaskDef<
+  { courseTitle: string; attempts: number; passRate: number; questions: { prompt: string; pctCorrect: number; answers: number; commonWrong?: string }[] },
+  { headline: string; weakSpots: { prompt: string; why: string }[]; coachingTopics: string[]; lessonFixes: string[] }
+> = {
+  id: "quiz.insight", label: "Explain where people struggle on a quiz", risk: "low", tier: "fast", perm: "training.build", maxTokens: 1400,
+  input: z.object({
+    courseTitle: z.string().trim().max(200), attempts: z.coerce.number().int().min(0), passRate: z.coerce.number().int().min(0).max(100),
+    questions: z.array(z.object({ prompt: z.string().trim().max(400), pctCorrect: z.coerce.number().int().min(0).max(100), answers: z.coerce.number().int().min(0), commonWrong: z.string().trim().max(250).optional() })).max(25),
+  }),
+  output: z.object({
+    headline: z.string().trim().min(5).max(200),
+    weakSpots: z.array(z.object({ prompt: z.string().trim().min(3).max(300), why: z.string().trim().min(3).max(300) })).max(5).default([]),
+    coachingTopics: z.array(z.string().trim().min(3).max(200)).max(5).default([]),
+    lessonFixes: z.array(z.string().trim().min(3).max(240)).max(5).default([]),
+  }),
+  shape: `{"headline": "People mostly understand the course but miss two questions about lockout steps", "weakSpots": [{"prompt": "question text", "why": "Many pick X, which suggests they mix up ..."}], "coachingTopics": ["Walk through the lockout order in the next huddle"], "lessonFixes": ["Add a step-by-step list to lesson 2"]}`,
+  system: "You read quiz statistics that code computed (never recalculate them) and explain in plain words which topics people struggle with, what a common wrong answer suggests, what a manager could coach in a team huddle, and how the lessons could be clearer. Talk about questions and topics only. Never rate, rank or comment on any person.",
+  user: (i) => `Course: ${i.courseTitle}\nAttempts: ${i.attempts}. Pass rate: ${i.passRate}%.\nQuestion statistics, hardest first:\n${doc(JSON.stringify(i.questions))}`,
+};
+
+export const huddleAgenda: TaskDef<
+  { minutes: number; focus?: string; facts: Record<string, unknown> },
+  { title: string; items: { topic: string; minutes: number; points: string[] }[] }
+> = {
+  id: "huddle.agenda", label: "Draft a team huddle agenda", risk: "low", tier: "fast", perm: "reports.view", maxTokens: 1300,
+  input: z.object({ minutes: z.coerce.number().int().min(5).max(30).default(10), focus: z.string().trim().max(200).optional(), facts: z.record(z.unknown()) }),
+  output: z.object({
+    title: z.string().trim().min(3).max(120),
+    items: z.array(z.object({ topic: z.string().trim().min(3).max(120), minutes: z.coerce.number().int().min(1).max(15), points: z.array(z.string().trim().min(3).max(220)).max(4).default([]) })).min(1).max(6),
+  }),
+  shape: `{"title": "Monday huddle (10 minutes)", "items": [{"topic": "Overdue training", "minutes": 3, "points": ["4 courses are past due. Ask who needs time this week."]}]}`,
+  system: "Plan a short team huddle for a manager from exact facts that code computed. Use only the numbers given; never invent numbers or names. Put the most important item first, keep the total to the requested minutes, and add a quick recognition or safety moment when there is room. Keep each talking point to one sentence.",
+  user: (i) => `Huddle length: ${i.minutes} minutes.${i.focus ? ` The manager wants to focus on: ${i.focus}` : ""}\nFacts:\n${doc(JSON.stringify(i.facts))}`,
+};
+
+export const handoffDraft: TaskDef<{ bullets: string; department?: string }, { note: string; flags: string[] }> = {
+  id: "handoff.draft", label: "Turn rough notes into a shift handoff", risk: "care", tier: "fast", perm: "staff", maxTokens: 900,
+  input: z.object({ bullets: z.string().trim().min(10, "Write a few quick notes first").max(3000), department: z.string().trim().max(80).optional() }),
+  output: z.object({ note: z.string().trim().min(20).max(2000), flags: z.array(z.string().trim().max(200)).max(4).default([]) }),
+  shape: `{"note": "Dock 2 door sticks, maintenance called. Receiving finished early...", "flags": ["Add the time the maintenance call was made"]}`,
+  system: "Turn a manager's rough shift notes into a clear handoff for the next shift: what happened, what is still open, and what to watch. Use only what the notes say. Keep it short, in plain sentences or short bullets. Keep placeholder tokens like [Person 1] verbatim. Do not add blame or judgments about people. In flags, mention any important detail that seems to be missing, such as a time or who owns a follow-up.",
+  user: (i) => `${i.department ? `Department: ${i.department}\n` : ""}Rough notes:\n${doc(i.bullets)}`,
+};
+
+/* ---------------- employee helpers ---------------- */
+
+export const policyAsk: TaskDef<
+  { question: string; passages: { id: string; title: string; text: string }[] },
+  { found: boolean; answer: string; sourceIds: string[] }
+> = {
+  id: "policy.ask", label: "Answer a question from the company's policies", risk: "low", tier: "fast", perm: "all", maxTokens: 700,
+  input: z.object({
+    question: z.string().trim().min(3, "Ask a question").max(300),
+    passages: z.array(z.object({ id: z.string().max(80), title: z.string().max(200), text: z.string().max(3000) })).max(4),
+  }),
+  output: z.object({ found: z.boolean(), answer: z.string().trim().min(3).max(1500), sourceIds: z.array(z.string().max(80)).max(4).default([]) }),
+  shape: `{"found": true, "answer": "Per the Attendance Policy, call at least 2 hours before your shift...", "sourceIds": ["policy id"]}`,
+  system: "You answer an employee's question using ONLY the company policy passages provided. Name the policy you used. If the passages do not answer the question, set found to false, say the policies don't cover it, and suggest asking a manager. Do not guess, do not add rules, and do not give legal or HR advice. Never say what discipline anyone would get. Keep it short and friendly. sourceIds lists the ids of the passages you used.",
+  user: (i) => `Question from an employee:\n${doc(i.question)}\n\nPolicy passages:\n${i.passages.length ? i.passages.map((p) => `[id: ${p.id}] ${p.title}\n${doc(p.text)}`).join("\n\n") : "(no readable policy text was found)"}`,
+};
+
+export const lessonTutor: TaskDef<{ courseTitle: string; lessons: string; question: string }, { answer: string; example: string }> = {
+  id: "lesson.tutor", label: "Explain a lesson in simpler words", risk: "low", tier: "fast", perm: "all", maxTokens: 700,
+  input: z.object({ courseTitle: z.string().trim().max(200), lessons: z.string().trim().min(20).max(14000), question: z.string().trim().min(3, "Ask a question").max(400) }),
+  output: z.object({ answer: z.string().trim().min(5).max(1200), example: z.string().trim().max(600).default("") }),
+  shape: `{"answer": "Short, plain explanation...", "example": "A one-sentence everyday example (can be empty)"}`,
+  system: "You are a patient tutor for a new frontline worker. Explain things using ONLY the lesson text provided, in short, simple sentences. If the lessons don't cover the question, say so and suggest asking a supervisor. If the question looks like a quiz or test question, or asks which answer is correct, do not choose an answer: explain the idea behind it from the lessons instead. Do not give legal advice.",
+  user: (i) => `Course: ${i.courseTitle}\nLesson text:\n${doc(i.lessons)}\n\nThe worker asks:\n${doc(i.question)}`,
+};
+
+export const requestDraft: TaskDef<{ kind: "call_out" | "time_off" | "late" | "shift_swap" | "other"; when?: string; reason?: string; tone: "polite" | "brief" }, { message: string; tips: string[] }> = {
+  id: "request.draft", label: "Help write a message to my manager", risk: "care", tier: "fast", perm: "all", maxTokens: 500,
+  input: z.object({ kind: z.enum(["call_out", "time_off", "late", "shift_swap", "other"]), when: z.string().trim().max(120).optional(), reason: z.string().trim().max(500).optional(), tone: z.enum(["polite", "brief"]).default("polite") }),
+  output: z.object({ message: z.string().trim().min(15).max(900), tips: z.array(z.string().trim().max(180)).max(3).default([]) }),
+  shape: `{"message": "Hi Sam, I need to call out of my shift on Friday...", "tips": ["If you have an official request form, send that too."]}`,
+  system: "Write a short, respectful message an employee can send to their manager about a schedule matter. Use only the details given. Do not invent a reason, and never include medical details or a diagnosis: if the reason is private or missing, keep it general (for example 'a personal matter'). Do not promise anything on the employee's behalf. Leave the manager's name out; start with 'Hi,'. In tips, give up to two practical reminders, such as sending an official request if their workplace uses one.",
+  user: (i) => `Type of message: ${i.kind.replace("_", " ")}. Tone: ${i.tone}.${i.when ? `\nWhen: ${i.when}` : ""}${i.reason ? `\nReason in the employee's words:\n${doc(i.reason)}` : ""}`,
+};
+
+export const weekSummary: TaskDef<{ facts: Record<string, unknown> }, { summary: string; todo: string[] }> = {
+  id: "week.summary", label: "Summarize my week", risk: "low", tier: "fast", perm: "all", maxTokens: 600,
+  input: z.object({ facts: z.record(z.unknown()) }),
+  output: z.object({ summary: z.string().trim().min(15).max(900), todo: z.array(z.string().trim().min(3).max(200)).max(6).default([]) }),
+  shape: `{"summary": "You have 3 shifts this week...", "todo": ["Finish Food Safety by Thursday"]}`,
+  system: "Write a short, friendly briefing for an employee about their own upcoming week, using ONLY the exact facts provided (dates, times, titles). Never change or guess dates or numbers. Put the to-do items in the order they are due.",
+  user: (i) => `Facts about this employee's week (code-computed):\n${doc(JSON.stringify(i.facts))}`,
+};
+
 export const TASKS: Record<string, TaskDef<any, any>> = Object.fromEntries(
   [
     courseDraft, policyLesson, quizMore, quizOptions, lessonSimplify, courseTranslate, courseMeta, lessonClarity,
@@ -681,5 +792,6 @@ export const TASKS: Record<string, TaskDef<any, any>> = Object.fromEntries(
     setupPlan, rolesCourses, csvMatch,
     credentialScan, documentMatch, complianceSummary, regulationExplain, incidentChecklist,
     infractionCompare, infractionTimeline, infractionPacket, infractionRedact, portalResponse,
+    dataPlan, quizInsight, huddleAgenda, handoffDraft, policyAsk, lessonTutor, requestDraft, weekSummary,
   ].map((t) => [t.id, t])
 );

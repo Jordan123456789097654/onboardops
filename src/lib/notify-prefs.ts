@@ -6,6 +6,7 @@ export const OPTIONAL_EMAIL_KINDS: { kind: string; label: string; hint: string }
   { kind: "request-decision", label: "Request decisions", hint: "Time off, leave and profile update outcomes" },
   { kind: "checklists", label: "Checklists", hint: "Checklist reminders and verifications" },
   { kind: "operations", label: "Schedule and shift swaps", hint: "Shift changes and swap outcomes" },
+  { kind: "announcements", label: "Product news and tips", hint: "New features, tips and customer stories from OnboardOps" },
 ];
 
 export function emailOptedOut(prefs: unknown, kind: string | undefined): boolean {

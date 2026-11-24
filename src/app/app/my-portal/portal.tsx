@@ -23,6 +23,7 @@ import { Check, Circle, Sparkles } from "lucide-react";
 
 type Props = {
   aiCare?: boolean;
+  aiPanel?: React.ReactNode;
   locationName: string | null; teamShifts: { id: string; name: string; label: string; startsAt: string; endsAt: string }[]; weekEntries: { clockIn: string; clockOut: string | null }[]; credentials: { id: string; name: string; expires: string }[]; submittedTemplates: { id: string; at: string }[];
   calendarUrl: string; sms: { configured: boolean; optIn: boolean; phone: string };
   balances: { type: string; allowance: number; used: number; pending: number }[];
@@ -505,6 +506,7 @@ export function Portal(p: Props) {
       ]} />
       <div className={tab === "home" ? "mt-4" : "hidden"} role="tabpanel" aria-label="home">
       <TodayHub clock={<ClockWidget bare openEntry={p.openEntry} />} locationName={p.locationName} myShifts={p.shifts} teamShifts={p.teamShifts} weekEntries={p.weekEntries} templates={p.templates} submittedTemplateIds={p.submittedTemplates} unsignedCases={p.cases.filter((c) => !c.acknowledged).map((c) => ({ id: c.id, caseNumber: c.caseNumber }))} policies={p.policies.map((x) => ({ id: x.id, title: x.title, signed: x.signed }))} enrollments={p.enrollments.map((e) => ({ id: e.id, title: e.title, status: e.status, due: e.due, courseId: e.courseId }))} credentials={p.credentials} requests={p.requests} />
+      {p.aiPanel}
       {pending.length > 0 && (
         <section className="mb-6 space-y-3">
           <h2 className="text-sm font-semibold">Needs your signature</h2>
@@ -530,7 +532,7 @@ export function Portal(p: Props) {
             <div key={e.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-[13px]">
               <div className="min-w-0 flex-1"><Link href={`/app/training/course/${e.courseId}`} className="font-medium">{e.title}</Link> {e.remedial && <Badge value="RETRAINING_REQUIRED" label="Remedial" />}<div className="text-xs text-soft">{e.reason}{e.due ? ` · due ${fmtDate(e.due)}` : ""}</div></div>
               <Badge value={e.status} />{e.best != null && <span className="mono">{e.best}%</span>}
-              {e.cert ? <Link target="_blank" className="mono text-accent" href={`/print/certificate/${e.id}`}>{e.cert}</Link> : <Link className="btn" href={`/app/training/course/${e.courseId}`}>{e.status === "ASSIGNED" ? "Start" : "Continue"}</Link>}
+              {e.cert ? <span className="flex items-center justify-end gap-2"><Link target="_blank" className="mono text-accent" href={`/print/certificate/${e.id}`}>{e.cert}</Link><a className="text-[12px] text-soft underline underline-offset-2 hover:text-ink" href={`/api/certificate/${e.id}/pdf`} download>PDF</a></span> : <Link className="btn" href={`/app/training/course/${e.courseId}`}>{e.status === "ASSIGNED" ? "Start" : "Continue"}</Link>}
             </div>))}</div>
         )}
       </section>

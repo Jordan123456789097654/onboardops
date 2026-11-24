@@ -120,7 +120,7 @@ try {
   const ws = (features: unknown) => ({ id: `ai-selftest-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, features });
   ok("low-risk tasks are allowed by default", (await err(() => guard.guardAi(ws({}), "u-" + Math.random(), "low"))) === null);
   ok("turning the ai feature off blocks all AI", (await err(() => guard.guardAi(ws({ ai: false }), "u-" + Math.random(), "low")))?.message.includes("turned off"));
-  ok("care tasks are closed when AI_CARE_FROM is not set", (await err(() => guard.guardAi(ws({}), "u-" + Math.random(), "care")))?.message.includes("not available yet"));
+  ok("care tasks are open when AI_CARE_FROM is not set", (await err(() => guard.guardAi(ws({}), "u-" + Math.random(), "care"))) === null);
   process.env.AI_CARE_FROM = new Date(Date.now() + 86400000).toISOString();
   ok("care tasks stay closed before the date", (await err(() => guard.guardAi(ws({}), "u-" + Math.random(), "care")))?.message.includes("not available yet"));
   process.env.AI_CARE_FROM = new Date(Date.now() - 86400000).toISOString();

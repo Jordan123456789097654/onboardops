@@ -6,6 +6,10 @@ import { Badge, PageHeader } from "@/components/ui";
 import { Bar, CountUp } from "@/components/motion";
 import { fmtDateTime } from "@/lib/utils";
 import { DraftImport } from "@/components/draft-import";
+import { can } from "@/lib/perms";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
+import { ManagerAi } from "./manager-ai";
 
 export const metadata = { title: "Command Center" };
 
@@ -61,6 +65,7 @@ export default async function Overview() {
         {actions.map(({ href, label, Icon }, i) => <Link key={href} href={href} className={i === 0 ? "btn-primary" : "btn"}><Icon className="h-3.5 w-3.5" />{label}</Link>)}
       </PageHeader>
       <DraftImport />
+      {aiConfigured() && featureOn(ctx.workspace.features, "ai") && <ManagerAi canReports={can(ctx, "reports.view")} canHandoff />}
       {alerts.length > 0 && (
         <section className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
           <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="h-3.5 w-3.5" />Needs attention</div>

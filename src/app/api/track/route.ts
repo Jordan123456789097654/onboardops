@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   try {
     if (await hit(`track:${clientIp(req.headers)}`, 120, 60)) return new Response(null, { status: 429, headers: CORS });
     const body = (await req.json().catch(() => ({}))) as { path?: string };
-    await recordSiteVisit(typeof body.path === "string" ? body.path : "/");
+    await recordSiteVisit(typeof body.path === "string" ? body.path : "/", { ip: clientIp(req.headers), ua: req.headers.get("user-agent") ?? "" });
   } catch {
     // ignore
   }

@@ -109,7 +109,7 @@ export default async function AdminHome() {
   const labels = buckets.map((d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`);
 
   const growthKpis: [string, number, string, string?][] = [
-    ["Site Visits", visits.total, `${visits.today} today · ${visits.last7d} (7d) · ${visits.last30d} (30d)`],
+    ["Unique Visitors", visits.total, `${visits.today} today · ${visits.last7d} (7d) · ${visits.last30d} (30d). Each browser counts once a day.`],
     ["Workspaces", workspaces, `${newWs} new this week · ${active7.length} active (7d)`],
     ["People Managed", employees, `${users} user accounts`],
     ["30d Retention", retention30, `${active30.length}/${workspaces} (30d) · ${retention90}% (90d)`, "%"],
@@ -240,8 +240,8 @@ export default async function AdminHome() {
       <section className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Daily Site Visits (Last 14 Days)</h2>
-            <StackedBars labels={visits.dailyLabels} series={[{ name: "Visits", values: visits.dailyCounts }]} />
+            <h2 className="mb-3 text-sm font-semibold">Unique Visitors Per Day (Last 14 Days)</h2>
+            <StackedBars labels={visits.dailyLabels} series={[{ name: "Visitors", values: visits.dailyCounts }]} />
             {visits.topPaths.length > 0 && (
               <div className="mt-4 border-t border-line pt-3">
                 <h3 className="mb-2 text-xs font-semibold text-soft">Top visited pages</h3>

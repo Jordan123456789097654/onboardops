@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, ALL_ROLES, MANAGEMENT_ROLES } from "@/lib/rbac";
 import { unmetPrerequisites } from "@/lib/course-rules";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
 import { CoursePlayer } from "./player";
 
 export default async function CoursePage({ params }: { params: { id: string } }) {
@@ -27,6 +29,7 @@ export default async function CoursePage({ params }: { params: { id: string } })
       previewQuestions={enrollment ? null : course.questions.map((q) => ({ id: q.id, prompt: q.prompt, options: (q.options as string[]).map((text, i) => ({ i, text })) }))}
       bank={bank}
       locked={locked}
+      tutor={aiConfigured() && featureOn(ctx.workspace.features, "ai")}
       enrollment={enrollment ? { id: enrollment.id, status: enrollment.status, best: enrollment.bestScore, cert: enrollment.certificateCode, lastAttemptAt: enrollment.lastAttemptAt?.toISOString() ?? null } : null}
     />
   );

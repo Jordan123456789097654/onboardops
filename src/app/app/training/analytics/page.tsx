@@ -2,6 +2,10 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePageRole, MANAGEMENT_ROLES } from "@/lib/rbac";
 import { Empty, PageHeader } from "@/components/ui";
+import { can } from "@/lib/perms";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
+import { QuizAi } from "./quiz-ai";
 
 export const metadata = { title: "Quiz analytics" };
 export const dynamic = "force-dynamic";
@@ -55,6 +59,7 @@ export default async function QuizAnalytics({ searchParams }: { searchParams: { 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-[13px]">
                 {[["Attempts", summary.attempts], ["People", summary.people], ["Pass rate", `${summary.passRate}%`], ["Average score", `${summary.avg}%`]].map(([k, v]) => <div key={String(k)} className="card p-3"><div className="text-xs text-soft">{k}</div><div className="mono mt-1 text-xl font-semibold">{v}</div></div>)}
               </div>
+              {current && aiConfigured() && featureOn(ctx.workspace.features, "ai") && can(ctx, "training.build") && <QuizAi courseId={current.id} />}
               <div className="space-y-3">
                 {rows.map((r) => {
                   const pct = Math.round((r.correct / r.total) * 100);

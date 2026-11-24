@@ -9,6 +9,7 @@ import { aiConfigured } from "@/lib/ai/groq";
 import { careOpen } from "@/lib/ai/guard";
 import { Empty } from "@/components/ui";
 import { Portal } from "./portal";
+import { EmployeeAi } from "./employee-ai";
 
 export const metadata = { title: "My Portal" };
 export const maxDuration = 60;
@@ -53,6 +54,7 @@ export default async function MyPortal() {
   return (
     <Portal
       aiCare={aiCare}
+      aiPanel={aiConfigured() && featureOn(ctx.workspace.features, "ai") ? <EmployeeAi aiCare={aiCare} /> : null}
       locationName={location?.name ?? null}
       teamShifts={teamShifts.map((s) => ({ id: s.id, name: short(s.employee!.fullName), label: s.label, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString() }))}
       weekEntries={weekEntries.map((e) => ({ clockIn: e.clockIn.toISOString(), clockOut: e.clockOut?.toISOString() ?? null }))}

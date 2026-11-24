@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { keyedDigest } from "./secret-box";
 import { ALL_AREAS, type MaintArea } from "./maintenance-areas";
 
 export const MAINTENANCE_ROW_ID = "__platform_maintenance__";
@@ -229,21 +230,30 @@ export async function saveAnnouncementState(input: {
   return getAnnouncementState();
 }
 
-export async function recordSiteVisit(rawPath: string) {
+const BOT_UA = /bot|crawl|spider|slurp|headless|preview|monitor|uptime|lighthouse|pingdom|curl|wget|python|node-fetch|axios|go-http/i;
+
+/**
+ * Counts each browser once per day. There is no cookie or stored ID: a connection is hashed with a key that changes every day,
+ * only that day's hashes are kept, and they are dropped when the day ends. Page views per path are still counted for "top pages".
+ */
+export async function recordSiteVisit(rawPath: string, who?: { ip: string; ua: string }) {
   try {
     const cleanPath = (rawPath || "/").split("?")[0].slice(0, 80) || "/";
     if (cleanPath.startsWith("/api/") || cleanPath.startsWith("/_next/")) return;
+    if (!who || !who.ua || BOT_UA.test(who.ua)) return;
     const todayKey = new Date().toISOString().slice(0, 10);
     const existing = await prisma.jobRun.findUnique({ where: { id: VISITS_ROW_ID } });
-    const data = (existing?.summary ?? {}) as { total?: number; byDay?: Record<string, number>; paths?: Record<string, number> };
-    const total = (Number(data.total) || 0) + 1;
-    const byDay: Record<string, number> = { ...(data.byDay ?? {}) };
-    byDay[todayKey] = (byDay[todayKey] || 0) + 1;
-    // Keep last 90 days only
-    const keys = Object.keys(byDay).sort();
+    const data = (existing?.summary ?? {}) as { paths?: Record<string, number>; uvDay?: string; uvIds?: string[]; uv?: Record<string, number> };
+    const uv: Record<string, number> = { ...(data.uv ?? {}) };
+    let ids = data.uvDay === todayKey && Array.isArray(data.uvIds) ? data.uvIds : [];
+    const who12 = keyedDigest(`visitor:${todayKey}`, `${who.ip}|${who.ua.slice(0, 200)}`).slice(0, 12);
+    if (!ids.includes(who12) && ids.length < 20000) ids = [...ids, who12];
+    uv[todayKey] = ids.length;
+    // Keep the last 90 days of counts only.
+    const keys = Object.keys(uv).sort();
     while (keys.length > 90) {
       const oldest = keys.shift();
-      if (oldest) delete byDay[oldest];
+      if (oldest) delete uv[oldest];
     }
     const paths: Record<string, number> = { ...(data.paths ?? {}) };
     paths[cleanPath] = (paths[cleanPath] || 0) + 1;
@@ -251,7 +261,7 @@ export async function recordSiteVisit(rawPath: string) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 30);
     const trimmedPaths = Object.fromEntries(sortedPaths);
-    const summary = { total, byDay, paths: trimmedPaths };
+    const summary = { uv, uvDay: todayKey, uvIds: ids, paths: trimmedPaths };
     await prisma.jobRun.upsert({
       where: { id: VISITS_ROW_ID },
       create: { id: VISITS_ROW_ID, name: "platform:visits", ok: true, summary, durationMs: 0 },
@@ -273,8 +283,9 @@ export async function getSiteVisits(): Promise<SiteVisitsState> {
     if (!row) {
       return { total: 0, today: 0, last7d: 0, last30d: 0, dailyLabels, dailyCounts: days.map(() => 0), topPaths: [] };
     }
-    const data = (row.summary ?? {}) as { total?: number; byDay?: Record<string, number>; paths?: Record<string, number> };
-    const byDay = data.byDay ?? {};
+    const data = (row.summary ?? {}) as { uv?: Record<string, number>; paths?: Record<string, number> };
+    // Unique visitors per day. Older rows that counted every page view are ignored, since those numbers were inflated.
+    const byDay = data.uv ?? {};
     const todayKey = new Date().toISOString().slice(0, 10);
     const d7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const d30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -290,7 +301,7 @@ export async function getSiteVisits(): Promise<SiteVisitsState> {
       .slice(0, 8)
       .map(([path, count]) => ({ path, count: Number(count) || 0 }));
     return {
-      total: Number(data.total) || 0,
+      total: Object.values(byDay).reduce((s, v) => s + (Number(v) || 0), 0),
       today: Number(byDay[todayKey]) || 0,
       last7d,
       last30d,

@@ -693,6 +693,39 @@ model SupportRequest {
   @@index([mergedIntoId])
 }
 
+/// One send from the staff console's email composer (a test, a single message or a broadcast). Counts only, no message text.
+model EmailCampaign {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  staffName  String
+  audience   String
+  target     String   @default("")
+  subject    String
+  templateId String?
+  category   String   @default("")
+  total      Int      @default(0)
+  delivered  Int      @default(0)
+  failed     Int      @default(0)
+  skipped    Int      @default(0)
+  status     String   @default("SENDING")
+
+  @@index([createdAt])
+}
+
+/// A reply template staff saved from the composer, next to the built-in library.
+model EmailTemplate {
+  id         String   @id @default(cuid())
+  title      String
+  category   String   @default("Custom")
+  subject    String
+  body       String
+  icon       String   @default("chat")
+  buttonText String   @default("")
+  buttonUrl  String   @default("")
+  createdBy  String
+  createdAt  DateTime @default(now())
+}
+
 model SupportAttachment {
   id        String   @id @default(cuid())
   requestId String
