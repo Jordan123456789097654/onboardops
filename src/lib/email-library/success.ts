@@ -3,27 +3,33 @@ import { tpl } from "./types";
 const C = "Customer Success" as const;
 
 export const SUCCESS = [
-  tpl(C, "inactive", "We haven't seen you in a while", "Re-engage a workspace that has gone quiet", "chat",
-    "Is everything okay with your OnboardOps workspace?", "We noticed it has been quiet. Can we help?",
+  tpl(C, "miss-you", "We miss you", "A friendly nudge when no one has used OnboardOps for a while", "welcome",
+    "We miss you, {{name}}", "It has been {{days}} days. Your workspace is waiting.",
+    ["Come back to my workspace", "{{login_url}}"], `
+Hi {{name}},
+
+It has been {{days}} days since anyone signed in to {{workspace}}, and we miss you.
+
+Everything is just as you left it: your people, courses and records. Nothing was changed or removed.
+
+If you are not sure where to start, assign one course or run one checklist. That is enough to see it working again.
+
+>+ Stuck or missing something? Reply and a real person will help.
+`),
+
+  tpl(C, "inactive", "We haven't seen you in a while", "A low-key check-in for a workspace that has gone quiet", "chat",
+    "Is everything okay with {{workspace}}?", "No one has signed in for {{days}} days. Can we help?",
     ["Pick up where you left off", "{{login_url}}"], `
 Hi {{name}},
 
-We noticed that no one has signed in to {{workspace}} for {{days}} days. We do not mind, and we do not want to nag. We just want to check that you have what you need.
+We noticed no one has signed in to {{workspace}} for {{days}} days. No pressure. We just want to make sure you have what you need.
 
-## Common reasons teams go quiet
-- It got busy, and setup slipped down the list.
-- Something was confusing, and nobody had time to ask.
+## Teams usually go quiet because
+- It got busy and setup slipped.
+- Something was confusing and nobody asked.
 - It did not do something you needed.
 
-## A way back in
-1. Sign in. Your records and settings are exactly as you left them.
-2. Pick one small thing: assign a course, or try one checklist.
-3. If you are stuck, reply and we will help directly.
-
-## We would like to know
-If OnboardOps is not right for you, we would value hearing why. It is the most useful thing a customer can tell us.
-
-Either way, thank you for trying it.
+Tell us which one it was, even in a single line. We will help, or we will fix it.
 `),
 
   tpl(C, "no-courses", "Build your first course", "Nudge a workspace that has no courses yet", "book",

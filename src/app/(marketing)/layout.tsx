@@ -5,9 +5,14 @@ import { JsonLd } from "@/components/json-ld";
 import { CookieNotice } from "@/components/cookie-notice";
 import { RefCapture } from "@/components/ref-capture";
 import { SiteFooter } from "@/components/site-footer";
+import { NewsletterAnnouncement } from "@/components/newsletter-announcement";
+import { prisma } from "@/lib/prisma";
 
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
   const signedIn = !!(await getSessionUserId(false));
+  const latest = await prisma.newsletterPost
+    .findFirst({ where: { status: "PUBLISHED", publishedAt: { gte: new Date(Date.now() - 30 * 86400_000) } }, orderBy: { publishedAt: "desc" }, select: { slug: true, title: true, summary: true, category: true } })
+    .catch(() => null);
   return (
     <div className="min-h-screen">
       <JsonLd data={{ "@context": "https://schema.org", "@graph": [
@@ -18,6 +23,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <main>{children}</main>
       <RefCapture />
       <CookieNotice />
+      <NewsletterAnnouncement issue={latest} />
       <SiteFooter />
     </div>
   );
