@@ -277,6 +277,409 @@ export const incidentRewrite: TaskDef<
       .join("\n"),
 };
 
+/* ---------------- Wave 2: Setup Assistant, Role Courses & CSV Matching ---------------- */
+
+const RefItem = z.object({ id: z.string().max(80), title: z.string().max(160) });
+export const setupPlan: TaskDef<
+  { description: string; availableCourses: z.infer<typeof RefItem>[]; availablePolicies: z.infer<typeof RefItem>[]; availableChecklists: z.infer<typeof RefItem>[] },
+  { departments: string[]; jobRoles: { title: string; description: string; courseIds: string[] }[]; courseIds: string[]; policyIds: string[]; checklistIds: string[]; customChecklistIdeas: string[]; starterNotes: string }
+> = {
+  id: "setup.plan",
+  label: "Build a workspace setup plan",
+  risk: "low",
+  tier: "smart",
+  perm: "admin",
+  maxTokens: 3200,
+  effort: "low",
+  input: z.object({
+    description: z.string().trim().min(15, "Describe your business, team size, and main shifts").max(4000),
+    availableCourses: z.array(RefItem).max(40).default([]),
+    availablePolicies: z.array(RefItem).max(40).default([]),
+    availableChecklists: z.array(RefItem).max(40).default([]),
+  }),
+  output: z.object({
+    departments: z.array(z.string().trim().min(2).max(60)).min(1).max(8),
+    jobRoles: z.array(z.object({ title: z.string().trim().min(2).max(80), description: z.string().trim().max(200).default(""), courseIds: z.array(z.string()).max(12).default([]) })).min(1).max(8),
+    courseIds: z.array(z.string()).max(15).default([]),
+    policyIds: z.array(z.string()).max(15).default([]),
+    checklistIds: z.array(z.string()).max(15).default([]),
+    customChecklistIdeas: z.array(z.string().trim().max(140)).max(6).default([]),
+    starterNotes: z.string().trim().max(400).default(""),
+  }),
+  shape: `{"departments": ["Front of House", "Kitchen"], "jobRoles": [{"title": "Barista", "description": "Drinks and counter service", "courseIds": ["course-id"]}], "courseIds": ["course-id"], "policyIds": ["policy-id"], "checklistIds": ["checklist-id"], "customChecklistIdeas": ["Closing espresso machine cleaning"], "starterNotes": "Short overview"}`,
+  system:
+    "Design a practical starter workspace structure for a shift-based business. Suggest 2 to 6 clear departments, 2 to 6 frontline job roles, and pick ONLY IDs that exist in the provided availableCourses, availablePolicies, and availableChecklists lists. Also map each job role to the relevant course IDs from availableCourses, and suggest up to 4 custom checklist ideas specific to this business.",
+  user: (i) =>
+    [
+      `Business description:\n${doc(i.description)}`,
+      `Available starter courses: ${JSON.stringify(i.availableCourses)}`,
+      `Available starter policies: ${JSON.stringify(i.availablePolicies)}`,
+      `Available starter checklists: ${JSON.stringify(i.availableChecklists)}`,
+    ].join("\n\n"),
+};
+
+export const rolesCourses: TaskDef<
+  { roles: { id: string; title: string; description: string }[]; courses: { id: string; title: string; category?: string }[] },
+  { recommendations: { roleId: string; courseIds: string[]; reason: string }[] }
+> = {
+  id: "roles.courses",
+  label: "Recommend courses per job role",
+  risk: "low",
+  tier: "fast",
+  perm: "admin",
+  maxTokens: 2000,
+  input: z.object({
+    roles: z.array(z.object({ id: z.string().max(80), title: z.string().max(120), description: z.string().max(300).default("") })).min(1).max(30),
+    courses: z.array(z.object({ id: z.string().max(80), title: z.string().max(160), category: z.string().max(80).optional() })).min(1).max(60),
+  }),
+  output: z.object({
+    recommendations: z.array(z.object({ roleId: z.string(), courseIds: z.array(z.string()).max(20), reason: z.string().trim().max(220).default("") })).max(30),
+  }),
+  shape: `{"recommendations": [{"roleId": "role_1", "courseIds": ["course_1", "course_2"], "reason": "Core safety and role basics"}]}`,
+  system:
+    "Match each job role to the courses it should require for onboarding and compliance. Use ONLY roleId values from roles and courseIds from courses. Give a brief one-sentence reason for each role.",
+  user: (i) => `Roles: ${JSON.stringify(i.roles)}\nCourses: ${JSON.stringify(i.courses)}`,
+};
+
+const CSV_FIELD_ENUM = z.enum(["", "fullName", "email", "phone", "department", "jobRole", "hireDate", "emergencyContact"]);
+export const csvMatch: TaskDef<
+  { headers: string[]; sampleRows: string[][] },
+  { mapping: z.infer<typeof CSV_FIELD_ENUM>[]; notes: string }
+> = {
+  id: "csv.match",
+  label: "Match CSV import columns",
+  risk: "care",
+  tier: "fast",
+  perm: "admin",
+  maxTokens: 1200,
+  input: z.object({
+    headers: z.array(z.string().max(120)).min(1).max(40),
+    sampleRows: z.array(z.array(z.string().max(160)).max(40)).max(5).default([]),
+  }),
+  output: z.object({
+    mapping: z.array(CSV_FIELD_ENUM).min(1).max(40),
+    notes: z.string().trim().max(300).default(""),
+  }),
+  shape: `{"mapping": ["fullName", "email", "department", "", "hireDate"], "notes": "Matched 4 of 5 columns."}`,
+  system:
+    "Map spreadsheet columns to OnboardOps employee import fields. Allowed values per column: \"fullName\", \"email\", \"phone\", \"department\", \"jobRole\", \"hireDate\", \"emergencyContact\", or \"\" (ignore). Return an array with the EXACT same length and order as headers. Each non-empty field name may appear at most once.",
+  user: (i) => `Headers (${i.headers.length}): ${JSON.stringify(i.headers)}\nSample rows (redacted):\n${doc(JSON.stringify(i.sampleRows))}`,
+};
+
+/* ---------------- Wave 3: Credentials, Vision OCR & Compliance ---------------- */
+
+export const credentialScan: TaskDef<
+  { employees: { id: string; label: string }[]; hint?: string },
+  { name: string; number: string; issuer: string; issuedAt: string; expiresAt: string; holderName: string; suggestedEmployeeId: string; confidence: "high" | "medium" | "low"; notes: string }
+> = {
+  id: "credential.scan",
+  label: "Scan license or certificate photo",
+  risk: "care",
+  tier: "vision",
+  perm: "credentials.manage",
+  maxTokens: 1200,
+  input: z.object({
+    employees: z.array(z.object({ id: z.string().max(80), label: z.string().max(140) })).max(200).default([]),
+    hint: z.string().max(200).optional(),
+  }),
+  output: z.object({
+    name: z.string().trim().max(140).default(""),
+    number: z.string().trim().max(100).default(""),
+    issuer: z.string().trim().max(140).default(""),
+    issuedAt: z.string().trim().regex(/^$|^\d{4}-\d{2}-\d{2}$/).default(""),
+    expiresAt: z.string().trim().regex(/^$|^\d{4}-\d{2}-\d{2}$/).default(""),
+    holderName: z.string().trim().max(120).default(""),
+    suggestedEmployeeId: z.string().trim().max(80).default(""),
+    confidence: z.enum(["high", "medium", "low"]).default("medium"),
+    notes: z.string().trim().max(300).default(""),
+  }),
+  shape: `{"name": "Food Handler Certificate", "number": "FH-12345", "issuer": "ServSafe", "issuedAt": "2026-01-15", "expiresAt": "2029-01-15", "holderName": "Jane Doe", "suggestedEmployeeId": "", "confidence": "high", "notes": "All fields readable."}`,
+  system:
+    "Read the attached photo of a workplace license, permit, or training certificate and extract only what is clearly visible: credential name, license/certificate number, issuing body, issued date (YYYY-MM-DD or empty), expiry date (YYYY-MM-DD or empty), and holder name. If employees are provided and the holder name clearly matches one, set suggestedEmployeeId to that exact employee id; otherwise leave it empty. Never guess illegible digits or dates—leave unreadable fields blank and mention it in notes.",
+  user: (i) =>
+    [
+      "Extract credential details from the attached image.",
+      i.hint ? `Additional context: ${i.hint}` : "",
+      i.employees.length ? `Workspace employees (optional match): ${JSON.stringify(i.employees.slice(0, 120))}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+};
+
+export const documentMatch: TaskDef<
+  { fileName: string; textSnippet?: string; employees: { id: string; label: string }[] },
+  { suggestedEmployeeId: string; suggestedTitle: string; category: string; holderNameFound: string; confidence: "high" | "medium" | "low"; reason: string }
+> = {
+  id: "document.match",
+  label: "Match scanned form to employee",
+  risk: "care",
+  tier: "vision",
+  perm: "documents.manage",
+  maxTokens: 1000,
+  input: z.object({
+    fileName: z.string().trim().min(1).max(200),
+    textSnippet: z.string().max(4000).optional(),
+    employees: z.array(z.object({ id: z.string().max(80), label: z.string().max(140) })).min(1).max(200),
+  }),
+  output: z.object({
+    suggestedEmployeeId: z.string().trim().max(80).default(""),
+    suggestedTitle: z.string().trim().max(140).default(""),
+    category: z.string().trim().max(60).default("General"),
+    holderNameFound: z.string().trim().max(120).default(""),
+    confidence: z.enum(["high", "medium", "low"]).default("medium"),
+    reason: z.string().trim().max(260).default(""),
+  }),
+  shape: `{"suggestedEmployeeId": "emp_123", "suggestedTitle": "Signed Forklift Certification", "category": "Certification", "holderNameFound": "Jordan Ellis", "confidence": "high", "reason": "Name matches EMP-1002 Jordan Ellis."}`,
+  system:
+    "Identify which workspace employee a scanned document or form belongs to, and suggest a clean document title and category (e.g. Certification, Tax/HR, Policy Sign-off, Medical/Safety, General). Use ONLY an id from the provided employees list; if unsure, leave suggestedEmployeeId empty and set confidence to low.",
+  user: (i) =>
+    [
+      `Filename: ${i.fileName}`,
+      i.textSnippet ? `Extracted text:\n${doc(i.textSnippet)}` : "Inspect the attached image of the scanned document.",
+      `Workspace employees: ${JSON.stringify(i.employees.slice(0, 150))}`,
+    ].join("\n\n"),
+};
+
+export const complianceSummary: TaskDef<
+  { scope: "training" | "credentials"; metrics: Record<string, unknown> },
+  { headline: string; summary: string; priorities: string[] }
+> = {
+  id: "compliance.summary",
+  label: "Summarize compliance metrics",
+  risk: "low",
+  tier: "fast",
+  perm: "staff",
+  maxTokens: 1200,
+  input: z.object({
+    scope: z.enum(["training", "credentials"]),
+    metrics: z.record(z.unknown()),
+  }),
+  output: z.object({
+    headline: z.string().trim().min(5).max(160),
+    summary: z.string().trim().min(20).max(1500),
+    priorities: z.array(z.string().trim().min(3).max(200)).max(5).default([]),
+  }),
+  shape: `{"headline": "84% compliant with 3 renewals due within 30 days", "summary": "Two short paragraphs...", "priorities": ["Follow up on 2 expired forklift licenses"]}`,
+  system:
+    "Turn exact code-computed compliance statistics into a clear, plain-English briefing for an operations manager. Use ONLY the exact numbers provided in the JSON—never recalculate, round differently, or invent statistics or employee names. Give up to 4 concrete, prioritized next actions.",
+  user: (i) => `Write a plain-language ${i.scope} compliance summary from these exact code-computed numbers:\n${doc(JSON.stringify(i.metrics))}`,
+};
+
+export const regulationExplain: TaskDef<
+  { topic: string; industry?: string },
+  { plainSummary: string; keyRequirements: string[]; practicalSteps: string[]; disclaimer: string }
+> = {
+  id: "regulation.explain",
+  label: "Explain a workplace rule or regulation in plain words",
+  risk: "low",
+  tier: "fast",
+  perm: "staff",
+  maxTokens: 1600,
+  input: z.object({
+    topic: z.string().trim().min(3, "Enter a regulation, standard, or compliance term").max(300),
+    industry: z.string().trim().max(120).optional(),
+  }),
+  output: z.object({
+    plainSummary: z.string().trim().min(20).max(1500),
+    keyRequirements: z.array(z.string().trim().min(3).max(220)).max(6).default([]),
+    practicalSteps: z.array(z.string().trim().min(3).max(220)).max(6).default([]),
+    disclaimer: z.string().trim().max(260).default("General educational information only — not legal advice. Verify local, state, and federal rules with a qualified advisor."),
+  }),
+  shape: `{"plainSummary": "Plain-English explanation...", "keyRequirements": ["Keep training records current"], "practicalSteps": ["Schedule refresher reminders"], "disclaimer": "General information only, not legal advice."}`,
+  system:
+    "Explain a workplace safety, food-handling, HR recordkeeping, or operational compliance topic in clear, everyday English for small-business managers. Be accurate at a general level without inventing obscure statute numbers or local rules. Always emphasize checking official agency guidance or counsel, and never give legal advice.",
+  user: (i) => `Explain "${i.topic}" in plain words${i.industry ? ` for a ${i.industry} team` : ""}.`,
+};
+
+export const incidentChecklist: TaskDef<
+  { incidentType: string; location?: string; description: string; reviewerNotes?: string },
+  { title: string; shiftType: z.infer<typeof ShiftType>; items: { label: string; required: boolean }[]; rationale: string }
+> = {
+  id: "incident.checklist",
+  label: "Suggest preventative checklist items from an incident",
+  risk: "care",
+  tier: "fast",
+  perm: "checklists.manage",
+  maxTokens: 1500,
+  input: z.object({
+    incidentType: z.string().trim().min(2).max(40),
+    location: z.string().trim().max(160).optional(),
+    description: z.string().trim().min(10).max(8000),
+    reviewerNotes: z.string().trim().max(4000).optional(),
+  }),
+  output: z.object({
+    title: z.string().trim().min(3).max(100),
+    shiftType: ShiftType.default("OPENING"),
+    items: z.array(z.object({ label: z.string().trim().min(3).max(180), required: z.boolean().default(true) })).min(3).max(12),
+    rationale: z.string().trim().max(300).default(""),
+  }),
+  shape: `{"title": "Loading Dock Safety Check", "shiftType": "OPENING", "items": [{"label": "Verify wheel chocks are placed before unloading", "required": true}], "rationale": "Addresses the slip/loading risk noted in the report."}`,
+  system:
+    "Based on a workplace incident report, suggest 4 to 8 concrete, preventative shift checklist items to help prevent recurrence. Focus on physical checks, equipment verification, signage, and safe procedures—never mention individuals or blame people.",
+  user: (i) =>
+    [
+      `Incident type: ${i.incidentType}`,
+      i.location ? `Location: ${i.location}` : "",
+      "Incident description:",
+      doc(i.description),
+      i.reviewerNotes ? `Reviewer notes:\n${doc(i.reviewerNotes)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+};
+
+/* ---------------- Wave 4: Records — Compare, Timeline, Packet, Redact & Employee Response ---------------- */
+
+export const infractionCompare: TaskDef<
+  { current: { severity: string; points: number; policy: string; summary: string }; pastCases: { caseRef: string; severity: string; points: number; policy: string; summary: string }[] },
+  { consistencyNote: string; similarCases: { caseRef: string; severity: string; points: number; similarity: string }[]; considerations: string[] }
+> = {
+  id: "infraction.compare",
+  label: "Compare with anonymized past cases",
+  risk: "care",
+  tier: "smart",
+  perm: "staff",
+  maxTokens: 1800,
+  effort: "low",
+  input: z.object({
+    current: z.object({ severity: z.string(), points: z.number(), policy: z.string(), summary: z.string().max(3000) }),
+    pastCases: z.array(z.object({ caseRef: z.string(), severity: z.string(), points: z.number(), policy: z.string(), summary: z.string().max(1500) })).max(20),
+  }),
+  output: z.object({
+    consistencyNote: z.string().trim().min(15).max(1200),
+    similarCases: z.array(z.object({ caseRef: z.string(), severity: z.string(), points: z.number(), similarity: z.string().trim().max(220) })).max(6).default([]),
+    considerations: z.array(z.string().trim().max(220)).max(5).default([]),
+  }),
+  shape: `{"consistencyNote": "In past similar attendance cases...", "similarCases": [{"caseRef": "CASE-A", "severity": "VERBAL_WARNING", "points": 1, "similarity": "Same late-arrival pattern"}], "considerations": ["Check prior verbal warnings before escalating"]}`,
+  system:
+    "Compare the current infraction case against anonymized historical cases from the same workspace to help managers check for consistency. Suggestions only: NEVER tell the manager what disciplinary decision to make, never recommend termination, and never give legal advice. Refer to past cases only by their provided caseRef.",
+  user: (i) =>
+    `Current case:\n${doc(JSON.stringify(i.current))}\n\nAnonymized past cases:\n${doc(JSON.stringify(i.pastCases))}`,
+};
+
+export const infractionTimeline: TaskDef<
+  { caseNumber: string; severity: string; policy: string; summary: string; events: { at: string; type: string; note: string }[] },
+  { lines: string[] }
+> = {
+  id: "infraction.timeline",
+  label: "Five-line case timeline summary",
+  risk: "care",
+  tier: "fast",
+  perm: "staff",
+  maxTokens: 1000,
+  input: z.object({
+    caseNumber: z.string().max(40),
+    severity: z.string().max(40),
+    policy: z.string().max(160),
+    summary: z.string().max(3000),
+    events: z.array(z.object({ at: z.string().max(60), type: z.string().max(60), note: z.string().max(1500) })).max(50),
+  }),
+  output: z.object({
+    lines: z.array(z.string().trim().min(5).max(220)).min(2).max(5),
+  }),
+  shape: `{"lines": ["Nov 12: Written infraction issued for Attendance Policy (+2 pts).", "Nov 13: Employee signed acknowledgment of receipt.", "..."]}`,
+  system:
+    "Distill this case's timeline into at most 5 short, chronological, strictly factual one-line bullet statements. Include only dates and facts present in the record. Keep placeholder tokens like [Person 1] verbatim.",
+  user: (i) =>
+    `Case ${i.caseNumber} (${i.severity}, policy: ${i.policy})\nSummary:\n${doc(i.summary)}\nTimeline events:\n${doc(JSON.stringify(i.events))}`,
+};
+
+export const infractionPacket: TaskDef<
+  { caseNumber: string; severity: string; points: number; policy: string; summary: string; acknowledged: boolean; events: { at: string; type: string; note: string }[]; attachments: { kind: string; title: string; statement: string }[]; appeals: { status: string; reason: string; decision: string }[] },
+  { executiveSummary: string; chronology: string[]; evidenceOverview: string; statusAndNextSteps: string }
+> = {
+  id: "infraction.packet",
+  label: "Draft case-packet summary",
+  risk: "care",
+  tier: "smart",
+  perm: "staff",
+  maxTokens: 2000,
+  effort: "low",
+  input: z.object({
+    caseNumber: z.string().max(40),
+    severity: z.string().max(40),
+    points: z.number(),
+    policy: z.string().max(160),
+    summary: z.string().max(3000),
+    acknowledged: z.boolean(),
+    events: z.array(z.object({ at: z.string().max(60), type: z.string().max(60), note: z.string().max(1200) })).max(50).default([]),
+    attachments: z.array(z.object({ kind: z.string().max(40), title: z.string().max(160), statement: z.string().max(2000) })).max(20).default([]),
+    appeals: z.array(z.object({ status: z.string().max(40), reason: z.string().max(1500), decision: z.string().max(1500) })).max(10).default([]),
+  }),
+  output: z.object({
+    executiveSummary: z.string().trim().min(20).max(1200),
+    chronology: z.array(z.string().trim().min(5).max(220)).max(8).default([]),
+    evidenceOverview: z.string().trim().max(800).default(""),
+    statusAndNextSteps: z.string().trim().max(600).default(""),
+  }),
+  shape: `{"executiveSummary": "...", "chronology": ["..."], "evidenceOverview": "...", "statusAndNextSteps": "..."}`,
+  system:
+    "Prepare a neutral, factual case-packet cover summary for HR review or archiving. Use ONLY facts present in the record—never speculate, never assign legal liability, and never recommend disciplinary outcomes. Keep placeholder tokens like [Person 1] verbatim.",
+  user: (i) => `Compile a case-packet summary for:\n${doc(JSON.stringify(i))}`,
+};
+
+export const infractionRedact: TaskDef<
+  { text: string },
+  { redactedText: string; removedCategories: string[] }
+> = {
+  id: "infraction.redact",
+  label: "Redact case text before sharing",
+  risk: "care",
+  tier: "fast",
+  perm: "staff",
+  maxTokens: 2500,
+  input: z.object({
+    text: z.string().trim().min(10, "Provide text to redact").max(12000),
+  }),
+  output: z.object({
+    redactedText: z.string().trim().min(5).max(14000),
+    removedCategories: z.array(z.string().trim().max(80)).max(10).default([]),
+  }),
+  shape: `{"redactedText": "On [Date], [Person 1] ...", "removedCategories": ["Names", "Phone numbers", "Store locations"]}`,
+  system:
+    "Prepare a clean redacted version of the text suitable for sharing outside the immediate HR team. Preserve existing redaction tokens ([Person 1], [email], [phone], [id]) AND also replace any remaining personal names, nicknames, staff codes (EMP-xxxx), addresses, license plates, or uniquely identifying personal details with bracketed placeholders like [Name], [Staff ID], [Location], or [Detail]. Keep the factual meaning intact and list the categories you redacted.",
+  user: (i) => `Redact identifying details from this text before external sharing:\n${doc(i.text)}`,
+};
+
+export const portalResponse: TaskDef<
+  { roughNotes: string; casePolicy?: string; caseSummary?: string },
+  { statement: string; tips: string[] }
+> = {
+  id: "portal.response",
+  label: "Help write a neutral employee response",
+  risk: "care",
+  tier: "fast",
+  perm: "all",
+  maxTokens: 1400,
+  input: z.object({
+    roughNotes: z.string().trim().min(10, "Write a sentence or two of what you want to say").max(5000),
+    casePolicy: z.string().trim().max(160).optional(),
+    caseSummary: z.string().trim().max(2500).optional(),
+  }),
+  output: z.object({
+    statement: z.string().trim().min(15).max(3000),
+    tips: z.array(z.string().trim().max(180)).max(4).default([]),
+  }),
+  shape: `{"statement": "I would like to add the following context to the record...", "tips": ["Double-check the exact shift time before submitting."]}`,
+  system:
+    "Help an employee turn their rough notes into a calm, respectful, factual written response for their workplace case record. Keep every point truthful to their notes without inventing excuses or giving legal advice. Remove profanity or personal attacks while preserving their side of the story clearly. Keep placeholder tokens like [Person 1] verbatim.",
+  user: (i) =>
+    [
+      i.casePolicy ? `Case policy referenced: ${i.casePolicy}` : "",
+      i.caseSummary ? `Case summary (for context):\n${doc(i.caseSummary)}` : "",
+      "Employee's rough notes:",
+      doc(i.roughNotes),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+};
+
 export const TASKS: Record<string, TaskDef<any, any>> = Object.fromEntries(
-  [courseDraft, policyLesson, quizMore, quizOptions, lessonSimplify, courseTranslate, courseMeta, lessonClarity, policyDraft, checklistDraft, infractionRewrite, incidentRewrite].map((t) => [t.id, t])
+  [
+    courseDraft, policyLesson, quizMore, quizOptions, lessonSimplify, courseTranslate, courseMeta, lessonClarity,
+    policyDraft, checklistDraft, infractionRewrite, incidentRewrite,
+    setupPlan, rolesCourses, csvMatch,
+    credentialScan, documentMatch, complianceSummary, regulationExplain, incidentChecklist,
+    infractionCompare, infractionTimeline, infractionPacket, infractionRedact, portalResponse,
+  ].map((t) => [t.id, t])
 );

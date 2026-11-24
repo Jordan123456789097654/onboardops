@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaffPage, SUPPORT_STAFF } from "@/lib/platform";
+import { aiConfigured } from "@/lib/ai/groq";
 import { Inbox, type Req } from "./inbox";
 
+export const maxDuration = 60;
 export const metadata = { title: "Support inbox" };
 
 export default async function InboxPage({ searchParams }: { searchParams: { status?: string; open?: string } }) {
@@ -20,5 +22,5 @@ export default async function InboxPage({ searchParams }: { searchParams: { stat
     workspaceId: r.workspaceId, workspaceName: r.workspaceId ? wname.get(r.workspaceId) ?? "Deleted workspace" : null, createdAt: r.createdAt.toISOString(),
     messages: r.messages.map((m) => ({ id: m.id, kind: m.kind, author: m.authorName, body: m.body, emailed: m.emailed, at: m.createdAt.toISOString() })),
   }));
-  return <Inbox rows={data} me={staff.name} initialStatus={searchParams.status ?? ""} openId={searchParams.open ?? null} />;
+  return <Inbox rows={data} me={staff.name} initialStatus={searchParams.status ?? ""} openId={searchParams.open ?? null} ai={aiConfigured()} />;
 }

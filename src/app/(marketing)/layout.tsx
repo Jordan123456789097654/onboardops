@@ -5,8 +5,10 @@ import { getSessionUserId } from "@/lib/auth";
 import { legalPages, SITE } from "@/lib/site";
 import { JsonLd } from "@/components/json-ld";
 import { CookieNotice } from "@/components/cookie-notice";
+import { MarketingChat } from "@/components/marketing-chat";
 import { RefCapture } from "@/components/ref-capture";
 import { FacebookIcon, YouTubeIcon } from "@/components/social-icons";
+import { aiConfigured } from "@/lib/ai/groq";
 
 const cols = [
   { title: "Product", links: [["Why OnboardOps", "/why"], ["Overview", "/features"], ["Solutions", "/solutions"], ["Security", "/security"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"], ["Free tools", "/tools"], ["Playbooks", "/playbooks"]] },
@@ -26,6 +28,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <main>{children}</main>
       <RefCapture />
       <CookieNotice />
+      {aiConfigured() && <MarketingChat />}
       <footer className="no-print mt-24 border-t border-line bg-surface">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>

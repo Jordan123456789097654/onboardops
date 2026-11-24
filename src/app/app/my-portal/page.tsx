@@ -4,10 +4,14 @@ import { requirePageRole, ALL_ROLES, serializeInfraction, hasFeature } from "@/l
 import { allowanceOf, usage, TIMEOFF_TYPES } from "@/lib/timeoff";
 import { hasSmsConfig } from "@/lib/sms";
 import { apiUrl, getApiOrigin } from "@/lib/service-role";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
+import { careOpen } from "@/lib/ai/guard";
 import { Empty } from "@/components/ui";
 import { Portal } from "./portal";
 
 export const metadata = { title: "My Portal" };
+export const maxDuration = 60;
 
 export default async function MyPortal() {
   const ctx = await requirePageRole(ALL_ROLES);
@@ -45,8 +49,10 @@ export default async function MyPortal() {
     p.locationId ? prisma.location.findFirst({ where: { id: p.locationId, workspaceId: ctx.workspaceId } }) : Promise.resolve(null),
   ]);
   const short = (n: string) => { const [f, ...r] = n.split(" "); return r.length ? `${f} ${r[r.length - 1][0]}.` : f; };
+  const aiCare = aiConfigured() && featureOn(ctx.workspace.features, "ai") && featureOn(ctx.workspace.features, "aiPeople") && careOpen();
   return (
     <Portal
+      aiCare={aiCare}
       locationName={location?.name ?? null}
       teamShifts={teamShifts.map((s) => ({ id: s.id, name: short(s.employee!.fullName), label: s.label, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString() }))}
       weekEntries={weekEntries.map((e) => ({ clockIn: e.clockIn.toISOString(), clockOut: e.clockOut?.toISOString() ?? null }))}

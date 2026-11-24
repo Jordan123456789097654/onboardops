@@ -1,34 +1,70 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, FileUp } from "lucide-react";
+import { Download, FileUp, Sparkles } from "lucide-react";
 import { importEmployeesAction, type ImportResult } from "@/actions/import";
-import { mapEmployeeCsv, csvHeaders, IMPORT_FIELDS, EMPLOYEE_CSV_TEMPLATE, type ParsedImport } from "@/lib/csv";
-import { Modal, useAction } from "@/components/ui";
+import { runAiTaskAction } from "@/actions/ai";
+import { mapEmployeeCsv, csvHeaders, parseCsv, IMPORT_FIELDS, EMPLOYEE_CSV_TEMPLATE, type ParsedImport } from "@/lib/csv";
+import { Modal, useAction, useToast } from "@/components/ui";
 
-export function ImportEmployees() {
+export function ImportEmployees({ aiCare = false }: { aiCare?: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [parsed, setParsed] = useState<ParsedImport | null>(null);
   const [fileName, setFileName] = useState("");
   const [raw, setRaw] = useState("");
   const [cols, setCols] = useState<{ headers: string[]; map: string[] }>({ headers: [], map: [] });
+  const [mapOpen, setMapOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [createMissing, setCreateMissing] = useState(false);
   const [sendWelcome, setSendWelcome] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  const reset = () => { setParsed(null); setFileName(""); setResult(null); if (input.current) input.current.value = ""; };
+  const reset = () => { setParsed(null); setFileName(""); setRaw(""); setCols({ headers: [], map: [] }); setMapOpen(false); setAiBusy(false); setResult(null); if (input.current) input.current.value = ""; };
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     setResult(null);
     setFileName(f.name);
     const text = await f.text();
     const h = csvHeaders(text);
+    const p = mapEmployeeCsv(text);
     setRaw(text);
     setCols({ headers: h.headers, map: h.auto });
-    setParsed(mapEmployeeCsv(text));
+    setParsed(p);
+    setMapOpen(p.missingRequired.length > 0);
+  };
+  const matchWithAi = async () => {
+    if (!raw || cols.headers.length === 0) return;
+    setAiBusy(true);
+    const sendHeaders = cols.headers.slice(0, 40).map((h) => h.slice(0, 120));
+    const grid = parseCsv(raw);
+    const sampleRows = grid.slice(1, 4).map((row) =>
+      Array.from({ length: sendHeaders.length }, (_, idx) => (row[idx] ?? "").trim().slice(0, 160))
+    );
+    const r = await runAiTaskAction("csv.match", {
+      headers: sendHeaders,
+      sampleRows,
+    }) as { ok: true; data: { mapping: string[]; notes: string } } | { ok: false; error: string };
+    setAiBusy(false);
+    if (!r.ok) {
+      toast("error", r.error);
+      return;
+    }
+    const validKeys = new Set(IMPORT_FIELDS.map((f) => f.key));
+    const seen = new Set<string>();
+    const nextMap = cols.headers.map((_, i) => {
+      const k = r.data.mapping[i] ?? "";
+      if (!k || !validKeys.has(k) || seen.has(k)) return "";
+      seen.add(k);
+      return k;
+    });
+    setCols({ ...cols, map: nextMap });
+    setParsed(mapEmployeeCsv(raw, nextMap));
+    setMapOpen(true);
+    toast("ok", r.data.notes || "Columns matched — review before importing.");
   };
   const template = () => {
     const url = URL.createObjectURL(new Blob([EMPLOYEE_CSV_TEMPLATE], { type: "text/csv" }));
@@ -59,8 +95,19 @@ export function ImportEmployees() {
               <button className="btn" type="button" onClick={template}><Download className="h-3.5 w-3.5" />Template</button>
             </div>
             {parsed && cols.headers.length > 0 && (
-              <details className="rounded-md border border-line p-2" open={parsed.missingRequired.length > 0}>
+              <details className="rounded-md border border-line p-2" open={mapOpen} onToggle={(e) => setMapOpen(e.currentTarget.open)}>
                 <summary className="cursor-pointer text-xs font-medium">Match columns ({cols.headers.length} found)</summary>
+                {aiCare ? (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-accent/30 bg-accent/5 px-2.5 py-2">
+                    <span className="text-[11px] text-soft">Employee fields are redacted before AI matching. Review columns before importing.</span>
+                    <button type="button" className="btn !h-7 !px-2.5 !text-xs" disabled={aiBusy || pending} onClick={matchWithAi}>
+                      <Sparkles className="h-3.5 w-3.5 text-accent" />
+                      {aiBusy ? "Matching…" : "Match columns with AI"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-soft">AI column matching is locked while people-data AI is off.</p>
+                )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">{cols.headers.map((h, i) => (
                   <label key={i} className="flex items-center gap-2 text-xs"><span className="w-32 truncate" title={h}>{h || `Column ${i + 1}`}</span>
                     <select className="input !h-8" value={cols.map[i] ?? ""} onChange={(e) => { const map = cols.map.slice(); map[i] = e.target.value; setCols({ ...cols, map }); setParsed(mapEmployeeCsv(raw, map)); }}>

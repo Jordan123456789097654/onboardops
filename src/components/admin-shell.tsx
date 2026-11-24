@@ -16,6 +16,7 @@ import {
   Menu,
   MessageSquareQuote,
   ShieldCheck,
+  Sparkles,
   UsersRound,
 } from "lucide-react";
 import { useState } from "react";
@@ -44,6 +45,7 @@ const ICON_MAP = {
   inbox: Inbox,
   feedback: Lightbulb,
   privacy: ShieldCheck,
+  content: Sparkles,
   roadmap: Map,
   testimonials: MessageSquareQuote,
   partners: Handshake,

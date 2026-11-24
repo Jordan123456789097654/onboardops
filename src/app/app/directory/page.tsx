@@ -4,10 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { requirePageRole, STAFF_ROLES, MANAGEMENT_ROLES } from "@/lib/rbac";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { fmtDate } from "@/lib/utils";
+import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
+import { careOpen } from "@/lib/ai/guard";
 import { AddEmployee } from "./add-employee";
 import { ImportEmployees } from "./import-employees";
 
 export const metadata = { title: "Staff Directory" };
+export const maxDuration = 60;
 
 export default async function Directory({ searchParams }: { searchParams: { q?: string; dept?: string; status?: string; readiness?: string; add?: string } }) {
   const ctx = await requirePageRole(STAFF_ROLES);
@@ -24,11 +28,12 @@ export default async function Directory({ searchParams }: { searchParams: { q?: 
   ]);
   const exportQs = new URLSearchParams({ q, dept, status, readiness }).toString();
   const canAdd = MANAGEMENT_ROLES.includes(ctx.role);
+  const aiCare = aiConfigured() && featureOn(ctx.workspace.features, "ai") && featureOn(ctx.workspace.features, "aiPeople") && careOpen();
   return (
     <>
       <PageHeader title="Staff Directory" sub={`${rows.length} employee${rows.length === 1 ? "" : "s"}`}>
         <a href={`/api/export/employees?${exportQs}`} className="btn">Export CSV</a>
-        {canAdd && <ImportEmployees />}
+        {canAdd && <ImportEmployees aiCare={aiCare} />}
         {canAdd && <AddEmployee defaultOpen={searchParams.add === "1"} departments={departments.map((d) => ({ id: d.id, name: d.name }))} roles={roles.map((r) => ({ id: r.id, name: r.title }))} />}
       </PageHeader>
       <form className="mb-3 flex flex-wrap gap-2" method="get">

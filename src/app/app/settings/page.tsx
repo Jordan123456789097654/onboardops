@@ -8,10 +8,12 @@ import { Settings } from "./settings";
 import { vercelConfigured, type DomainDetails } from "@/lib/vercel-domains";
 import { SITE } from "@/lib/site";
 import { featureOn } from "@/lib/features";
+import { aiConfigured } from "@/lib/ai/groq";
 import { cmkState } from "@/lib/cmk";
 import { SSO_ERRORS, ssoRedirectUri } from "@/lib/sso";
 
 export const metadata = { title: "Settings" };
+export const maxDuration = 60;
 
 export default async function SettingsPage({ searchParams }: { searchParams: { sso?: string; sso_error?: string } }) {
   const ctx = await requirePageRole(ADMIN_ROLES);
@@ -19,7 +21,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { s
   const [departments, roles, courses, members] = await Promise.all([
     prisma.department.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { name: "asc" } }),
     prisma.jobRole.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { title: "asc" } }),
-    prisma.course.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { title: "asc" }, select: { id: true, title: true } }),
+    prisma.course.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { title: "asc" }, select: { id: true, title: true, category: true } }),
     prisma.workspaceMember.findMany({ where: { workspaceId: ctx.workspaceId }, include: { user: true }, orderBy: { createdAt: "asc" } }),
   ]);
   const w = ctx.workspace;
@@ -48,6 +50,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { s
       features={(w.features as Record<string, boolean>) ?? {}}
       rolePerms={(w.rolePerms as Record<string, string[]>) ?? {}}
       customRolesOn={featureOn(w.features, "customRoles")}
+      ai={aiConfigured() && featureOn(w.features, "ai")}
     />
   );
 }

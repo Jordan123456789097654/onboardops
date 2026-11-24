@@ -14,13 +14,15 @@ import { Paperclip } from "lucide-react";
 import { acknowledgePolicyAction } from "@/actions/policies";
 import { fileIncidentAction } from "@/actions/incidents";
 import { submitStaffRequestAction, withdrawStaffRequestAction } from "@/actions/requests";
+import { runAiTaskAction } from "@/actions/ai";
 import { INCIDENT_TYPES } from "@/lib/constants";
-import { Badge, Empty, Field, Modal, PageHeader, Tabs, useAction } from "@/components/ui";
+import { Badge, Empty, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 import { TodayHub } from "./today-hub";
-import { Check, Circle } from "lucide-react";
+import { Check, Circle, Sparkles } from "lucide-react";
 
 type Props = {
+  aiCare?: boolean;
   locationName: string | null; teamShifts: { id: string; name: string; label: string; startsAt: string; endsAt: string }[]; weekEntries: { clockIn: string; clockOut: string | null }[]; credentials: { id: string; name: string; expires: string }[]; submittedTemplates: { id: string; at: string }[];
   calendarUrl: string; sms: { configured: boolean; optIn: boolean; phone: string };
   balances: { type: string; allowance: number; used: number; pending: number }[];
@@ -260,19 +262,127 @@ function ProfileChange({ phone, emergencyContact }: { phone: string; emergencyCo
   );
 }
 
-function ResponseBox({ caseId }: { caseId: string }) {
+type PortalResponseDraft = { statement: string; tips: string[] };
+
+function ResponseBox({ caseId, aiCare = false, casePolicy, caseSummary }: { caseId: string; aiCare?: boolean; casePolicy?: string; caseSummary?: string }) {
   const router = useRouter();
+  const toast = useToast();
   const { exec, pending } = useAction();
+  const { exec: execAi, pending: aiPending } = useAction();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  const [draft, setDraft] = useState<PortalResponseDraft | null>(null);
+
+  const helpWriteNeutrally = () => {
+    execAi(
+      () =>
+        runAiTaskAction("portal.response", {
+          roughNotes: text.slice(0, 5000),
+          casePolicy: casePolicy?.trim() ? casePolicy.trim().slice(0, 160) : undefined,
+          caseSummary: caseSummary?.trim() ? caseSummary.trim().slice(0, 2500) : undefined,
+        }) as Promise<{ ok: true; data: PortalResponseDraft } | { ok: false; error: string }>,
+      {
+        onOk: (res) => {
+          setDraft(res);
+          toast("ok", "Draft ready — review and edit before submitting.");
+        },
+      }
+    );
+  };
+
   return (
     <>
       <button className="btn" onClick={() => setOpen(true)}>Add my response</button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Your written response">
+      <Modal open={open} onClose={() => { setOpen(false); setDraft(null); }} title="Your written response">
         <div className="space-y-3">
           <p className="text-xs text-soft">Tell your side. This is added to the case record and your manager is notified. You can still sign or appeal separately.</p>
-          <Field label="Your response"><textarea className="textarea" rows={5} value={text} onChange={(e) => setText(e.target.value)} /></Field>
-          <button className="btn-primary w-full" disabled={pending} onClick={() => exec(() => addEmployeeResponseAction(caseId, { statement: text }), { success: "Response added", onOk: () => { setOpen(false); setText(""); router.refresh(); } })}>Submit response</button>
+          <Field label="Your response">
+            <textarea
+              className="textarea"
+              rows={5}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Write your rough notes or full statement here…"
+            />
+          </Field>
+          {aiCare && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="btn !h-7 !text-xs"
+                  disabled={aiPending || pending || text.trim().length < 10}
+                  onClick={helpWriteNeutrally}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-accent" />
+                  {aiPending ? "Drafting…" : "Help me write neutrally (AI)"}
+                </button>
+                <span className="text-[11px] text-soft">
+                  Names &amp; contact details are scrubbed before AI. Nothing is submitted until you review and click Submit response.
+                </span>
+              </div>
+              {draft && (
+                <div className="rounded-lg border border-accent/40 bg-accent/5 p-3 text-xs space-y-2">
+                  <div className="flex items-center justify-between gap-2 font-semibold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-accent" />
+                      Suggested calm, factual wording
+                    </span>
+                    <button type="button" className="font-normal text-soft underline" onClick={() => setDraft(null)}>
+                      Discard
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap rounded border border-line bg-surface p-2.5 text-[13px] text-ink">
+                    {draft.statement}
+                  </p>
+                  {draft.tips.length > 0 && (
+                    <ul className="list-disc space-y-0.5 pl-4 text-soft">
+                      {draft.tips.map((tip, i) => (
+                        <li key={i}>{tip}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-primary !h-8 flex-1 text-xs"
+                      onClick={() => {
+                        setText(draft.statement);
+                        setDraft(null);
+                        toast("ok", "Copied into your response — review or edit before clicking Submit response.");
+                      }}
+                    >
+                      Use this wording
+                    </button>
+                    <button
+                      type="button"
+                      className="btn !h-8 text-xs"
+                      onClick={() => setDraft(null)}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            className="btn-primary w-full"
+            disabled={pending || aiPending}
+            onClick={() =>
+              exec(() => addEmployeeResponseAction(caseId, { statement: text }), {
+                success: "Response added",
+                onOk: () => {
+                  setOpen(false);
+                  setText("");
+                  setDraft(null);
+                  router.refresh();
+                },
+              })
+            }
+          >
+            Submit response
+          </button>
         </div>
       </Modal>
     </>
@@ -451,7 +561,7 @@ export function Portal(p: Props) {
       <div className={tab === "records" ? "mt-4" : "hidden"} role="tabpanel" aria-label="records">
       <section id="notices" className="scroll-mt-20">
         <h2 className="mb-2 text-sm font-semibold">My notices</h2>
-        {p.cases.length === 0 ? <Empty title="No infractions on file" /> : <div className="card divide-y divide-line">{p.cases.map((c) => <div key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><span className="mono">{c.caseNumber}</span><Badge value={c.severity} /><span className="flex-1">{c.policy}</span>{c.acknowledged ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Awaiting" />}<ResponseBox caseId={c.id} /><AppealBox caseId={c.id} status={p.appeals.find((a) => a.caseId === c.id)?.status} /><CaseSteps signed={c.acknowledged} responded={!!c.responded} appeal={p.appeals.find((a) => a.caseId === c.id)?.status} /></div>)}</div>}
+        {p.cases.length === 0 ? <Empty title="No infractions on file" /> : <div className="card divide-y divide-line">{p.cases.map((c) => <div key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-[13px]"><span className="mono">{c.caseNumber}</span><Badge value={c.severity} /><span className="flex-1">{c.policy}</span>{c.acknowledged ? <Badge value="ACTIVE" label="Signed" /> : <Badge value="PENDING" label="Awaiting" />}<ResponseBox caseId={c.id} aiCare={!!p.aiCare} casePolicy={c.policy} caseSummary={c.summary} /><AppealBox caseId={c.id} status={p.appeals.find((a) => a.caseId === c.id)?.status} /><CaseSteps signed={c.acknowledged} responded={!!c.responded} appeal={p.appeals.find((a) => a.caseId === c.id)?.status} /></div>)}</div>}
       </section>
       {p.reviews.length > 0 && (
         <section className="mb-6 space-y-3">

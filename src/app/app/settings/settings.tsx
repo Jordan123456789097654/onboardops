@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles, X } from "lucide-react";
 import { saveDepartmentAction, saveJobRoleAction, saveSettingsAction, saveWorkspaceMetaAction, testWebhookAction } from "@/actions/settings";
 import { setMemberRoleAction } from "@/actions/features";
+import { runAiTaskAction } from "@/actions/ai";
 import { FeaturesPanel } from "./features-panel";
 import { FieldsPanel } from "./fields-panel";
 import { IntegrationsPanel } from "./integrations-panel";
@@ -17,8 +19,10 @@ import { Badge, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/co
 
 type Dept = { id?: string; name: string; colorCode: string };
 type JobRole = { id?: string; title: string; description: string; requiredCourseIds: string[]; pathSequential: boolean };
+type RoleCourseRec = { roleId: string; courseIds: string[]; reason: string };
+type RoleRecState = { suggestedIds: string[]; selectedIds: string[]; reason: string };
 
-export function Settings({ sso, encryption, mfa, integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members }: {
+export function Settings({ sso, encryption, mfa, integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members, ai = false }: {
   customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
   integrations: { keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; scopes: string[]; expiresAt: string | null }[]; webhookUrl: string; locations: { id: string; name: string; address: string; timezone: string }[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } };
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
@@ -28,7 +32,8 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
   domain: { address: { enabled: boolean; slug: string; status: string; zone: string; isOwner: boolean }; slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
   ws: { publicCerts: boolean; decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
-  departments: Required<Dept>[]; roles: Required<JobRole>[]; courses: { id: string; title: string }[]; members: { id: string; name: string; email: string; role: string; customRoleId: string | null }[];
+  departments: Required<Dept>[]; roles: Required<JobRole>[]; courses: { id: string; title: string; category?: string }[]; members: { id: string; name: string; email: string; role: string; customRoleId: string | null }[];
+  ai?: boolean;
 }) {
   const router = useRouter();
   const { exec, pending } = useAction();
@@ -41,7 +46,74 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
   const [closePw, setClosePw] = useState("");
   const [dept, setDept] = useState<Dept | null>(null);
   const [role, setRole] = useState<JobRole | null>(null);
+  const [aiRecBusy, setAiRecBusy] = useState(false);
+  const [recs, setRecs] = useState<Record<string, RoleRecState>>({});
+  const [applyingRoleId, setApplyingRoleId] = useState<string | null>(null);
   const done = () => router.refresh();
+
+  async function suggestCourses() {
+    setAiRecBusy(true);
+    const r = await runAiTaskAction("roles.courses", {
+      roles: roles.slice(0, 30).map((item) => ({ id: item.id, title: item.title, description: item.description })),
+      courses: courses.slice(0, 60).map((c) => ({ id: c.id, title: c.title, ...(c.category ? { category: c.category } : {}) })),
+    }) as { ok: true; data: { recommendations: RoleCourseRec[] } } | { ok: false; error: string };
+    setAiRecBusy(false);
+    if (!r.ok) {
+      toast("error", r.error);
+      return;
+    }
+    const validRoleIds = new Set(roles.map((item) => item.id));
+    const validCourseIds = new Set(courses.map((c) => c.id));
+    const next: Record<string, RoleRecState> = {};
+    for (const rec of r.data.recommendations) {
+      if (!validRoleIds.has(rec.roleId)) continue;
+      const cleanedIds = Array.from(new Set(rec.courseIds.filter((cid) => validCourseIds.has(cid))));
+      next[rec.roleId] = { suggestedIds: cleanedIds, selectedIds: cleanedIds, reason: rec.reason.trim() };
+    }
+    setRecs(next);
+    const count = Object.keys(next).length;
+    if (count === 0) toast("ok", "No course suggestions returned for these roles.");
+    else toast("ok", `Suggested courses for ${count} role${count === 1 ? "" : "s"} — review before applying.`);
+  }
+
+  function toggleRecCourse(roleId: string, courseId: string) {
+    setRecs((prev) => {
+      const cur = prev[roleId];
+      if (!cur) return prev;
+      const has = cur.selectedIds.includes(courseId);
+      return {
+        ...prev,
+        [roleId]: { ...cur, selectedIds: has ? cur.selectedIds.filter((id) => id !== courseId) : [...cur.selectedIds, courseId] },
+      };
+    });
+  }
+
+  function dismissRec(roleId: string) {
+    setRecs((prev) => {
+      const next = { ...prev };
+      delete next[roleId];
+      return next;
+    });
+  }
+
+  async function applyRec(roleItem: Required<JobRole>, courseIds: string[]) {
+    setApplyingRoleId(roleItem.id);
+    const r = await saveJobRoleAction({
+      id: roleItem.id,
+      title: roleItem.title,
+      description: roleItem.description,
+      requiredCourseIds: courseIds,
+      pathSequential: roleItem.pathSequential,
+    });
+    setApplyingRoleId(null);
+    if (!r.ok) {
+      toast("error", r.error);
+      return;
+    }
+    dismissRec(roleItem.id);
+    toast("ok", `Updated required courses for ${roleItem.title}`);
+    done();
+  }
 
   return (
     <>
@@ -79,8 +151,83 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
               <div className="card divide-y divide-line">{departments.map((d) => <div key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><span className="h-3 w-3 rounded-sm" style={{ background: d.colorCode }} /><span className="flex-1">{d.name}</span><span className="mono text-xs text-soft">{d.colorCode}</span><button className="btn" onClick={() => setDept(d)}>Edit</button></div>)}</div>
             </section>
             <section>
-              <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">Job roles and required courses</h2><button className="btn" onClick={() => setRole({ title: "", description: "", requiredCourseIds: [], pathSequential: false })}>Add job role</button></div>
-              <div className="card divide-y divide-line">{roles.map((r) => <div key={r.id} className="flex items-center gap-3 px-3 py-2 text-[13px]"><div className="flex-1"><div className="font-medium">{r.title}</div><div className="text-xs text-soft">{r.requiredCourseIds.map((id) => courses.find((c) => c.id === id)?.title).filter(Boolean).join(r.pathSequential ? " → " : " · ") || "No required courses"}{r.pathSequential && r.requiredCourseIds.length > 1 ? " (in order)" : ""}</div></div><button className="btn" onClick={() => setRole(r)}>Edit</button></div>)}</div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">Job roles and required courses</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  {ai && roles.length > 0 && courses.length > 0 && (
+                    <button type="button" className="btn" disabled={aiRecBusy || pending} onClick={suggestCourses}>
+                      <Sparkles className="h-3.5 w-3.5 text-accent" />
+                      {aiRecBusy ? "Suggesting…" : "Suggest courses with AI"}
+                    </button>
+                  )}
+                  <button className="btn" onClick={() => setRole({ title: "", description: "", requiredCourseIds: [], pathSequential: false })}>Add job role</button>
+                </div>
+              </div>
+              <div className="card divide-y divide-line">
+                {roles.map((r) => {
+                  const rec = recs[r.id];
+                  const isApplying = applyingRoleId === r.id;
+                  return (
+                    <div key={r.id} className="px-3 py-2 text-[13px]">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="font-medium">{r.title}</div>
+                          <div className="text-xs text-soft">
+                            {r.requiredCourseIds.map((id) => courses.find((c) => c.id === id)?.title).filter(Boolean).join(r.pathSequential ? " → " : " · ") || "No required courses"}
+                            {r.pathSequential && r.requiredCourseIds.length > 1 ? " (in order)" : ""}
+                          </div>
+                        </div>
+                        <button className="btn" onClick={() => setRole(r)}>Edit</button>
+                      </div>
+                      {rec && (
+                        <div className="mt-2.5 rounded-lg border border-accent/30 bg-accent/5 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                              <Sparkles className="h-3.5 w-3.5 text-accent" />AI course suggestion
+                            </span>
+                            <button type="button" className="text-soft hover:text-ink" aria-label="Dismiss suggestion" onClick={() => dismissRec(r.id)}>
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          {rec.reason && <p className="mt-1 text-xs text-soft">{rec.reason}</p>}
+                          {rec.suggestedIds.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {rec.suggestedIds.map((cid) => {
+                                const title = courses.find((c) => c.id === cid)?.title;
+                                if (!title) return null;
+                                const checked = rec.selectedIds.includes(cid);
+                                return (
+                                  <label key={cid} className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-xs">
+                                    <input type="checkbox" checked={checked} disabled={isApplying} onChange={() => toggleRecCourse(r.id, cid)} />
+                                    <span>{title}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="mt-1.5 text-xs text-soft">No matching courses suggested for this role.</p>
+                          )}
+                          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                            {rec.suggestedIds.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn-primary !h-7 !px-2.5 !text-xs"
+                                disabled={isApplying || pending}
+                                onClick={() => applyRec(r, rec.selectedIds)}
+                              >
+                                {isApplying ? "Applying…" : "Apply to this role"}
+                              </button>
+                            )}
+                            <button type="button" className="btn !h-7 !px-2.5 !text-xs" disabled={isApplying} onClick={() => dismissRec(r.id)}>
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
               <p className="mt-2 text-xs text-soft">Assigning a job role to an employee enrolls them in every required course and sets readiness to Pending.</p>
             </section>
           </div>

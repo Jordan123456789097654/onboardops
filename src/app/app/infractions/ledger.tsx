@@ -1,10 +1,10 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Check, Copy, FileText, ListOrdered, RefreshCw, Scale, ShieldAlert, Sparkles } from "lucide-react";
 import { addCaseAttachmentAction, applyStrikeDecayAction, decideAppealAction, deleteDisciplineRuleAction, saveDisciplineRuleAction } from "@/actions/discipline2";
 import { addCaseNoteAction, issueInfractionAction, logAppealAction } from "@/actions/infractions";
-import { runAiTaskAction } from "@/actions/ai";
+import { compareInfractionCaseAction, runAiTaskAction } from "@/actions/ai";
 import { Badge, Drawer, Empty, Field, Modal, PageHeader, useAction, useToast } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 
@@ -20,6 +20,438 @@ type RuleRow = { id: string; whenSeverity: string; count: number; withinDays: nu
 type TemplateOpt = { id: string; name: string; severity: string; points: number; policy: string; summary: string };
 
 type AiRewriteDraft = { policyViolated: string; summary: string; coachingTip: string; flags: string[] };
+type AiTimelineDraft = { lines: string[] };
+type AiCompareDraft = { consistencyNote: string; similarCases: { caseRef: string; severity: string; points: number; similarity: string }[]; considerations: string[] };
+type AiPacketDraft = { executiveSummary: string; chronology: string[]; evidenceOverview: string; statusAndNextSteps: string };
+type AiRedactDraft = { redactedText: string; removedCategories: string[] };
+type AiDrawerTool = "timeline" | "compare" | "packet" | "redact";
+
+function buildShareableCaseText(c: CaseRow): string {
+  const publicTimeline = c.timeline.filter((t) => !t.confidential);
+  const lines: string[] = [
+    `Case: ${c.caseNumber}`,
+    `Employee: ${c.employee}`,
+    `Severity: ${c.severity.replace(/_/g, " ")} (+${c.points} pts)`,
+    `Policy: ${c.policy}`,
+    `Issued: ${fmtDateTime(c.createdAt)} by ${c.issuedBy}`,
+    `Acknowledgment: ${c.acknowledged ? `Signed by ${c.signedBy ?? "employee"}${c.acknowledgedAt ? ` on ${fmtDateTime(c.acknowledgedAt)}` : ""}` : "Awaiting signature"}`,
+    "",
+    `Summary:\n${c.summary}`,
+  ];
+  if (publicTimeline.length > 0) {
+    lines.push(
+      "",
+      "Timeline (non-confidential):",
+      ...publicTimeline.map((t) => `- ${fmtDateTime(t.at)} [${t.type.replace(/_/g, " ")}] ${t.actor}: ${t.note}`)
+    );
+  }
+  if (c.attachments.length > 0) {
+    lines.push(
+      "",
+      "Attachments & Statements:",
+      ...c.attachments.map((a) => `- [${a.kind}] ${a.title} (${a.author}, ${fmtDateTime(a.at)})${a.statement ? `: ${a.statement}` : ""}`)
+    );
+  }
+  return lines.join("\n").slice(0, 12000);
+}
+
+function CaseAiHelpers({ c, canConfidential }: { c: CaseRow; canConfidential: boolean }) {
+  const toast = useToast();
+  const { exec, pending } = useAction();
+  const [active, setActive] = useState<AiDrawerTool | null>(null);
+  const [loading, setLoading] = useState<AiDrawerTool | null>(null);
+  const [timelineDraft, setTimelineDraft] = useState<AiTimelineDraft | null>(null);
+  const [compareDraft, setCompareDraft] = useState<AiCompareDraft | null>(null);
+  const [packetDraft, setPacketDraft] = useState<(AiPacketDraft & { includedConfidential: boolean }) | null>(null);
+  const [redactDraft, setRedactDraft] = useState<AiRedactDraft | null>(null);
+  const [redactedText, setRedactedText] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const hasConfidentialNotes = Boolean(c.confidential.trim()) || c.timeline.some((t) => t.confidential);
+  const [includeConfInPacket, setIncludeConfInPacket] = useState(canConfidential);
+
+  useEffect(() => {
+    setActive(null);
+    setLoading(null);
+    setTimelineDraft(null);
+    setCompareDraft(null);
+    setPacketDraft(null);
+    setRedactDraft(null);
+    setRedactedText("");
+    setCopiedKey(null);
+    setIncludeConfInPacket(canConfidential);
+  }, [c.id, canConfidential]);
+
+  const copyText = (key: string, text: string, label: string) => {
+    if (!navigator.clipboard?.writeText) {
+      toast("error", "Clipboard not available — select and copy manually.");
+      return;
+    }
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopiedKey(key);
+        toast("ok", `${label} copied.`);
+        setTimeout(() => setCopiedKey((cur) => (cur === key ? null : cur)), 2000);
+      },
+      () => toast("error", "Could not copy — select and copy manually.")
+    );
+  };
+
+  const runTool = <T,>(
+    tool: AiDrawerTool,
+    fn: () => Promise<{ ok: true; data: T } | { ok: false; error: string }>,
+    onOk: (d: T) => void
+  ) => {
+    setLoading(tool);
+    setActive(tool);
+    exec(
+      async () => {
+        try {
+          return await fn();
+        } finally {
+          setLoading(null);
+        }
+      },
+      { onOk }
+    );
+  };
+
+  const fetchTimeline = () => {
+    const events = (canConfidential ? c.timeline : c.timeline.filter((t) => !t.confidential))
+      .slice(0, 50)
+      .map((t) => ({ at: fmtDateTime(t.at).slice(0, 60), type: t.type.slice(0, 60), note: t.note.slice(0, 1500) }));
+    runTool(
+      "timeline",
+      () =>
+        runAiTaskAction("infraction.timeline", {
+          caseNumber: c.caseNumber.slice(0, 40),
+          severity: c.severity.slice(0, 40),
+          policy: c.policy.slice(0, 160),
+          summary: c.summary.slice(0, 3000),
+          events,
+        }) as Promise<{ ok: true; data: AiTimelineDraft } | { ok: false; error: string }>,
+      (res) => setTimelineDraft(res)
+    );
+  };
+
+  const fetchCompare = () => {
+    runTool("compare", () => compareInfractionCaseAction(c.id), (res) => setCompareDraft(res));
+  };
+
+  const fetchPacket = () => {
+    const useConf = canConfidential && includeConfInPacket;
+    const baseEvents = (useConf ? c.timeline : c.timeline.filter((t) => !t.confidential)).map((t) => ({
+      at: fmtDateTime(t.at).slice(0, 60),
+      type: t.type.slice(0, 60),
+      note: t.note.slice(0, 1200),
+    }));
+    const events = (
+      useConf && c.confidential.trim()
+        ? [{ at: fmtDateTime(c.createdAt).slice(0, 60), type: "CONFIDENTIAL_MANAGER_NOTE", note: c.confidential.trim().slice(0, 1200) }, ...baseEvents]
+        : baseEvents
+    ).slice(0, 50);
+    const attachments = c.attachments.slice(0, 20).map((a) => ({
+      kind: a.kind.slice(0, 40),
+      title: a.title.slice(0, 160),
+      statement: a.statement.slice(0, 2000),
+    }));
+    const appeals = c.appeals.slice(0, 10).map((a) => ({
+      status: a.status.slice(0, 40),
+      reason: a.reason.slice(0, 1500),
+      decision: a.decision.slice(0, 1500),
+    }));
+    const includedConfidential = useConf && hasConfidentialNotes;
+    runTool(
+      "packet",
+      () =>
+        runAiTaskAction("infraction.packet", {
+          caseNumber: c.caseNumber.slice(0, 40),
+          severity: c.severity.slice(0, 40),
+          points: c.points,
+          policy: c.policy.slice(0, 160),
+          summary: c.summary.slice(0, 3000),
+          acknowledged: c.acknowledged,
+          events,
+          attachments,
+          appeals,
+        }) as Promise<{ ok: true; data: AiPacketDraft } | { ok: false; error: string }>,
+      (res) => setPacketDraft({ ...res, includedConfidential })
+    );
+  };
+
+  const fetchRedact = () => {
+    const text = buildShareableCaseText(c);
+    runTool(
+      "redact",
+      () =>
+        runAiTaskAction("infraction.redact", { text }) as Promise<{ ok: true; data: AiRedactDraft } | { ok: false; error: string }>,
+      (res) => {
+        setRedactDraft(res);
+        setRedactedText(res.redactedText);
+      }
+    );
+  };
+
+  const formatPacketForCopy = (p: AiPacketDraft & { includedConfidential: boolean }) => {
+    const parts = [
+      `Case-Packet Summary · ${c.caseNumber}`,
+      p.includedConfidential
+        ? "[Note: Confidential manager notes were included — restricted HR/admin use only.]"
+        : "[Note: Confidential manager notes were excluded from this summary.]",
+      "",
+      `Executive Summary:\n${p.executiveSummary}`,
+    ];
+    if (p.chronology.length > 0) {
+      parts.push("", "Chronology:", ...p.chronology.map((line, i) => `${i + 1}. ${line}`));
+    }
+    if (p.evidenceOverview) {
+      parts.push("", `Evidence Overview:\n${p.evidenceOverview}`);
+    }
+    if (p.statusAndNextSteps) {
+      parts.push("", `Status & Next Steps:\n${p.statusAndNextSteps}`);
+    }
+    return parts.join("\n");
+  };
+
+  const toolBtnCls = (tool: AiDrawerTool) =>
+    `btn !h-7 !px-2.5 !text-xs ${active === tool ? "!border-accent !bg-accent/10 !text-accent" : ""}`;
+
+  return (
+    <div className="rounded-lg border border-line bg-muted/40 p-3 space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1.5 text-xs font-semibold">
+          <Sparkles className="h-3.5 w-3.5 text-accent" />
+          <span>AI Case Helpers</span>
+          <span className="font-normal text-soft">(suggestions only — never decides outcomes)</span>
+        </div>
+        {active && (
+          <button type="button" className="text-[11px] text-soft underline hover:text-ink" onClick={() => setActive(null)}>
+            Hide preview
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className={toolBtnCls("timeline")}
+          disabled={pending}
+          onClick={() => (timelineDraft ? setActive("timeline") : fetchTimeline())}
+        >
+          <ListOrdered className="h-3.5 w-3.5" />
+          {loading === "timeline" ? "Summarizing…" : "5-line timeline"}
+        </button>
+        <button
+          type="button"
+          className={toolBtnCls("compare")}
+          disabled={pending}
+          onClick={() => (compareDraft ? setActive("compare") : fetchCompare())}
+        >
+          <Scale className="h-3.5 w-3.5" />
+          {loading === "compare" ? "Comparing…" : "Compare past cases"}
+        </button>
+        <button
+          type="button"
+          className={toolBtnCls("packet")}
+          disabled={pending}
+          onClick={() => (packetDraft ? setActive("packet") : fetchPacket())}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          {loading === "packet" ? "Drafting…" : "Case-packet summary"}
+        </button>
+        <button
+          type="button"
+          className={toolBtnCls("redact")}
+          disabled={pending}
+          onClick={() => (redactDraft ? setActive("redact") : fetchRedact())}
+        >
+          <ShieldAlert className="h-3.5 w-3.5" />
+          {loading === "redact" ? "Redacting…" : "Redact for sharing"}
+        </button>
+      </div>
+
+      {canConfidential && hasConfidentialNotes && (
+        <label className="flex items-center gap-1.5 text-[11px] text-soft">
+          <input
+            type="checkbox"
+            checked={includeConfInPacket}
+            onChange={(e) => setIncludeConfInPacket(e.target.checked)}
+          />
+          Include confidential notes when generating Case-packet summary (never included in Redact for sharing)
+        </label>
+      )}
+
+      {active && (
+        <div className="rounded-md border border-accent/30 bg-surface p-3 text-xs space-y-2.5">
+          {loading === active ? (
+            <p className="text-soft">Generating draft with names &amp; contact details scrubbed…</p>
+          ) : active === "timeline" && timelineDraft ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">5-line factual timeline</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="inline-flex items-center gap-1 text-[11px] text-soft hover:text-ink" disabled={pending} onClick={fetchTimeline}>
+                    <RefreshCw className="h-3 w-3" />Refresh
+                  </button>
+                  <button
+                    type="button"
+                    className="btn !h-7 !px-2 !text-xs"
+                    onClick={() => copyText("timeline", timelineDraft.lines.map((l, i) => `${i + 1}. ${l}`).join("\n"), "Timeline summary")}
+                  >
+                    {copiedKey === "timeline" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copiedKey === "timeline" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <ol className="list-decimal space-y-1 pl-4 text-[13px] leading-snug">
+                {timelineDraft.lines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ol>
+            </>
+          ) : active === "compare" && compareDraft ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">Anonymized past-case comparison</span>
+                <button type="button" className="inline-flex items-center gap-1 text-[11px] text-soft hover:text-ink" disabled={pending} onClick={fetchCompare}>
+                  <RefreshCw className="h-3 w-3" />Refresh
+                </button>
+              </div>
+              <p className="text-[13px] leading-relaxed">{compareDraft.consistencyNote}</p>
+              {compareDraft.similarCases.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-soft">Similar past cases</div>
+                  <div className="grid gap-1.5">
+                    {compareDraft.similarCases.map((sc, i) => (
+                      <div key={`${sc.caseRef}-${i}`} className="rounded border border-line bg-muted/40 p-2 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="mono font-medium">{sc.caseRef}</span>
+                          <Badge value={sc.severity} />
+                          <span className="mono text-[11px] text-soft">+{sc.points} pts</span>
+                        </div>
+                        <p className="text-soft">{sc.similarity}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {compareDraft.considerations.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-soft">Consistency considerations</div>
+                  <ul className="list-disc space-y-0.5 pl-4 text-soft">
+                    {compareDraft.considerations.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="rounded border border-line bg-muted px-2.5 py-1.5 text-[11px] text-soft">
+                Anonymized workspace history for consistency review only. Managers decide all outcomes.
+              </p>
+            </>
+          ) : active === "packet" && packetDraft ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">Case-packet summary</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="inline-flex items-center gap-1 text-[11px] text-soft hover:text-ink" disabled={pending} onClick={fetchPacket}>
+                    <RefreshCw className="h-3 w-3" />Refresh
+                  </button>
+                  <button
+                    type="button"
+                    className="btn !h-7 !px-2 !text-xs"
+                    onClick={() => copyText("packet", formatPacketForCopy(packetDraft), "Case-packet summary")}
+                  >
+                    {copiedKey === "packet" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copiedKey === "packet" ? "Copied" : "Copy packet summary"}
+                  </button>
+                </div>
+              </div>
+              <div
+                className={
+                  packetDraft.includedConfidential
+                    ? "rounded border border-amber-400/50 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-950 dark:text-amber-200"
+                    : "rounded border border-line bg-muted px-2.5 py-1.5 text-[11px] text-soft"
+                }
+              >
+                {packetDraft.includedConfidential
+                  ? "Confidential manager notes were included in this draft (restricted HR/admin access — do not share with supervisors or employees)."
+                  : "Confidential manager notes were excluded from this summary."}
+              </div>
+              <div className="space-y-2 text-[13px]">
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-soft">Executive summary</div>
+                  <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">{packetDraft.executiveSummary}</p>
+                </div>
+                {packetDraft.chronology.length > 0 && (
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-soft">Chronology</div>
+                    <ol className="mt-0.5 list-decimal space-y-0.5 pl-4">
+                      {packetDraft.chronology.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+                {packetDraft.evidenceOverview && (
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-soft">Evidence overview</div>
+                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">{packetDraft.evidenceOverview}</p>
+                  </div>
+                )}
+                {packetDraft.statusAndNextSteps && (
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-soft">Status &amp; next steps</div>
+                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed">{packetDraft.statusAndNextSteps}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : active === "redact" && redactDraft ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">Redacted case export (review &amp; edit before sharing)</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="inline-flex items-center gap-1 text-[11px] text-soft hover:text-ink" disabled={pending} onClick={fetchRedact}>
+                    <RefreshCw className="h-3 w-3" />Refresh
+                  </button>
+                  <button
+                    type="button"
+                    className="btn !h-7 !px-2 !text-xs"
+                    disabled={!redactedText.trim()}
+                    onClick={() => copyText("redact", redactedText, "Redacted case text")}
+                  >
+                    {copiedKey === "redact" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copiedKey === "redact" ? "Copied" : "Copy redacted text"}
+                  </button>
+                </div>
+              </div>
+              {redactDraft.removedCategories.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-soft">Redacted:</span>
+                  {redactDraft.removedCategories.map((cat, i) => (
+                    <Badge key={`${cat}-${i}`} value="INFO" label={cat} />
+                  ))}
+                </div>
+              )}
+              <textarea
+                className="textarea mono !text-xs"
+                rows={8}
+                value={redactedText}
+                onChange={(e) => setRedactedText(e.target.value)}
+                aria-label="Redacted case text"
+              />
+              <div className="rounded border border-amber-400/50 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-950 dark:text-amber-200">
+                <b>Double-check before sharing externally:</b> Confidential manager notes were excluded, and identifying details were scrubbed, but AI can miss unusual names, locations, or context clues. Review and edit the text above before copying.
+              </div>
+            </>
+          ) : (
+            <p className="text-soft">No draft available yet. Click a helper button above to generate one.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = false, severities, canConfidential, aiCare = false, defaultOpen }: { rules?: RuleRow[]; isAdmin?: boolean; rows: CaseRow[]; employees: { id: string; label: string }[]; templates?: TemplateOpt[]; severities: string[]; canConfidential: boolean; aiCare?: boolean; defaultOpen: boolean }) {
   const router = useRouter();
@@ -201,6 +633,7 @@ export function Ledger({ rows, employees, templates = [], rules = [], isAdmin = 
             {open.evidence.length > 0 && <div><div className="text-xs text-soft">Evidence</div>{open.evidence.map((u) => <a key={u} className="mono block break-all text-accent" href={u} target="_blank" rel="noreferrer">{u}</a>)}</div>}
             {open.confidential && <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"><div className="mono text-[11px] uppercase">Confidential manager notes</div>{open.confidential}</div>}
             <div className="mono text-xs text-soft">Issued by {open.issuedBy} · {fmtDateTime(open.createdAt)}{open.acknowledged ? ` · signed "${open.signedBy}" ${fmtDateTime(open.acknowledgedAt)}` : ""}</div>
+            {aiCare && <CaseAiHelpers key={open.id} c={open} canConfidential={canConfidential} />}
             <div>
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-soft">Timeline (append-only)</h3>
               <ol className="space-y-2 border-l border-line pl-3">{open.timeline.map((t) => <li key={t.id}><div className="mono text-[11px] text-soft">{fmtDateTime(t.at)} · {t.type.replace(/_/g, " ")}{t.confidential ? " · confidential" : ""}</div><div>{t.actor}: {t.note}</div></li>)}</ol>
