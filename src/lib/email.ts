@@ -7,7 +7,7 @@ const appUrl = () => (process.env.APP_URL || "https://onboardops.org").trim().re
 
 const FORCED_FROM_EMAIL = "notifications@onboardops.org";
 
-export type SendOpts = { kind?: string; workspaceId?: string | null; workspaceName?: string | null; html?: string; replyTo?: string };
+export type SendOpts = { kind?: string; workspaceId?: string | null; workspaceName?: string | null; html?: string; replyTo?: string; headers?: Record<string, string> };
 
 async function resolveFromHeader(opts: SendOpts): Promise<string> {
   let wsName = opts.workspaceName?.trim();
@@ -49,6 +49,7 @@ export async function sendEmail(to: string, subject: string, text: string, opts:
         to: [realTo],
         subject: finalSubject,
         text: finalText,
+        ...(opts.headers ? { headers: opts.headers } : {}),
         ...(opts.replyTo || (opts.kind === "support-reply" && process.env.SUPPORT_REPLY_TO?.trim()) ? { reply_to: opts.replyTo || process.env.SUPPORT_REPLY_TO!.trim() } : {}),
         ...(finalHtml ? { html: finalHtml } : {}),
         ...(cids.length ? { attachments: cids.map((id) => ({ filename: `${id}.png`, content: EMAIL_IMAGES[id], content_type: "image/png", content_id: id })) } : {}),

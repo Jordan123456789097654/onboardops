@@ -8,77 +8,81 @@ export type ChangelogEntry = {
 
 export const entries: ChangelogEntry[] = [
   {
-    v: "0.15.0",
-    date: "2026-11-23",
-    highlight: "Dedicated api.onboardops.org host, smarter outage tracking, and full AI assistant suite",
-    bullets: [
-      "AI setup assistant, policy & checklist drafters, license photo scanner, and compliance summaries",
-      "Records AI for neutral write-ups, anonymized case comparisons, timelines, redaction, and portal responses",
-      "Dedicated api.onboardops.org host, live outage timelines, and a reorganized Staff Console",
+    "v": "0.12.0",
+    "date": "2026-11-24",
+    "highlight": "Newsletter, growth analytics, stronger security and a rebuilt email composer",
+    "bullets": [
+      "A website newsletter with archive, sign-up and one-click unsubscribe",
+      "Security hardening: rate limits on every API route, required two-step sign-in for staff, breached-password check",
+      "Email composer with templates, certificate PDFs with QR codes, and multiple workspaces per account"
     ],
-    items: [
+    "items": [
+      "Newsletter: every issue is published on the website at /newsletter, with double opt-in sign-up and a one-click unsubscribe in every email. Bigger issues can also be emailed to confirmed subscribers, but most stay website-only.",
+      "Growth analytics for the OnboardOps team: traffic sources, campaigns, unique visitors and the sign-up funnel.",
+      "Security hardening: every public API route is rate limited, database connections must use SSL, two-step sign-in is now required for all staff-console users, new passwords are checked against known breaches, and a security.txt file tells researchers how to report problems.",
+      "Email composer in the staff console with a template library (including incident, outage and security notices), plus certificate PDFs with QR codes that link to public verification.",
+      "A signed-in account can now create additional workspaces. The company logo is optional when signing up.",
+      "AI helpers for managers and employees, and a live status badge in the website footer."
+    ]
+  },
+  {
+    "v": "0.11.0",
+    "date": "2026-11-23",
+    "highlight": "AI tools, two-factor sign-in, single sign-on, API writes and a dedicated API host",
+    "bullets": [
+      "AI tools across the course builder, setup wizard, credentials and records (drafts only)",
+      "Two-factor sign-in, Google and GitHub sign-in, single sign-on and API write access",
+      "Dedicated API host, a rebuilt support inbox and a redesigned website chat"
+    ],
+    "items": [
+      "Support desk rebuilt: a staff inbox with analytics and settings, attachments, inbound email, and a redesigned, warmer chat bubble on every page.",
       "Dedicated API host at api.onboardops.org for Public API v1 (/v1/*), health and status probes (/status/*, /health), Better Stack webhooks, calendar feeds (.ics), and public media, with automatic 308 redirects from legacy URLs.",
       "Upgraded outage and status system: automatically detects both Better Stack monitor outages and manual incidents, merges live Better Stack resource statuses into the in-app outage screen, splits degraded/non-core issues into a non-blocking banner vs. full lock screen, displays live incident timelines via /api/incidents polling, and adds Site Owner bypass controls, outage screen override modes, AI update drafting, and encrypted Discord/Slack/Teams staff alerts.",
       "AI Setup & Operations tools: describe your business in the Setup Wizard to generate starter departments, job roles, policies, courses, and checklists; recommend required courses per job role in Settings; draft workplace policies from bullet points in Policies; generate shift checklists from a plain-English description; and match spreadsheet columns automatically during CSV staff imports (people-data gated).",
       "AI Credentials & Compliance tools: scan photos of licenses or certificates to pre-fill credential details and match scanned forms to the right employee, generate plain-language training and credential compliance summaries from exact code-computed numbers, explain workplace rules and regulations in plain words (not legal advice), and suggest preventative shift checklist items directly from incident reports.",
       "AI Records & Portal helpers (suggestions only — names and contact details are redacted first, and a person always decides): rewrite write-ups and incident reports in neutral HR language, flag opinions or missing facts, suggest matching policies, compare a case against anonymized past workspace cases, generate a five-line timeline or case-packet summary, redact identifying details before sharing, and help employees write calm, factual responses in My Portal.",
       "Website & Staff Console upgrades: added a public visitor chat widget on marketing pages grounded strictly in public help docs and pricing (no customer data), reorganized the Staff Console sidebar and Dashboard, expanded long-form incident/update/maintenance presets, added AI reply suggestions and triage sorting to the Support Inbox, and launched the Staff Content Studio (/admin/content) for copyable changelog posts, industry landing drafts, and testimonial case studies.",
-    ],
-  },
-  {
-    v: "0.14.0",
-    date: "2026-11-23",
-    highlight: "AI tools in the course builder",
-    bullets: ["Draft a course and quiz from a pasted procedure", "Better wrong answers, scenario questions and simpler wording", "Translate a course, and check lessons for unclear parts"],
-    items: [
       "New AI tools in the course builder: draft a whole course and quiz from a pasted procedure or policy, turn a long policy into a three-minute lesson, add more or scenario-style questions, rewrite weak wrong answers, simplify a lesson, translate a course into another language as a separate copy, suggest reading times and a pass mark, and check lessons for unclear or contradictory parts.",
       "Everything the AI writes is a draft in the form. Nothing is saved until you press Save, and it can be wrong, so read it first.",
       "AI is on by default. An owner or admin can switch it off in Settings, Features. Use is limited per person and per workspace.",
       "The text you submit is sent to our AI provider (Groq) to write the draft. The privacy policy, data processing addendum, terms, Security page and FAQ describe this.",
-    ],
-  },
-  {
-    v: "0.13.0",
-    date: "2026-11-23",
-    highlight: "Two-factor sign-in, Google and GitHub sign-in, single sign-on, API writes and your own encryption key",
-    bullets: ["Two-factor sign-in with an authenticator app, and backup codes", "Sign in with Google or GitHub, and single sign-on for a workspace", "API write access with scoped keys, and an option to use your own encryption key"],
-    items: [
       "Two-factor authentication: turn it on in Account settings with an authenticator app such as Google Authenticator or 1Password, and save your backup codes. It is asked for after your password, an email link or a reset link. A code cannot be used twice, and five wrong codes lock it for 15 minutes. A workspace owner can require it for everyone and can reset it for someone who lost their phone.",
       "Sign in with Google or GitHub, and connect or disconnect them in Account settings. They are linked to an existing account only when the email is verified on both sides, and two-factor is still asked for afterwards. You cannot disconnect your only way to sign in.",
       "Single sign-on for a workspace: owners can set up Google Workspace or Microsoft Entra ID in Settings, test it, then turn it on. Only people who already belong to the workspace can get in, and a company domain alone never grants access. Owners can always use a password.",
       "API write access: create and update employees, assign courses, log verbal warnings, written infractions and strike points, and create shifts. Keys have separate read and write scopes, can expire, can be revoked at any time, and can never do more than the person who made them. Every write is recorded in the audit log under the key's name. The API reference is in the help center.",
       "Use your own encryption key: an owner can protect the workspace's encrypted records with a key they supply, rotate it, or revoke it to lock those records until the key is provided again. The key is shown once and cannot be recovered by us.",
       "Fixed an error that could stop a new infraction from being saved on workspaces with encryption turned on.",
-      "Legal documents and the Security page and FAQ now describe these features.",
-    ],
+      "Legal documents and the Security page and FAQ now describe these features."
+    ]
   },
   {
-    v: "0.12.0",
-    date: "2026-11-22",
-    highlight: "Maintenance notices, per-area maintenance and release notes in the app",
-    bullets: ["Scheduled maintenance now shows a live countdown banner first", "Maintenance can cover just one area, such as the workspace app or the API", "New versions wait until you finish typing, and a What's new button lists releases"],
-    items: [
+    "v": "0.10.0",
+    "date": "2026-11-22",
+    "highlight": "Maintenance notices, per-area maintenance, release notes and a setup video",
+    "bullets": [
+      "Scheduled maintenance shows a live countdown banner first",
+      "Maintenance can cover just one area, such as the workspace app or the API",
+      "A two-minute video tutorial for setting up a workspace"
+    ],
+    "items": [
       "Scheduled maintenance now shows a countdown banner to everyone affected, from the moment it is scheduled, and starts and ends on its own. The maintenance page shows a live countdown to the expected return.",
       "Maintenance can cover a single area: the website, the workspace app, the employee portal or the API. Everything else keeps working. While an area is down, changes made from it are paused and the API answers that it is under maintenance.",
       "New versions no longer interrupt you. A small Update available bar appears, and the page refreshes by itself only when you have stopped for a moment and have nothing unsaved. Security updates still apply right away.",
       "The update screen lists a few of the changes, with a link to the full changelog.",
       "A What's new button in the app header shows the latest releases, with a dot when there is a version you have not opened yet.",
-    ],
+      "A two minute video tutorial now walks through setting up a workspace: the setup wizard, inviting staff, your first course, discipline rules, Discord and Teams alerts, features and roles, and your own domain. Chapters are clickable. The video plays from YouTube only when you press play, and it is linked from the help center, every help article, the footer, the launch checklist and the end of the setup wizard."
+    ]
   },
   {
-    v: "0.11.1",
-    date: "2026-11-22",
-    highlight: "New video tutorial for setting up your workspace",
-    bullets: ["A two minute video tutorial for setting up a workspace", "Linked from the help center, every help article and the setup wizard"],
-    items: [
-      "A two minute video tutorial now walks through setting up a workspace: the setup wizard, inviting staff, your first course, discipline rules, Discord and Teams alerts, features and roles, and your own domain. Chapters are clickable. The video plays from YouTube only when you press play, and it is linked from the help center, every help article, the footer, the launch checklist and the end of the setup wizard.",
+    "v": "0.9.0",
+    "date": "2026-11-21",
+    "highlight": "Stronger encryption, appeals, scheduling, credentials and a new employee portal",
+    "bullets": [
+      "Per-workspace encryption keys and encrypted uploads",
+      "Appeals, time off, shift scheduling, credentials and handoff notes",
+      "Employee portal tabs, free manager tools and workspace subdomains"
     ],
-  },
-  {
-    v: "0.11.0",
-    date: "2026-11-21",
-    highlight: "Stronger encryption, employee portal tabs and free manager tools",
-    items: [
+    "items": [
       "Database security improved: the site now locks sensitive records with a separate key per workspace, the keys themselves are locked by a master key kept outside the database, and rows already stored are being re-encrypted. Even a copy of the database alone no longer shows these notes or files in readable form.",
       "Stronger encryption: sensitive notes, case and incident text, injury details, contact numbers and every uploaded file are now encrypted before they are stored, with a separate key for each workspace.",
       "A new, simpler maintenance page that checks on its own and reloads when we are back.",
@@ -105,12 +109,6 @@ export const entries: ChangelogEntry[] = [
       "Private calendar feed link (.ics) so shifts and approved time off appear in Google, Apple or Outlook calendar.",
       "Optional text messages for new shifts, swap answers and request decisions. Each workspace connects its own Twilio account (token stored encrypted), and employees opt in individually.",
       "Rate limiting on sign-in, password reset, magic links, contact and search, stricter security headers, and a keyed audit log you can verify.",
-    ],
-  },
-  {
-    v: "0.10.0",
-    date: "2026-11-21",
-    items: [
       "Appeals and evidence: employees can file an appeal from My Portal, reviewers uphold or overturn it from the case drawer (overturning restores strike points), and cases can hold witness statements and evidence.",
       "Progressive discipline rules and strike point decay: owners and admins can set escalation rules and apply a rolling decay window, configured under Settings.",
       "Time off: vacation, sick and personal requests with yearly allowances, days-left balances, a team calendar, and warnings when teammates request the same days.",
@@ -123,30 +121,113 @@ export const entries: ChangelogEntry[] = [
       "Custom employee fields (Settings) with values editable on each employee record, bulk document upload, and manual column matching when importing employees from CSV.",
       "Command Center alerts for overdue checklists and expiring credentials or documents, and Ctrl+K now searches people and cases.",
       "Workspace branding (accent color and tagline) and a strike decay window in Settings.",
-    ],
-  },
-  {
-    v: "0.9.0",
-    date: "2026-11-21",
-    items: [
       "One-click role assignment: promote or assign anyone as an Employee, Supervisor, Manager or Admin directly from the Staff Accounts table, the Employee Dossier, or when adding and bulk-inviting staff.",
       "OnboardOps subdomains & manual domain assignment: workspaces can now use <name>.onboardops.org subdomains (such as retailnetwork.onboardops.org) in addition to external custom domains, and site owners can manually connect and verify domains from the Staff Console.",
       "Shift Handoff Notes feed (/app/handoff): post department or general handoff notes between opening, mid-shift and closing teams, alongside handoff notes from shift checklists.",
       "Shift Scheduling (/app/schedule), Time Clock & Timesheets (/app/timesheets), and Equipment Sign-Out (/app/assets) pages are now live when enabled in Workspace Features.",
       "Credentials & Licenses (/app/credentials): add, track and remove employee licenses and certifications with 30-day expiry warnings.",
       "Corrective-action template picker when logging an infraction to pre-fill severity, strike points, policy violated and summary.",
-      "Live system status page (/status) and BetterStack monitoring endpoints (/api/status, /api/status/frontend, /api/status/database, /api/status/auth, /api/status/api, /api/status/email, /api/status/storage, /api/status/domains, and /api/health).",
-    ],
+      "Live system status page (/status) and BetterStack monitoring endpoints (/api/status, /api/status/frontend, /api/status/database, /api/status/auth, /api/status/api, /api/status/email, /api/status/storage, /api/status/domains, and /api/health)."
+    ]
   },
-  { v: "0.8.0", date: "2026-11-20", items: ["Account settings: profile picture, nickname, add and remove email addresses, make one primary, change your password, and sign out other devices. Any confirmed email can be used to sign in.", "Simpler navigation, with secondary pages under Resources, and a lighter home page.", "Legal pages are much longer and more detailed, with new Employee Privacy Notice and Data Retention and Deletion Policy documents."] },
-  { v: "0.7.0", date: "2026-11-19", items: ["Magic links: sign in from an emailed link with no password, on the main sign in and on each workplace's staff sign in.", "New Why OnboardOps page with a side-by-side comparison, a time calculator and a fit check.", "Interactive home page: click through the workflow with real screens, explore what each role can see, and run the numbers for your team.", "Staff console access now requires a verified email."] },
-  { v: "0.6.0", date: "2026-11-18", items: ["Employees can create their own account, verify their email, and see Workplaces I'm employed in. Employers that added their email appear to join.", "Workspace staff sign-in at /w/your-name, and custom domains connected through Vercel, with a branded sign-in and a workspace-only app on that address.", "Employees can request a leave of absence, retirement or resignation; managers approve or deny, and records update on the right dates.", "Staff Accounts page: send sign-in invites to many employees at once.", "Employees whose records are closed can no longer sign in.", "Account lockout after repeated wrong passwords.", "Emails are now designed HTML emails with icons."] },
-  { v: "0.5.0", date: "2026-11-16", items: ["Staff console for the OnboardOps team: support inbox, workspace directory, time-limited read-only support access that customers can see, account recovery, workspace locking, privacy request queue, beta feedback board, email delivery log, metrics and an append-only staff activity log.", "Send feedback from inside the app."] },
-  { v: "0.4.0", date: "2026-11-14", items: ["Password reset by email, and email invites so employees choose their own password. Changing a password signs out other devices.", "Bulk employee import from CSV with a preview and a line-by-line list of skipped rows.", "Due dates, training reminders, expiring certificates that re-enroll automatically, and a daily job to run them.", "In-app notification bell.", "Policies and handbooks with PDF upload, per-role assignment, versioning and signature tracking.", "Employee documents with restricted access, incident reports that can become cases, and performance reviews and 1:1 notes for managers.", "Reports page with charts and a printable compliance report.", "Full workspace export and an owner-only option to close and delete a workspace."] },
-  { v: "0.3.0", date: "2026-11-12", items: ["New help center with step-by-step guides, search and a support contact form.", "Legal documents rewritten with numbered sections, plain-English summaries, a table of contents, processing details and a subprocessor list.", "Minimum age is now 13 (with parent or guardian permission under 18).", "Home page now uses real screenshots of the app, with a tabbed gallery.", "New logo, and animations throughout that respect the reduced-motion setting."] },
-  { v: "0.2.0", date: "2026-11-10", items: ["Rebuilt the interface: accessible dialogs and drawers, icons, a light / system / dark theme switch, and a new Command Center with course completion and an attention list.", "New public pages: Solutions, Security, About, Contact and FAQ.", "Added Terms of Service, Terms of Use, Privacy Policy, Acceptable Use Policy, Cookie Policy, Data Processing Addendum and Beta Program Terms.", "Registration now requires accepting the Terms and Privacy Policy, and the acceptance is recorded in the audit log.", "Everything is free for beta testers."] },
-  { v: "0.1.0", date: "2026-11-08", items: ["Staff directory, employee dossier and status changes with required reasons.", "Training academy: multi-lesson builder, server-graded quizzes, certificate codes (CERT-#####), compliance matrix.", "Infraction ledger with append-only case timeline, confidential notes (managers and above only) and employee acknowledgment.", "Auto-retraining on written infractions or 2+ points; auto-suspend at the workspace strike threshold.", "Shift checklists with supervisor verification.", "Audit log where each entry's SHA-256 hash chains over the previous entry.", "Operations and confidential webhooks for Discord and Slack, plus Resend email notifications."] },
-  { v: "0.0.9", date: "2026-11-06", items: ["Fixed: changing a job role no longer duplicates enrollments for courses an employee already has.", "Quiz retake cooldown is now enforced on the server instead of the browser.", "Supervisors can no longer open confidential timeline notes through the case drawer."] },
+  {
+    "v": "0.8.0",
+    "date": "2026-11-20",
+    "items": [
+      "Account settings: profile picture, nickname, add and remove email addresses, make one primary, change your password, and sign out other devices. Any confirmed email can be used to sign in.",
+      "Simpler navigation, with secondary pages under Resources, and a lighter home page.",
+      "Legal pages are much longer and more detailed, with new Employee Privacy Notice and Data Retention and Deletion Policy documents."
+    ]
+  },
+  {
+    "v": "0.7.0",
+    "date": "2026-11-19",
+    "items": [
+      "Magic links: sign in from an emailed link with no password, on the main sign in and on each workplace's staff sign in.",
+      "New Why OnboardOps page with a side-by-side comparison, a time calculator and a fit check.",
+      "Interactive home page: click through the workflow with real screens, explore what each role can see, and run the numbers for your team.",
+      "Staff console access now requires a verified email."
+    ]
+  },
+  {
+    "v": "0.6.0",
+    "date": "2026-11-18",
+    "items": [
+      "Employees can create their own account, verify their email, and see Workplaces I'm employed in. Employers that added their email appear to join.",
+      "Workspace staff sign-in at /w/your-name, and custom domains connected through Vercel, with a branded sign-in and a workspace-only app on that address.",
+      "Employees can request a leave of absence, retirement or resignation; managers approve or deny, and records update on the right dates.",
+      "Staff Accounts page: send sign-in invites to many employees at once.",
+      "Employees whose records are closed can no longer sign in.",
+      "Account lockout after repeated wrong passwords.",
+      "Emails are now designed HTML emails with icons."
+    ]
+  },
+  {
+    "v": "0.5.0",
+    "date": "2026-11-16",
+    "items": [
+      "Staff console for the OnboardOps team: support inbox, workspace directory, time-limited read-only support access that customers can see, account recovery, workspace locking, privacy request queue, beta feedback board, email delivery log, metrics and an append-only staff activity log.",
+      "Send feedback from inside the app."
+    ]
+  },
+  {
+    "v": "0.4.0",
+    "date": "2026-11-14",
+    "items": [
+      "Password reset by email, and email invites so employees choose their own password. Changing a password signs out other devices.",
+      "Bulk employee import from CSV with a preview and a line-by-line list of skipped rows.",
+      "Due dates, training reminders, expiring certificates that re-enroll automatically, and a daily job to run them.",
+      "In-app notification bell.",
+      "Policies and handbooks with PDF upload, per-role assignment, versioning and signature tracking.",
+      "Employee documents with restricted access, incident reports that can become cases, and performance reviews and 1:1 notes for managers.",
+      "Reports page with charts and a printable compliance report.",
+      "Full workspace export and an owner-only option to close and delete a workspace."
+    ]
+  },
+  {
+    "v": "0.3.0",
+    "date": "2026-11-12",
+    "items": [
+      "New help center with step-by-step guides, search and a support contact form.",
+      "Legal documents rewritten with numbered sections, plain-English summaries, a table of contents, processing details and a subprocessor list.",
+      "Minimum age is now 13 (with parent or guardian permission under 18).",
+      "Home page now uses real screenshots of the app, with a tabbed gallery.",
+      "New logo, and animations throughout that respect the reduced-motion setting."
+    ]
+  },
+  {
+    "v": "0.2.0",
+    "date": "2026-11-10",
+    "items": [
+      "Rebuilt the interface: accessible dialogs and drawers, icons, a light / system / dark theme switch, and a new Command Center with course completion and an attention list.",
+      "New public pages: Solutions, Security, About, Contact and FAQ.",
+      "Added Terms of Service, Terms of Use, Privacy Policy, Acceptable Use Policy, Cookie Policy, Data Processing Addendum and Beta Program Terms.",
+      "Registration now requires accepting the Terms and Privacy Policy, and the acceptance is recorded in the audit log.",
+      "Everything is free for beta testers."
+    ]
+  },
+  {
+    "v": "0.1.0",
+    "date": "2026-11-08",
+    "items": [
+      "Staff directory, employee dossier and status changes with required reasons.",
+      "Training academy: multi-lesson builder, server-graded quizzes, certificate codes (CERT-#####), compliance matrix.",
+      "Infraction ledger with append-only case timeline, confidential notes (managers and above only) and employee acknowledgment.",
+      "Auto-retraining on written infractions or 2+ points; auto-suspend at the workspace strike threshold.",
+      "Shift checklists with supervisor verification.",
+      "Audit log where each entry's SHA-256 hash chains over the previous entry.",
+      "Operations and confidential webhooks for Discord and Slack, plus Resend email notifications."
+    ]
+  },
+  {
+    "v": "0.0.9",
+    "date": "2026-11-06",
+    "items": [
+      "Fixed: changing a job role no longer duplicates enrollments for courses an employee already has.",
+      "Quiz retake cooldown is now enforced on the server instead of the browser.",
+      "Supervisors can no longer open confidential timeline notes through the case drawer."
+    ]
+  },
 ];
 
 /** One short line about the newest release, shown on the update screen. Uses the entry's highlight, or the start of its first item. */

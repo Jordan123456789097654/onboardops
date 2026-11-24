@@ -28,6 +28,8 @@ export type EmailSpec = {
   blocks?: EmailBlock[];
   /** An extra line in the footer, such as why the person got this email. */
   footer?: string;
+  /** Adds an Unsubscribe link to the footer (newsletters). */
+  unsubscribeUrl?: string;
 };
 
 const TONES = {
@@ -41,6 +43,14 @@ const baseUrl = () => process.env.APP_URL || "http://localhost:3000";
 
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const nl2br = (s: string) => esc(s).replace(/\n/g, "<br>");
+
+/** Safe inline formatting for rich blocks: **bold** and [label](https://link). Everything else is escaped text. Only https and mailto links are allowed. */
+const rich = (s: string) =>
+  esc(s)
+    .replace(/\[([^\]\n]{1,120})\]\((https:\/\/[^\s)]{1,400}|mailto:[^\s)]{1,200})\)/g, (_m, label: string, url: string) => `<a href="${url}" style="color:#1D4ED8;text-decoration:underline">${label}</a>`)
+    .replace(/\*\*([^*\n]{1,200})\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br>");
+const plainInline = (s: string) => s.replace(/\[([^\]\n]{1,120})\]\(((?:https:\/\/|mailto:)[^\s)]{1,400})\)/g, "$1 ($2)").replace(/\*\*([^*\n]{1,200})\*\*/g, "$1");
 
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
@@ -57,22 +67,22 @@ export function buildEmail(s: EmailSpec): { html: string; text: string } {
     : "";
   const blockHtml = (b: EmailBlock): string => {
     switch (b.t) {
-      case "p": return `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.65;color:#52525b;text-align:left" class="muted">${nl2br(b.v)}</p>`;
+      case "p": return `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.65;color:#52525b;text-align:left" class="muted">${rich(b.v)}</p>`;
       case "h": return `<h2 class="title" style="margin:22px 0 8px 0;font-family:${FONT};font-size:17px;line-height:1.3;font-weight:700;letter-spacing:-.01em;color:#09090b;text-align:left">${esc(b.v)}</h2>`;
-      case "ul": return `<ul style="margin:0 0 14px 0;padding:0 0 0 22px;text-align:left;font-size:15px;line-height:1.7;color:#27272a" class="body">${b.v.map((i) => `<li style="margin-bottom:4px">${esc(i)}</li>`).join("")}</ul>`;
-      case "ol": return `<ol style="margin:0 0 14px 0;padding:0 0 0 22px;text-align:left;font-size:15px;line-height:1.7;color:#27272a" class="body">${b.v.map((i) => `<li style="margin-bottom:6px">${esc(i)}</li>`).join("")}</ol>`;
+      case "ul": return `<ul style="margin:0 0 14px 0;padding:0 0 0 22px;text-align:left;font-size:15px;line-height:1.7;color:#27272a" class="body">${b.v.map((i) => `<li style="margin-bottom:4px">${rich(i)}</li>`).join("")}</ul>`;
+      case "ol": return `<ol style="margin:0 0 14px 0;padding:0 0 0 22px;text-align:left;font-size:15px;line-height:1.7;color:#27272a" class="body">${b.v.map((i) => `<li style="margin-bottom:6px">${rich(i)}</li>`).join("")}</ol>`;
       case "details": return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 20px 0;border:1px solid #e4e4e7;border-radius:10px;background:#fafafa" class="panel"><tbody>${b.v.map(([k, v], i) => `<tr><td style="padding:10px 14px;${i ? "border-top:1px solid #e4e4e7;" : ""}text-align:left"><div style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#71717a" class="muted">${esc(k)}</div><div style="margin-top:2px;font-size:14px;line-height:1.5;color:#18181b" class="body">${nl2br(v)}</div></td></tr>`).join("")}</tbody></table>`;
-      case "callout": { const c = TONES[b.tone]; return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 18px 0"><tr><td class="co-${b.tone}" style="padding:12px 16px;background:${c.bg};border-left:4px solid ${c.border};border-radius:6px;font-size:14px;line-height:1.6;color:${c.text};text-align:left">${nl2br(b.v)}</td></tr></table>`; }
+      case "callout": { const c = TONES[b.tone]; return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 18px 0"><tr><td class="co-${b.tone}" style="padding:12px 16px;background:${c.bg};border-left:4px solid ${c.border};border-radius:6px;font-size:14px;line-height:1.6;color:${c.text};text-align:left">${rich(b.v)}</td></tr></table>`; }
     }
   };
   const blockText = (b: EmailBlock): string[] => {
     switch (b.t) {
-      case "p": return [b.v, ""];
+      case "p": return [plainInline(b.v), ""];
       case "h": return [b.v.toUpperCase(), ""];
-      case "ul": return [...b.v.map((i) => `- ${i}`), ""];
-      case "ol": return [...b.v.map((i, n) => `${n + 1}. ${i}`), ""];
-      case "details": return [...b.v.map(([k, v]) => `${k}: ${v}`), ""];
-      case "callout": return [`>> ${b.v}`, ""];
+      case "ul": return [...b.v.map((i) => `- ${plainInline(i)}`), ""];
+      case "ol": return [...b.v.map((i, n) => `${n + 1}. ${plainInline(i)}`), ""];
+      case "details": return [...b.v.map(([k, v]) => `${k}: ${plainInline(v)}`), ""];
+      case "callout": return [`>> ${plainInline(b.v)}`, ""];
     }
   };
   const button = s.button
@@ -106,7 +116,7 @@ export function buildEmail(s: EmailSpec): { html: string; text: string } {
 <tr><td align="center" class="pad" style="padding:14px 36px 0 36px"><h1 class="title" style="margin:0 0 14px 0;font-family:${FONT};font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.02em;color:#09090b">${esc(s.title)}</h1></td></tr>
 <tr><td class="pad" align="${align}" style="padding:0 36px;text-align:${align}">${s.blocks ? s.blocks.map(blockHtml).join("") : `${p}${list}${details}`}${button}${note}</td></tr>
 <tr><td class="pad" style="padding:22px 36px 0 36px"><div class="rule" style="border-top:1px solid #e4e4e7"></div></td></tr>
-<tr><td class="pad" style="padding:18px 36px 30px 36px;font-size:12px;line-height:1.7;color:#71717a;text-align:left"><div class="muted">OnboardOps &middot; Staff records, training and discipline for shift-based teams. Built in Georgia, USA.</div>${s.footer ? `<div class="muted" style="margin-top:8px">${esc(s.footer)}</div>` : ""}<div style="margin-top:8px"><a href="${base}/support" style="color:#71717a;text-decoration:underline">Help</a> &nbsp;&middot;&nbsp; <a href="${base}/legal/privacy" style="color:#71717a;text-decoration:underline">Privacy</a> &nbsp;&middot;&nbsp; <a href="${base}/legal/terms-of-service" style="color:#71717a;text-decoration:underline">Terms</a></div></td></tr>
+<tr><td class="pad" style="padding:18px 36px 30px 36px;font-size:12px;line-height:1.7;color:#71717a;text-align:left"><div class="muted">OnboardOps &middot; Staff records, training and discipline for shift-based teams. Built in Georgia, USA.</div>${s.footer ? `<div class="muted" style="margin-top:8px">${esc(s.footer)}</div>` : ""}${s.unsubscribeUrl ? `<div class="muted" style="margin-top:8px">Don&rsquo;t want these emails? <a href="${esc(s.unsubscribeUrl)}" style="color:#71717a;text-decoration:underline">Unsubscribe</a></div>` : ""}<div style="margin-top:8px"><a href="${base}/support" style="color:#71717a;text-decoration:underline">Help</a> &nbsp;&middot;&nbsp; <a href="${base}/legal/privacy" style="color:#71717a;text-decoration:underline">Privacy</a> &nbsp;&middot;&nbsp; <a href="${base}/legal/terms-of-service" style="color:#71717a;text-decoration:underline">Terms</a></div></td></tr>
 </table></td></tr></table></body></html>`;
 
   const text = [
@@ -121,6 +131,7 @@ export function buildEmail(s: EmailSpec): { html: string; text: string } {
         ]),
     ...(s.button ? [`${s.button.label}: ${s.button.url}`, ""] : []),
     ...(s.note ? [s.note, ""] : []),
+    ...(s.unsubscribeUrl ? [`Unsubscribe: ${s.unsubscribeUrl}`, ""] : []),
     "—",
     `OnboardOps · ${base}/support`,
   ].join("\n");

@@ -693,6 +693,42 @@ model SupportRequest {
   @@index([mergedIntoId])
 }
 
+/// Someone who asked for the newsletter. They confirm by email before anything is sent (PENDING until then).
+model NewsletterSubscriber {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  status         String    @default("PENDING")
+  /// A long random token for the confirm and unsubscribe links. It identifies the subscription and nothing else.
+  token          String    @unique
+  source         String    @default("website")
+  lastSentPostId String?
+  createdAt      DateTime  @default(now())
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+
+  @@index([status])
+}
+
+/// A newsletter issue. A published issue appears on the website; sending it by email is a separate step.
+model NewsletterPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  summary     String    @default("")
+  category    String    @default("Update")
+  body        String
+  status      String    @default("DRAFT")
+  publishedAt DateTime?
+  sentAt      DateTime?
+  sentTo      Int       @default(0)
+  sentFailed  Int       @default(0)
+  authorName  String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, publishedAt])
+}
+
 /// One send from the staff console's email composer (a test, a single message or a broadcast). Counts only, no message text.
 model EmailCampaign {
   id         String   @id @default(cuid())

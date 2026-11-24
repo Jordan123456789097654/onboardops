@@ -44,6 +44,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         heading: "Website & Growth",
         items: [
           { href: "/admin/content", label: "Content studio", icon: "content" },
+          { href: "/admin/newsletter", label: "Newsletter", icon: "email" },
           { href: "/admin/roadmap", label: "Public roadmap", icon: "roadmap" },
           { href: "/admin/testimonials", label: "Testimonials", icon: "testimonials" },
           { href: "/admin/partners", label: "Partners", icon: "partners" },

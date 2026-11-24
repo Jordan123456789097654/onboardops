@@ -8,7 +8,7 @@ import { legalPages, SITE } from "@/lib/site";
 const STATUS_URL = "https://status.onboardops.org";
 
 const cols: { title: string; links: [string, string][] }[] = [
-  { title: "Product", links: [["Overview", "/features"], ["Solutions", "/solutions"], ["Pricing", "/pricing"], ["Security", "/security"], ["Changelog", "/changelog"], ["Roadmap", "/roadmap"], ["Why OnboardOps", "/why"]] },
+  { title: "Product", links: [["Overview", "/features"], ["Solutions", "/solutions"], ["Pricing", "/pricing"], ["Security", "/security"], ["Changelog", "/changelog"], ["Newsletter", "/newsletter"],["Roadmap", "/roadmap"], ["Why OnboardOps", "/why"]] },
   { title: "Resources", links: [["Help center", "/support"], ["Video tutorial", "/tutorial"], ["Launch checklist", "/launch"], ["Migration guides", "/migrate"], ["Playbooks", "/playbooks"], ["Free tools", "/tools"], ["Blog", "/blog"], ["FAQ", "/faq"]] },
   { title: "Company", links: [["About", "/about"], ["Careers", "/careers"], ["Partners and badge", "/partners"], ["Brand", "/brand"], ["Verify a certificate", "/verify"], ["Contact support", "/contact"], ["System status", STATUS_URL]] },
 ];
