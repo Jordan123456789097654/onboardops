@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, MailCheck } from "lucide-react";
+import { ArrowRight, Building2, MailCheck, Plus } from "lucide-react";
 import { resendVerificationAction } from "@/actions/auth";
 import { switchWorkspaceAction } from "@/actions/auth";
-import { claimWorkplaceAction } from "@/actions/workplaces";
+import { claimWorkplaceAction, createWorkspaceAction } from "@/actions/workplaces";
 import { Badge, Empty, useAction } from "@/components/ui";
 
 type Mine = { id: string; name: string; role: string; staffCode: string | null; locked: boolean; domain: string | null; slug: string };
@@ -15,6 +15,7 @@ export function Workplaces({ verified, mine, claimable }: { verified: boolean; m
   const { exec, pending } = useAction();
   const [devLink, setDevLink] = useState<string | undefined>();
   const [sent, setSent] = useState(false);
+  const [name, setName] = useState("");
   return (
     <div className="mt-6 space-y-8">
       {!verified && (
@@ -39,6 +40,16 @@ export function Workplaces({ verified, mine, claimable }: { verified: boolean; m
             ))}
           </div>
         )}
+      </section>
+
+      <section id="new" className="scroll-mt-6">
+        <h2 className="mb-1 text-sm font-semibold">Start another workspace</h2>
+        <p className="mb-2 text-xs text-soft">Run more than one business from this one login. Each workspace has its own staff, records and settings, and you are its Owner. Switch between them any time.</p>
+        <form className="card flex flex-wrap items-end gap-3 p-4" onSubmit={(e) => { e.preventDefault(); exec(() => createWorkspaceAction({ workspaceName: name }), { success: "Workspace created", onOk: (r) => { router.push(r.to); router.refresh(); } }); }}>
+          <label className="block min-w-56 flex-1"><span className="label">Company name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Harbor Street Cafe" required minLength={2} /></label>
+          <button className="btn-primary" disabled={pending || name.trim().length < 2}><Plus className="h-3.5 w-3.5" />Create workspace</button>
+          <p className="w-full text-[11.5px] text-soft">You can add a logo and invite staff once it opens. It is free during the beta.</p>
+        </form>
       </section>
 
       {verified && claimable.length > 0 && (

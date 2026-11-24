@@ -63,6 +63,7 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, works
         <select id="ws" className="input" value={activeWorkspaceId} onChange={(e) => switchWorkspaceAction(e.target.value)}>
           {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
+        <a href="/workplaces#new" className="mt-1.5 inline-block text-[11.5px] text-soft underline underline-offset-2 hover:text-ink">+ New workspace</a>
       </div>
       <div className="flex-1 space-y-5 overflow-y-auto p-3">
         {groups.map((g) => (

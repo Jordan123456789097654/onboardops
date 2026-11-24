@@ -23,14 +23,14 @@ export default async function WorkplacesPage() {
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-4">
       <div className="flex items-center justify-between"><Link href="/" aria-label="OnboardOps home"><Brand /></Link><div className="flex items-center gap-2"><ThemeToggle />{resolvePlatformRole(user) && <Link href="/admin" className="btn-primary">Staff Console</Link>}<Link href="/account" className="btn">Account</Link><form action={logoutAction}><button className="btn">Sign out</button></form></div></div>
       <div className="flex-1 py-10">
-        <h1 className="text-2xl font-semibold">Workplaces I&apos;m employed in</h1>
+        <h1 className="text-2xl font-semibold">My workspaces</h1>
         <p className="mt-1 text-[13px] text-soft">Signed in as {user.name} ({user.email}).</p>
         <Workplaces
           verified={!!user.emailVerifiedAt}
           mine={memberships.map((m) => ({ id: m.workspaceId, name: m.workspace.name, role: m.role, staffCode: m.profile?.staffCode ?? null, locked: !!m.workspace.suspendedAt, domain: m.workspace.customDomain && m.workspace.domainStatus === "VERIFIED" ? m.workspace.customDomain : null, slug: m.workspace.slug }))}
           claimable={claimable.map((c) => ({ id: c.id, workspace: c.workspace.name, staffCode: c.staffCode, role: c.jobRole?.title ?? null, department: c.department?.name ?? null }))}
         />
-        <p className="mt-10 text-[13px] text-soft">Setting up a company yourself? <Link className="text-accent underline" href="/register">Create a workspace</Link>. Don&apos;t see your employer? Ask them to add you with <b>{user.email}</b>, or to send you an invite.</p>
+        <p className="mt-10 text-[13px] text-soft">Setting up another company? Use &ldquo;Start another workspace&rdquo; above. Don&apos;t see your employer? Ask them to add you with <b>{user.email}</b>, or to send you an invite.</p>
       </div>
     </div>
   );
