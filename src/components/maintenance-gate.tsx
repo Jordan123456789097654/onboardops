@@ -69,11 +69,18 @@ export function MaintenanceGate({
 
   useEffect(() => {
     if (!pathname || pathname === lastTracked.current || pathname.startsWith("/admin")) return;
+    const firstOfLoad = lastTracked.current === "";
     lastTracked.current = pathname;
+    const q = new URLSearchParams(window.location.search);
     fetch(apiUrl("/api/track"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: pathname }),
+      body: JSON.stringify({
+        path: pathname,
+        w: window.innerWidth,
+        // Only the first page of a visit carries where the person came from.
+        ...(firstOfLoad ? { ref: document.referrer || undefined, utm_source: q.get("utm_source") || undefined, utm_medium: q.get("utm_medium") || undefined, utm_campaign: q.get("utm_campaign") || undefined } : {}),
+      }),
       keepalive: true,
     }).catch(() => {});
   }, [pathname]);

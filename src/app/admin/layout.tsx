@@ -22,6 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         ...(s.role !== "VIEWER"
           ? [{ href: "/admin/status", label: "Status & Incidents", icon: "status", badge: incidents.length, badgeTone: "danger" as const }]
           : []),
+        { href: "/admin/analytics", label: "Growth analytics", icon: "analytics" },
         { href: "/admin/workspaces", label: "Workspaces", icon: "workspaces" },
       ],
     },

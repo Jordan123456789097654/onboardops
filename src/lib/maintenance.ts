@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { keyedDigest } from "./secret-box";
+import { FUNNEL_PAGES, campaignOf, classifySource, countryOf, deviceOf, type VisitMeta } from "./traffic";
 import { ALL_AREAS, type MaintArea } from "./maintenance-areas";
 
 export const MAINTENANCE_ROW_ID = "__platform_maintenance__";
@@ -236,32 +237,64 @@ const BOT_UA = /bot|crawl|spider|slurp|headless|preview|monitor|uptime|lighthous
  * Counts each browser once per day. There is no cookie or stored ID: a connection is hashed with a key that changes every day,
  * only that day's hashes are kept, and they are dropped when the day ends. Page views per path are still counted for "top pages".
  */
-export async function recordSiteVisit(rawPath: string, who?: { ip: string; ua: string }) {
+type DayCounts = Record<string, Record<string, number>>;
+type VisitsRow = { paths?: Record<string, number>; uvDay?: string; uvIds?: string[]; uv?: Record<string, number>; pageIds?: Record<string, string[]>; src?: DayCounts; dev?: DayCounts; cty?: DayCounts; cmp?: DayCounts; pg?: DayCounts };
+
+/** Keeps the newest 90 days of a day-keyed map, and the biggest 30 entries inside each day. */
+function pruneDays<T>(m: Record<string, T>): Record<string, T> {
+  const keys = Object.keys(m).sort();
+  while (keys.length > 90) { const oldest = keys.shift(); if (oldest) delete m[oldest]; }
+  return m;
+}
+const bump = (m: DayCounts, day: string, key: string) => {
+  const d = { ...(m[day] ?? {}) };
+  d[key] = (d[key] || 0) + 1;
+  m[day] = Object.fromEntries(Object.entries(d).sort((a, b) => b[1] - a[1]).slice(0, 30));
+};
+
+export async function recordSiteVisit(rawPath: string, who?: { ip: string; ua: string }, meta: VisitMeta = {}) {
   try {
     const cleanPath = (rawPath || "/").split("?")[0].slice(0, 80) || "/";
     if (cleanPath.startsWith("/api/") || cleanPath.startsWith("/_next/")) return;
     if (!who || !who.ua || BOT_UA.test(who.ua)) return;
     const todayKey = new Date().toISOString().slice(0, 10);
     const existing = await prisma.jobRun.findUnique({ where: { id: VISITS_ROW_ID } });
-    const data = (existing?.summary ?? {}) as { paths?: Record<string, number>; uvDay?: string; uvIds?: string[]; uv?: Record<string, number> };
+    const data = (existing?.summary ?? {}) as VisitsRow;
     const uv: Record<string, number> = { ...(data.uv ?? {}) };
-    let ids = data.uvDay === todayKey && Array.isArray(data.uvIds) ? data.uvIds : [];
+    const sameDay = data.uvDay === todayKey;
+    let ids = sameDay && Array.isArray(data.uvIds) ? data.uvIds : [];
     const who12 = keyedDigest(`visitor:${todayKey}`, `${who.ip}|${who.ua.slice(0, 200)}`).slice(0, 12);
-    if (!ids.includes(who12) && ids.length < 20000) ids = [...ids, who12];
-    uv[todayKey] = ids.length;
-    // Keep the last 90 days of counts only.
-    const keys = Object.keys(uv).sort();
-    while (keys.length > 90) {
-      const oldest = keys.shift();
-      if (oldest) delete uv[oldest];
+    const src = { ...(data.src ?? {}) }, dev = { ...(data.dev ?? {}) }, cty = { ...(data.cty ?? {}) }, cmp = { ...(data.cmp ?? {}) }, pg = { ...(data.pg ?? {}) };
+    if (!ids.includes(who12) && ids.length < 20000) {
+      ids = [...ids, who12];
+      // First visit of the day for this browser: count where it came from, once.
+      const own = ["onboardops.org"];
+      try { if (process.env.APP_URL) own.push(new URL(process.env.APP_URL).hostname); } catch { /* ignore a bad APP_URL */ }
+      bump(src, todayKey, classifySource(meta, own));
+      bump(dev, todayKey, deviceOf(who.ua, meta.width));
+      bump(cty, todayKey, countryOf(meta.country));
+      const campaign = campaignOf(meta);
+      if (campaign) bump(cmp, todayKey, campaign);
     }
+    uv[todayKey] = ids.length;
+    // Key pages: one count per browser per page per day, so the funnel is unique people, not page views.
+    const pageIds: Record<string, string[]> = sameDay ? { ...(data.pageIds ?? {}) } : {};
+    const stage = FUNNEL_PAGES[cleanPath];
+    if (stage) {
+      const seen = pageIds[stage] ?? [];
+      if (!seen.includes(who12) && seen.length < 5000) {
+        pageIds[stage] = [...seen, who12];
+        pg[todayKey] = { ...(pg[todayKey] ?? {}), [stage]: pageIds[stage].length };
+      }
+    }
+    pruneDays(uv); pruneDays(src); pruneDays(dev); pruneDays(cty); pruneDays(cmp); pruneDays(pg);
     const paths: Record<string, number> = { ...(data.paths ?? {}) };
     paths[cleanPath] = (paths[cleanPath] || 0) + 1;
     const sortedPaths = Object.entries(paths)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 30);
     const trimmedPaths = Object.fromEntries(sortedPaths);
-    const summary = { uv, uvDay: todayKey, uvIds: ids, paths: trimmedPaths };
+    const summary = { uv, uvDay: todayKey, uvIds: ids, pageIds, src, dev, cty, cmp, pg, paths: trimmedPaths };
     await prisma.jobRun.upsert({
       where: { id: VISITS_ROW_ID },
       create: { id: VISITS_ROW_ID, name: "platform:visits", ok: true, summary, durationMs: 0 },
