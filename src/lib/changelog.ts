@@ -8,6 +8,24 @@ export type ChangelogEntry = {
 
 export const entries: ChangelogEntry[] = [
   {
+    v: "0.15.0",
+    date: "2026-11-23",
+    highlight: "Dedicated api.onboardops.org host, smarter outage tracking, and full AI assistant suite",
+    bullets: [
+      "AI setup assistant, policy & checklist drafters, license photo scanner, and compliance summaries",
+      "Records AI for neutral write-ups, anonymized case comparisons, timelines, redaction, and portal responses",
+      "Dedicated api.onboardops.org host, live outage timelines, and a reorganized Staff Console",
+    ],
+    items: [
+      "Dedicated API host at api.onboardops.org for Public API v1 (/v1/*), health and status probes (/status/*, /health), Better Stack webhooks, calendar feeds (.ics), and public media, with automatic 308 redirects from legacy URLs.",
+      "Upgraded outage and status system: automatically detects both Better Stack monitor outages and manual incidents, merges live Better Stack resource statuses into the in-app outage screen, splits degraded/non-core issues into a non-blocking banner vs. full lock screen, displays live incident timelines via /api/incidents polling, and adds Site Owner bypass controls, outage screen override modes, AI update drafting, and encrypted Discord/Slack/Teams staff alerts.",
+      "AI Setup & Operations tools: describe your business in the Setup Wizard to generate starter departments, job roles, policies, courses, and checklists; recommend required courses per job role in Settings; draft workplace policies from bullet points in Policies; generate shift checklists from a plain-English description; and match spreadsheet columns automatically during CSV staff imports (people-data gated).",
+      "AI Credentials & Compliance tools: scan photos of licenses or certificates to pre-fill credential details and match scanned forms to the right employee, generate plain-language training and credential compliance summaries from exact code-computed numbers, explain workplace rules and regulations in plain words (not legal advice), and suggest preventative shift checklist items directly from incident reports.",
+      "AI Records & Portal helpers (suggestions only — names and contact details are redacted first, and a person always decides): rewrite write-ups and incident reports in neutral HR language, flag opinions or missing facts, suggest matching policies, compare a case against anonymized past workspace cases, generate a five-line timeline or case-packet summary, redact identifying details before sharing, and help employees write calm, factual responses in My Portal.",
+      "Website & Staff Console upgrades: added a public visitor chat widget on marketing pages grounded strictly in public help docs and pricing (no customer data), reorganized the Staff Console sidebar and Dashboard, expanded long-form incident/update/maintenance presets, added AI reply suggestions and triage sorting to the Support Inbox, and launched the Staff Content Studio (/admin/content) for copyable changelog posts, industry landing drafts, and testimonial case studies.",
+    ],
+  },
+  {
     v: "0.14.0",
     date: "2026-11-23",
     highlight: "AI tools in the course builder",
