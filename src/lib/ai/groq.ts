@@ -32,7 +32,8 @@ export const aiConfigured = () => keys().length > 0 && process.env.AI_DISABLED !
 
 // A key that was refused or rate limited is skipped until this time. Per server instance, which is fine: a new instance just tries again.
 const parkedUntil = new Map<number, number>();
-let cursor = 0;
+// Random start so every cold serverless instance begins on a different key instead of always key #1.
+let cursor = Math.floor(Math.random() * 1000);
 /** Test helper. */
 export const _resetKeyState = () => { parkedUntil.clear(); cursor = 0; };
 
@@ -42,16 +43,17 @@ async function call({ path, body, headers = {}, timeoutMs = 30_000 }: Init): Pro
   const ks = keys();
   if (!ks.length || process.env.AI_DISABLED === "1") throw new AiError("not_configured");
   let sawRate = false;
-  // Try every key at most once per call, starting after the one used last.
+  // Every call moves the pointer on, so concurrent and consecutive calls spread over all keys. Each call tries every key at most once.
+  const start = cursor % ks.length;
+  cursor = (start + 1) % ks.length;
   for (let n = 0; n < ks.length; n++) {
-    const i = (cursor + n) % ks.length;
+    const i = (start + n) % ks.length;
     if ((parkedUntil.get(i) ?? 0) > Date.now()) continue;
     try {
       const res = await fetch(`${base()}${path}`, { method: "POST", body, signal: AbortSignal.timeout(timeoutMs), headers: { authorization: `Bearer ${ks[i]}`, "user-agent": "OnboardOps/1.0", ...headers } });
       if (res.status === 429) { sawRate = true; parkedUntil.set(i, Date.now() + Math.min(60, Number(res.headers.get("retry-after")) || 20) * 1000); console.error(`ai: key #${i} rate limited`); continue; }
       if (res.status === 401 || res.status === 403) { parkedUntil.set(i, Date.now() + 10 * 60_000); console.error(`ai: key #${i} refused (${res.status})`); continue; }
       if (res.status >= 500) { console.error(`ai: key #${i} server error ${res.status}`); continue; }
-      cursor = (i + 1) % ks.length;
       return res;
     } catch (e) {
       if ((e as Error)?.name === "TimeoutError") throw new AiError("timeout");

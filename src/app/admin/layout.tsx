@@ -33,6 +33,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         heading: "Support & Compliance",
         items: [
           { href: "/admin/inbox", label: "Support inbox", icon: "inbox", badge: openSupport, badgeTone: "warn" },
+          { href: "/admin/support-analytics", label: "Support analytics", icon: "analytics" },
+          { href: "/admin/support-settings", label: "Support settings", icon: "settings" },
           { href: "/admin/feedback", label: "Beta feedback", icon: "feedback" },
           { href: "/admin/privacy", label: "Privacy requests", icon: "privacy", badge: openPrivacy, badgeTone: "warn" },
         ],

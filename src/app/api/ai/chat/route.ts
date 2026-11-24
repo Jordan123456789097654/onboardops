@@ -7,6 +7,8 @@ import { notYet, securityGroups } from "@/lib/security-facts";
 import { prisma } from "@/lib/prisma";
 import { getActiveMembership } from "@/lib/auth";
 import { entries as changelog } from "@/lib/changelog";
+import { getSupportConfig, hoursStatus } from "@/lib/support-config";
+import { bumpDaily } from "@/lib/support";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -290,7 +292,11 @@ export async function POST(req: Request) {
     .map((m) => m.content)
     .join(" ");
 
-  const knowledge = buildPublicKnowledge(recentUserText) + (await changelogAndLegal()) + (await accountFacts());
+  const cfg = await getSupportConfig();
+  const hours = hoursStatus(cfg);
+  const hoursLine = `\n\n=== SUPPORT TEAM RIGHT NOW ===\n${hours.open ? "The support team is online." : `The support team is away${hours.nextOpenLabel ? `, back ${hours.nextOpenLabel}` : ""}. Tickets still reach them and they reply when back.`} Reply target: ${cfg.responseTarget}.`;
+  if (messages.length === 1) await bumpDaily("chats");
+  const knowledge = buildPublicKnowledge(recentUserText) + (await changelogAndLegal()) + (await accountFacts()) + hoursLine;
   const transcript = messages
     .map((m) => `${m.role === "user" ? "Visitor" : "Assistant"}: ${m.content}`)
     .join("\n");
@@ -303,7 +309,7 @@ export async function POST(req: Request) {
       json: true,
       maxTokens: 700,
       temperature: 0.2,
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT.replace(/Maya/g, cfg.brand.name),
       user: userPrompt,
     });
 
@@ -325,6 +331,8 @@ export async function POST(req: Request) {
       })
       .slice(0, 3);
 
+    await bumpDaily("aiReplies");
+    if (out.data.escalate) await bumpDaily("escalations");
     return NextResponse.json({
       reply: out.data.reply,
       escalate: out.data.escalate,

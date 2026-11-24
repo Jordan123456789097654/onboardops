@@ -13,6 +13,8 @@ import { saveAnnouncementState, saveMaintenanceState } from "@/lib/maintenance";
 import { reconcileMaintenance } from "@/lib/betterstack";
 import { mergeWorkspaceMeta } from "@/lib/workspace-meta";
 import { connectDomain, removeDomain, validateDomain } from "@/lib/vercel-domains";
+import { can, getSupportConfig } from "@/lib/support-config";
+import { emitSupportEvent } from "@/lib/support";
 import { run } from "./_util";
 
 const ownersOf = (workspaceId: string) => prisma.workspaceMember.findMany({ where: { workspaceId, role: "OWNER" }, include: { user: true } });
@@ -26,13 +28,19 @@ export async function replyToRequestAction(id: string, input: unknown) {
     const req = await prisma.supportRequest.findUnique({ where: { id } });
     if (!req) throw new Error("Request not found.");
     const ref = req.id.slice(-8).toUpperCase();
+    if (d.markSolved && !can(await getSupportConfig(), staff.role, "close")) throw new Error("You don't have permission to close tickets.");
     const m = emails.supportReply(req.name, ref, d.body);
     const sent = await sendEmail(req.email, m.subject, m.text, { html: m.html, kind: "support-reply", workspaceId: req.workspaceId });
-    await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       await tx.supportMessage.create({ data: { requestId: id, kind: "REPLY", authorName: staff.name, body: d.body, emailed: sent.ok } });
-      await tx.supportRequest.update({ where: { id }, data: { status: d.markSolved ? "SOLVED" : "WAITING", assignee: req.assignee ?? staff.name } });
+      const u = await tx.supportRequest.update({
+        where: { id },
+        data: { status: d.markSolved ? "SOLVED" : "WAITING", solvedAt: d.markSolved ? new Date() : null, resolvedHint: false, idleNudgedAt: null, staffTypingAt: null, assignee: req.assignee ?? staff.name },
+      });
       await staffAudit(tx, staff, { action: "SUPPORT_REPLY", targetType: "SupportRequest", targetId: id, workspaceId: req.workspaceId, summary: `Replied to request ${ref}${sent.ok ? "" : " (email failed: " + (sent.error ?? "unknown") + ")"}` });
+      return u;
     });
+    await emitSupportEvent(d.markSolved ? "ticket.solved" : "ticket.replied", updated, d.body);
     refresh();
     return { emailed: sent.ok, error: sent.error };
   });

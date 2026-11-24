@@ -7,7 +7,7 @@ const appUrl = () => (process.env.APP_URL || "https://onboardops.org").trim().re
 
 const FORCED_FROM_EMAIL = "notifications@onboardops.org";
 
-export type SendOpts = { kind?: string; workspaceId?: string | null; workspaceName?: string | null; html?: string };
+export type SendOpts = { kind?: string; workspaceId?: string | null; workspaceName?: string | null; html?: string; replyTo?: string };
 
 async function resolveFromHeader(opts: SendOpts): Promise<string> {
   let wsName = opts.workspaceName?.trim();
@@ -49,6 +49,7 @@ export async function sendEmail(to: string, subject: string, text: string, opts:
         to: [realTo],
         subject: finalSubject,
         text: finalText,
+        ...(opts.replyTo || (opts.kind === "support-reply" && process.env.SUPPORT_REPLY_TO?.trim()) ? { reply_to: opts.replyTo || process.env.SUPPORT_REPLY_TO!.trim() } : {}),
         ...(finalHtml ? { html: finalHtml } : {}),
         ...(cids.length ? { attachments: cids.map((id) => ({ filename: `${id}.png`, content: EMAIL_IMAGES[id], content_type: "image/png", content_id: id })) } : {}),
       }),
@@ -111,6 +112,9 @@ export const emails = {
 
   supportReply: (name: string, ref: string, body: string) =>
     mail(`Re: your OnboardOps support request (${ref})`, { icon: "chat", preheader: "We replied to your support request.", title: "We replied to your request", paragraphs: [`Hi ${name},`, ...body.split(/\n{2,}/)], details: [["Reference", ref]], button: { label: "Contact support", url: `${appUrl()}/contact` }, note: "You can reply to this email or use the contact form.", align: "left" }),
+
+  supportCode: (code: string) =>
+    mail("Your OnboardOps support code", { icon: "verify", preheader: `Your code is ${code}.`, title: "Your support code", paragraphs: ["Use this code in the chat to see your past conversations with us. It works for 15 minutes.", `Your code: ${code}`], note: "If you didn't ask for this, ignore this email. Nobody can see your conversations without the code.", align: "left" }),
 
   supportAccess: (owner: string, workspace: string, staff: string, reason: string, until: string) =>
     mail(`OnboardOps support accessed ${workspace}`, { icon: "eye", preheader: `${staff} opened read-only support access.`, title: "Support opened read-only access", paragraphs: [`Hi ${owner}, ${staff} from OnboardOps support opened read-only access to ${workspace}. They can look but not change anything.`], details: [["Who", staff], ["Reason", reason], ["Expires", until]], button: { label: "View your audit log", url: `${appUrl()}/app/audit` }, note: "This is recorded in your audit log. If you did not expect it, contact us right away." }),

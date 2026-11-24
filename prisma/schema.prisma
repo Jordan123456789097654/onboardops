@@ -660,13 +660,93 @@ model SupportRequest {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  priority      String    @default("NORMAL")
+  tags          String[]  @default([])
+  category      String?
+  sentiment     String?
+  aiSummary     String?
+  resolvedHint  Boolean   @default(false)
+  triagedAt     DateTime?
+  inbox         String?
+  pageUrl       String?
+  spam          Boolean   @default(false)
+  mergedIntoId  String?
+  linkedIds     String[]  @default([])
+  solvedAt      DateTime?
+  staffSeenAt   DateTime?
+  staffSeenBy   String?
+  staffTypingAt DateTime?
+  staffTypingBy String?
+  idleNudgedAt  DateTime?
+  rating        Int?
+  ratingNote    String?
+  ratedAt       DateTime?
+
   messages     SupportMessage[]
+  attachments  SupportAttachment[]
   roadmapTitle String?
   roadmapBlurb String?
 
   @@index([email, createdAt])
   @@index([status, createdAt])
   @@index([workspaceId])
+  @@index([mergedIntoId])
+}
+
+model SupportAttachment {
+  id        String   @id @default(cuid())
+  requestId String
+  messageId String?
+  name      String
+  mime      String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  request SupportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
+
+model SupportCanned {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  grp       String   @default("Custom")
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model SupportBlock {
+  email     String   @id
+  reason    String   @default("")
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model SupportConfig {
+  id        String   @id @default("main")
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+model SupportDaily {
+  day         String @id
+  chats       Int    @default(0)
+  aiReplies   Int    @default(0)
+  escalations Int    @default(0)
+  tickets     Int    @default(0)
+}
+
+model SupportCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
 }
 
 model SupportMessage {

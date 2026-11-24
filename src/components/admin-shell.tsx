@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Briefcase,
   Building2,
   Eye,
@@ -16,6 +17,7 @@ import {
   Menu,
   MessageSquareQuote,
   ShieldCheck,
+  Settings2,
   Sparkles,
   UsersRound,
 } from "lucide-react";
@@ -43,6 +45,8 @@ const ICON_MAP = {
   status: Activity,
   workspaces: Building2,
   inbox: Inbox,
+  analytics: BarChart3,
+  settings: Settings2,
   feedback: Lightbulb,
   privacy: ShieldCheck,
   content: Sparkles,
