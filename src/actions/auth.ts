@@ -6,6 +6,7 @@ import { createSession, destroySession, hashPassword, setActiveWorkspace, verify
 import { beginSession, landingFor } from "@/lib/login";
 import { hasOAuthAccount } from "@/lib/oauth";
 import { ssoRequiredFor } from "@/lib/sso";
+import { samlRequiredFor } from "@/lib/saml";
 import { writeAudit } from "@/lib/audit";
 import { slugify } from "@/lib/utils";
 import { createToken, findValidToken } from "@/lib/tokens";
@@ -15,6 +16,7 @@ import { getMaintenanceState } from "@/lib/maintenance";
 import { emails, sendEmail } from "@/lib/email";
 import { enforceRate } from "@/lib/rate-limit";
 import { autoClaimSubdomain, subdomainHost } from "@/lib/subdomain";
+import { parseLogoDataUrl } from "@/lib/logo";
 import { run, type Result } from "./_util";
 
 const loginSchema = z.object({ email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") });
@@ -24,6 +26,7 @@ const registerSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   workspaceName: z.string().trim().max(80).default(""),
+  logoDataUrl: z.string().optional(),
   ref: z.string().max(40).optional(),
   address: z.string().max(60).optional(),
   acceptTerms: z.literal(true, { errorMap: () => ({ message: "You must accept the Terms of Service and Privacy Policy" }) }),
@@ -35,6 +38,7 @@ export async function loginAction(input: unknown): Promise<Result<{ to: string }
     const d = loginSchema.parse(input);
     // A company that requires single sign-on sends its members to their identity provider; the password is not accepted for them (owners are exempt).
     if (await ssoRequiredFor(d.email)) return { to: `/api/auth/sso/start?email=${encodeURIComponent(d.email.trim().toLowerCase())}` };
+    if (await samlRequiredFor(d.email)) return { to: `/api/auth/saml/start?email=${encodeURIComponent(d.email.trim().toLowerCase())}` };
     const user = await findUserByAnyEmail(d.email);
     if (user?.lockedUntil && user.lockedUntil > new Date()) throw new Error("Too many failed attempts. Try again in a few minutes, or reset your password.");
     if (!user || !(await verifyPassword(d.password, user.passwordHash))) {
@@ -73,6 +77,11 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     if (maint.enabled) throw new Error(maint.message || "OnboardOps is currently undergoing scheduled maintenance.");
     const d = registerSchema.parse(input);
     if (d.accountType === "OWNER" && d.workspaceName.length < 2) throw new Error("Enter a company name");
+    let parsedLogo: ReturnType<typeof parseLogoDataUrl> | null = null;
+    if (d.accountType === "OWNER") {
+      if (!d.logoDataUrl) throw new Error("Upload a company logo (PNG, JPG, or WebP) to create your workspace.");
+      parsedLogo = parseLogoDataUrl(d.logoDataUrl);
+    }
     const email = d.email.toLowerCase();
     if (await emailTaken(email)) throw new Error("An account with that email already exists. Sign in instead.");
     const passwordHash = await hashPassword(d.password);
@@ -88,7 +97,15 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     if (await prisma.workspace.findUnique({ where: { slug } })) slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
     const { userId, wsId } = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { email, name: d.name, passwordHash, passwordSetAt: new Date() } });
-      const ws = await tx.workspace.create({ data: { name: d.workspaceName, slug } });
+      const ws = await tx.workspace.create({
+        data: {
+          name: d.workspaceName,
+          slug,
+          logoData: parsedLogo!.data,
+          logoMime: parsedLogo!.mime,
+          logoUpdatedAt: new Date(),
+        },
+      });
       const member = await tx.workspaceMember.create({ data: { workspaceId: ws.id, userId: user.id, role: "OWNER" } });
       await writeAudit(tx, { workspaceId: ws.id, actorMemberId: member.id, actorName: user.name, actionType: "WORKSPACE_CREATED", targetType: "Workspace", targetId: ws.id, summary: `Workspace "${ws.name}" created` });
       await writeAudit(tx, { workspaceId: ws.id, actorMemberId: member.id, actorName: user.name, actionType: "TERMS_ACCEPTED", targetType: "User", targetId: user.id, summary: `${user.name} accepted the Terms of Service, Privacy Policy and Beta Program Terms (version 2026-11-21)` });
@@ -187,7 +204,7 @@ export async function resetPasswordAction(input: unknown): Promise<Result<{ to: 
       for (const m of ms) await writeAudit(tx, { workspaceId: m.workspaceId, actorMemberId: m.id, actorName: t.user.name, actionType: t.kind === "INVITE" ? "PASSWORD_SET" : "PASSWORD_RESET", targetType: "User", targetId: t.userId, summary: `${t.user.name} ${t.kind === "INVITE" ? "set a password from an invite" : "reset their password"}; other sessions were signed out` });
     });
     // A reset link proves the email, not the second factor, so it goes through the same gate as a password sign-in.
-    if (await ssoRequiredFor(t.user.email)) return { to: "/sso" };
+    if ((await ssoRequiredFor(t.user.email)) || (await samlRequiredFor(t.user.email))) return { to: "/sso" };
     const first = (await membershipsFor(t.userId))[0];
     const gate = await beginSession(t.userId, { workspaceId: first?.workspaceId, method: "reset" });
     if (!gate.done) return { to: gate.to };
@@ -263,6 +280,7 @@ export async function staffLoginAction(input: unknown): Promise<Result<{ to: str
 
     if (!member) throw new Error(generic);
     if (member.role !== "OWNER" && (await ssoRequiredFor(user.email))?.workspaceId === ws.id) return { to: `/api/auth/sso/start?email=${encodeURIComponent(user.email)}` };
+    if (member.role !== "OWNER" && (await samlRequiredFor(user.email))?.workspaceId === ws.id) return { to: `/api/auth/saml/start?email=${encodeURIComponent(user.email)}` };
 
     if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
     const gate = await beginSession(user.id, { workspaceId: ws.id, method: "staff" });
@@ -317,7 +335,7 @@ export async function magicSignInAction(input: unknown): Promise<Result<{ to: st
     const d = z.object({ token: z.string().min(10), ws: z.string().optional() }).parse(input);
     const t = await findValidToken(d.token);
     if (!t || t.kind !== "MAGIC") throw new Error("This sign-in link is invalid or has expired. Request a new one.");
-    if (await ssoRequiredFor(t.user.email)) throw new Error("Your company requires single sign-on. Use the single sign-on link on the sign-in page.");
+    if ((await ssoRequiredFor(t.user.email)) || (await samlRequiredFor(t.user.email))) throw new Error("Your company requires single sign-on. Use the single sign-on link on the sign-in page.");
     await prisma.$transaction([
       prisma.authToken.update({ where: { id: t.id }, data: { usedAt: new Date() } }),
       prisma.user.update({ where: { id: t.userId }, data: { emailVerifiedAt: t.user.emailVerifiedAt ?? new Date(), failedLogins: 0, lockedUntil: null } }),

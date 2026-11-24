@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { workspaceLogoUrl } from "@/lib/logo";
 import { StaffLogin } from "@/components/staff-login";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function WorkspaceLogin({ params }: { params: { slug: string } }) {
-  const ws = await prisma.workspace.findUnique({ where: { slug: params.slug }, select: { id: true, name: true, suspendedAt: true } });
+  const ws = await prisma.workspace.findUnique({ where: { slug: params.slug }, select: { id: true, name: true, suspendedAt: true, logoUpdatedAt: true } });
   if (!ws) notFound();
-  return <StaffLogin workspaceId={ws.id} name={ws.name} onCustomDomain={false} />;
+  return <StaffLogin workspaceId={ws.id} name={ws.name} logoUrl={workspaceLogoUrl(ws)} onCustomDomain={false} />;
 }

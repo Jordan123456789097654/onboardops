@@ -6,6 +6,7 @@ import { destroySession, verifyPassword } from "@/lib/auth";
 import { requireWorkspaceRole, ADMIN_ROLES } from "@/lib/rbac";
 import { runLoggedDailyJobs } from "@/lib/jobs";
 import { writeAudit } from "@/lib/audit";
+import { assertNotUnderLegalHold } from "@/lib/retention";
 import { run } from "./_util";
 
 /** Runs the same job the daily cron runs, for this workspace only. */
@@ -24,6 +25,7 @@ const closeSchema = z.object({ confirmName: z.string(), password: z.string().min
 export async function closeWorkspaceAction(input: unknown) {
   const res = await run(async () => {
     const ctx = await requireWorkspaceRole(["OWNER"]);
+    assertNotUnderLegalHold(ctx.workspace);
     const d = closeSchema.parse(input);
     if (d.confirmName.trim() !== ctx.workspace.name) throw new Error("Type the workspace name exactly to confirm.");
     if (!(await verifyPassword(d.password, ctx.user.passwordHash))) throw new Error("That password is incorrect.");

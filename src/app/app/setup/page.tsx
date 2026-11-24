@@ -4,6 +4,7 @@ import { LIB_CHECKLISTS, LIB_COURSES, LIB_POLICIES } from "@/lib/library";
 import { SITE } from "@/lib/site";
 import { featureOn } from "@/lib/features";
 import { aiConfigured } from "@/lib/ai/groq";
+import { workspaceLogoUrl } from "@/lib/logo";
 import { Wizard } from "./wizard";
 
 export const metadata = { title: "Set up your workspace" };
@@ -12,9 +13,12 @@ export const maxDuration = 60;
 export default async function SetupPage() {
   const ctx = await requirePageRole(ADMIN_ROLES);
   const [depts, emps] = await Promise.all([prisma.department.count({ where: { workspaceId: ctx.workspaceId } }), prisma.employeeProfile.count({ where: { workspaceId: ctx.workspaceId } })]);
+  const logoUrl = workspaceLogoUrl(ctx.workspace);
   return (
     <Wizard
+      workspaceId={ctx.workspaceId}
       workspace={ctx.workspace.name}
+      logoUrl={logoUrl}
       hasDepts={depts > 0}
       hasPeople={emps > 0}
       signIn={`${SITE.url}/w/${ctx.workspace.slug}`}

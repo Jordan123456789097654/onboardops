@@ -8,7 +8,9 @@ export const FIELDS: Record<string, Record<string, "s" | "j" | "b">> = {
   InfractionTimelineEvent: { note: "s" },
   CaseAttachment: { statement: "s" },
   Appeal: { reason: "s", decisionNote: "s" },
-  IncidentReport: { description: "s", reviewerNotes: "s", rootCause: "s", injury: "j", actions: "j" },
+  IncidentReport: { description: "s", reviewerNotes: "s", rootCause: "s", injury: "j", actions: "j", workersComp: "j" },
+  InvestigationCase: { summary: "s", findings: "s" },
+  InvestigationEntry: { content: "s" },
   CoachingNote: { note: "s" },
   Review: { summary: "s", strengths: "s", improvements: "s", goals: "s", privateNotes: "s" },
   EmployeeProfile: { phone: "s", emergencyContact: "s", customValues: "j" },
@@ -24,10 +26,12 @@ export const FIELDS: Record<string, Record<string, "s" | "j" | "b">> = {
 const PARENT: Record<string, { fk: string; parent: string }> = {
   InfractionTimelineEvent: { fk: "caseId", parent: "InfractionCase" },
   CaseAttachment: { fk: "caseId", parent: "InfractionCase" },
+  InvestigationEntry: { fk: "investigationId", parent: "InvestigationCase" },
 };
 /** Nested writes (create inside a create) for relations that contain encrypted columns. */
 const NESTED: Record<string, Record<string, string>> = {
   InfractionCase: { timeline: "InfractionTimelineEvent", attachments: "CaseAttachment", appeals: "Appeal" },
+  InvestigationCase: { entries: "InvestigationEntry" },
 };
 
 const WRITES = new Set(["create", "createMany", "createManyAndReturn", "update", "updateMany", "upsert"]);
@@ -56,7 +60,7 @@ function rememberCase(id: string, ws: string) {
 }
 
 async function wsFromParent(parent: string, id: string): Promise<string | null> {
-  if (parent === "InfractionCase") { const known = justCreated.get(id); if (known) return known; }
+  if (parent === "InfractionCase" || parent === "InvestigationCase") { const known = justCreated.get(`${parent}:${id}`); if (known) return known; }
   const r = await (basePrisma as Any)[lower(parent)].findUnique({ where: { id }, select: { workspaceId: true } });
   return r?.workspaceId ?? null;
 }
@@ -132,7 +136,7 @@ export const encryptionExtension = Prisma.defineExtension({
           }
         }
         const result = await query(a);
-        if (model === "InfractionCase" && operation === "create" && result && typeof result === "object" && typeof (result as Any).id === "string" && typeof (result as Any).workspaceId === "string") rememberCase((result as Any).id, (result as Any).workspaceId);
+        if ((model === "InfractionCase" || model === "InvestigationCase") && operation === "create" && result && typeof result === "object" && typeof (result as Any).id === "string" && typeof (result as Any).workspaceId === "string") rememberCase(`${model}:${(result as Any).id}`, (result as Any).workspaceId);
         return deepDecrypt(result);
       },
     },

@@ -115,7 +115,7 @@ export async function getActiveMembership(): Promise<Membership | null> {
     if (grant) {
       const [ws, user] = await Promise.all([prisma.workspace.findUnique({ where: { id: grant.workspaceId } }), prisma.user.findUnique({ where: { id: uid } })]);
       if (ws && user && resolvePlatformRole(user) && resolvePlatformRole(user) !== "VIEWER") {
-        return { id: `support:${grant.id}`, workspaceId: ws.id, userId: uid, role: "SUPERVISOR", customRoleId: null, customRole: null, createdAt: grant.createdAt, workspace: ws, user, profile: null, support: { grantId: grant.id, expiresAt: grant.expiresAt, reason: grant.reason } };
+        return { id: `support:${grant.id}`, workspaceId: ws.id, userId: uid, role: "SUPERVISOR", customRoleId: null, customRole: null, orgUnitId: null, createdAt: grant.createdAt, workspace: ws, user, profile: null, support: { grantId: grant.id, expiresAt: grant.expiresAt, reason: grant.reason } };
       }
     }
   }

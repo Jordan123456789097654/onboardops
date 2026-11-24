@@ -9,6 +9,7 @@ import { installLibraryAction } from "@/actions/library";
 import { finishSetupAction } from "@/actions/records";
 import { runAiTaskAction } from "@/actions/ai";
 import { Badge, PageHeader, useToast } from "@/components/ui";
+import { LogoPanel } from "@/app/app/settings/logo-panel";
 import { cn } from "@/lib/utils";
 
 type Item = { id: string; title: string };
@@ -41,9 +42,11 @@ const INDUSTRY_STARTERS: { label: string; description: string }[] = [
   },
 ];
 
-export function Wizard({ workspace, hasDepts, hasPeople, signIn, courses, policies, checklists, ai = false }: { workspace: string; hasDepts: boolean; hasPeople: boolean; signIn: string; courses: Item[]; policies: Item[]; checklists: Item[]; ai?: boolean }) {
+export function Wizard({ workspaceId, workspace, logoUrl = null, hasDepts, hasPeople, signIn, courses, policies, checklists, ai = false }: { workspaceId: string; workspace: string; logoUrl?: string | null; hasDepts: boolean; hasPeople: boolean; signIn: string; courses: Item[]; policies: Item[]; checklists: Item[]; ai?: boolean }) {
   const router = useRouter();
   const toast = useToast();
+  const [currentLogoUrl, setCurrentLogoUrl] = useState<string | null>(logoUrl);
+  const [startedWithoutLogo] = useState(!logoUrl);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [depts, setDepts] = useState("Warehouse\nFront Desk");
@@ -181,6 +184,36 @@ export function Wizard({ workspace, hasDepts, hasPeople, signIn, courses, polici
   return (
     <>
       <PageHeader title={`Set up ${workspace}`} sub="Four quick steps. You can skip any of them and come back later." />
+      {startedWithoutLogo && (
+        <section
+          className={cn(
+            "mb-6 max-w-2xl rounded-lg border p-4",
+            currentLogoUrl
+              ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30"
+              : "border-amber-400/70 bg-amber-50/70 dark:border-amber-600/50 dark:bg-amber-950/30"
+          )}
+        >
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">
+                {currentLogoUrl ? "Company logo uploaded" : "Upload your company logo (required)"}
+              </h2>
+              <p className="mt-0.5 text-xs text-soft">
+                {currentLogoUrl
+                  ? "Your workspace branding is ready. You can replace or download your logo anytime in Settings."
+                  : "Upload your company logo to finish branding your workspace sidebar and staff sign-in page."}
+              </p>
+            </div>
+            {currentLogoUrl ? <Badge value="PASSED" label="Complete" /> : <Badge value="PENDING" label="Required" />}
+          </div>
+          <LogoPanel
+            workspaceId={workspaceId}
+            workspaceName={workspace}
+            logoUrl={currentLogoUrl}
+            onUploaded={(url) => setCurrentLogoUrl(url)}
+          />
+        </section>
+      )}
       {ai && (
         <div className="mb-6 max-w-2xl rounded-lg border border-accent/30 bg-accent/5 p-4 text-[13px]">
           <div className="flex items-center justify-between gap-2">

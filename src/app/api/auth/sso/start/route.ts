@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { enforceRate } from "@/lib/rate-limit";
+import { samlForEmail } from "@/lib/saml";
 import { SSO_COOKIE, SSO_TTL_SECONDS, newSsoFlow, signSsoFlow, ssoAuthUrl, ssoForEmail } from "@/lib/sso";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,10 @@ export async function GET(req: Request) {
   } else {
     const email = (q.get("email") ?? "").trim().toLowerCase();
     cfg = email ? await ssoForEmail(email) : null;
+    if (!cfg && email) {
+      const samlCfg = await samlForEmail(email);
+      if (samlCfg) redirect(`/api/auth/saml/start?email=${encodeURIComponent(email)}`);
+    }
     extra = { hint: email || undefined };
   }
   if (!cfg) redirect(fail("not_configured"));

@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { createSession, membershipsFor, setActiveWorkspace } from "./auth";
 import { resolvePlatformRole } from "./platform-role";
 import { loginRequirement } from "./mfa";
+import { isDuoEnabled } from "./duo";
 import { MFA_COOKIE, MFA_TTL_SECONDS, signMfaPending, verifyMfaPending, type MfaPending } from "./mfa-token";
 
 /**
@@ -11,15 +12,17 @@ import { MFA_COOKIE, MFA_TTL_SECONDS, signMfaPending, verifyMfaPending, type Mfa
  */
 export async function beginSession(userId: string, opts: { workspaceId?: string | null; method: MfaPending["method"] }): Promise<{ done: true } | { done: false; to: string }> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpEnabledAt: true } });
-  const ws = opts.workspaceId ? await prisma.workspace.findUnique({ where: { id: opts.workspaceId }, select: { require2fa: true } }) : null;
+  const ws = opts.workspaceId ? await prisma.workspace.findUnique({ where: { id: opts.workspaceId }, select: { require2fa: true, duoConfig: true } }) : null;
   const need = loginRequirement({ totpEnabledAt: user?.totpEnabledAt ?? null }, ws);
-  if (need === "none") {
+  const duoOn = isDuoEnabled(ws);
+  if (need === "none" && !duoOn) {
     await createSession(userId);
     return { done: true };
   }
-  const token = await signMfaPending({ u: userId, ws: opts.workspaceId ?? undefined, enroll: need === "enroll", method: opts.method });
+  const enroll = need === "enroll";
+  const token = await signMfaPending({ u: userId, ws: opts.workspaceId ?? undefined, enroll, method: opts.method });
   cookies().set(MFA_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: MFA_TTL_SECONDS });
-  return { done: false, to: need === "enroll" ? "/login/2fa/setup" : "/login/2fa" };
+  return { done: false, to: enroll ? "/login/2fa/setup" : "/login/2fa" };
 }
 
 export async function readMfaPending() {

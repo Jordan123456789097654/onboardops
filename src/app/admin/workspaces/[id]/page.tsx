@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Download } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireStaffPage, ALL_STAFF } from "@/lib/platform";
 import { isPartnerWorkspace } from "@/lib/workspace-meta";
+import { workspaceLogoUrl } from "@/lib/logo";
 import { Badge, PageHeader } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 import { WorkspaceActions } from "./actions";
@@ -22,16 +24,48 @@ export default async function WorkspaceDetail({ params }: { params: { id: string
   ]);
   const partner = isPartnerWorkspace(ws.features);
   const canSupport = staff.role !== "VIEWER";
+  const logoUrl = workspaceLogoUrl(ws);
+  const initials = ws.name.split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "WS";
   const facts: [string, string | number][] = [["Created", fmtDate(ws.createdAt)], ["Plan", partner ? "PARTNER" : ws.plan], ["Employees", ws._count.employees], ["Courses", ws._count.courses], ["Infraction cases", ws._count.infractions], ["Policies", ws._count.policies], ["Incident reports", ws._count.incidents], ["Failed emails", emailFails]];
   return (
     <>
       <PageHeader title={ws.name} sub={`${ws.slug} · ${ws.members.length} members`}>
+        {logoUrl ? (
+          <a href={`/api/workspace-logo/${ws.id}?download=1`} download className="btn">
+            <Download className="h-3.5 w-3.5" />
+            Download Logo
+          </a>
+        ) : (
+          <Badge value="NONE" label="No logo uploaded" />
+        )}
         {partner && <Badge value="PASSED" label="Official Partner" />}
         {ws.legalHold && <Badge value="PENDING" label="Legal Hold" />}
         {ws.suspendedAt ? <Badge value="SUSPENDED" label="Locked" /> : <Badge value="ACTIVE" label="Active" />}
       </PageHeader>
       {ws.suspendedAt && <p className="mb-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-[13px] text-rose-900 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">Locked {fmtDateTime(ws.suspendedAt)}. Reason shown to the owner: {ws.suspendedReason}</p>}
       {ws.legalHold && <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">Legal Hold is active{ws.legalHoldReason ? `: ${ws.legalHoldReason}` : ""}. Record deletions and workspace closure are frozen.</p>}
+      <div className="card mb-4 flex flex-wrap items-center gap-3 p-3">
+        {logoUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={logoUrl}
+            alt={`${ws.name} logo`}
+            className="h-12 w-12 shrink-0 rounded-lg border border-line bg-surface object-contain p-1"
+          />
+        ) : (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-line bg-muted text-sm font-semibold text-soft">
+            {initials}
+          </span>
+        )}
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{ws.name}</div>
+          <div className="text-xs text-soft">
+            {logoUrl && ws.logoUpdatedAt
+              ? `Logo updated ${fmtDateTime(ws.logoUpdatedAt)}${ws.logoMime ? ` · ${ws.logoMime}` : ""}`
+              : "No workspace logo uploaded yet."}
+          </div>
+        </div>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{facts.map(([l, v]) => <div key={l} className="card p-3"><div className="text-xs text-soft">{l}</div><div className="mono mt-0.5 text-lg font-semibold">{v}</div></div>)}</div>
       <WorkspaceActions
         workspaceId={ws.id}

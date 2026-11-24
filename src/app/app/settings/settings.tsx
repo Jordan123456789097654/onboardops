@@ -14,6 +14,14 @@ import { DomainPanel } from "./domain-panel";
 import { TwoFactorPolicy, type MfaPolicy } from "./two-factor-policy";
 import { EncryptionPanel, type EncryptionState } from "./encryption-panel";
 import { SsoPanel, type SsoPanelState } from "./sso-panel";
+import { SamlPanel, type SamlPanelState } from "./saml-panel";
+import { DuoPanel, type DuoPanelState } from "./duo-panel";
+import { ScimPanel, type ScimTokenItem } from "./scim-panel";
+import { KmsPanel, type CloudKmsPublicConfig } from "./kms-panel";
+import { SiemPanel, type SiemDeliveryRow } from "./siem-panel";
+import { GovernancePanel, type GovernanceState } from "./governance-panel";
+import { LogoPanel } from "./logo-panel";
+import type { SiemPublicConfig } from "@/lib/siem";
 import type { DomainDetails } from "@/lib/vercel-domains";
 import { Badge, Field, Modal, PageHeader, Tabs, useAction, useToast } from "@/components/ui";
 
@@ -22,13 +30,22 @@ type JobRole = { id?: string; title: string; description: string; requiredCourse
 type RoleCourseRec = { roleId: string; courseIds: string[]; reason: string };
 type RoleRecState = { suggestedIds: string[]; selectedIds: string[]; reason: string };
 
-export function Settings({ sso, encryption, mfa, integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members, ai = false }: {
+export function Settings({ initialTab, workspaceId, logoUrl, sso, saml, duo, scimTokens, encryption, kms, siem, governance, mfa, integrations, customFields, features, rolePerms, customRoles, customRolesOn, domain, isOwner, ws, departments, roles, courses, members, ai = false }: {
+  initialTab?: string;
+  workspaceId: string;
+  logoUrl: string | null;
   customFields: { id: string; label: string; type: "text" | "date" | "select" | "yesno"; options: string[]; showToEmployee: boolean }[];
   integrations: { keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; scopes: string[]; expiresAt: string | null }[]; webhookUrl: string; locations: { id: string; name: string; address: string; timezone: string }[]; sms: { configured: boolean; sid: string; from: string }; bamboo: { configured: boolean; subdomain: string } };
   features: Record<string, boolean>; rolePerms: Record<string, string[]>; customRoles: { id: string; name: string; description: string; baseRole: string; members: number }[]; customRolesOn: boolean;
   mfa: MfaPolicy;
   encryption: EncryptionState;
+  kms: CloudKmsPublicConfig;
+  siem: { config: SiemPublicConfig; deliveries: SiemDeliveryRow[] };
+  governance: GovernanceState;
   sso: SsoPanelState;
+  saml: SamlPanelState;
+  duo: DuoPanelState;
+  scimTokens: ScimTokenItem[];
   domain: { address: { enabled: boolean; slug: string; status: string; zone: string; isOwner: boolean }; slug: string; baseUrl: string; name: string | null; status: string; details: DomainDetails | null; vercel: boolean };
   isOwner: boolean;
   ws: { publicCerts: boolean; decayDays: number; accent: string; tagline: string; name: string; ops: string; conf: string; threshold: number; retrain: boolean; reminders: boolean };
@@ -38,7 +55,7 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
   const router = useRouter();
   const { exec, pending } = useAction();
   const toast = useToast();
-  const [tab, setTab] = useState("workspace");
+  const [tab, setTab] = useState(initialTab || "workspace");
   const [s, setS] = useState({ name: ws.name, operationsWebhookUrl: ws.ops, confidentialWebhookUrl: ws.conf, autoSuspendStrikeThreshold: ws.threshold, autoRetrainOnWrittenInfraction: ws.retrain, remindersEnabled: ws.reminders });
   const [meta, setMeta] = useState({ publicCerts: ws.publicCerts, strikeDecayDays: ws.decayDays, accentColor: ws.accent, tagline: ws.tagline });
   const [closeOpen, setCloseOpen] = useState(false);
@@ -121,6 +138,8 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
       <Tabs value={tab} onChange={setTab} tabs={[{ id: "workspace", label: "Automation & Webhooks" }, { id: "structure", label: "Departments & Job Roles" }, { id: "access", label: "Access" }, { id: "roles", label: "Roles & permissions" }, { id: "features", label: "Features" }, { id: "fields", label: "Custom fields" }, { id: "integrations", label: "Integrations" }, { id: "domain", label: "Sign-in & domain" }, { id: "data", label: "Data & privacy" }]} />
       <div className={`mt-4 ${tab === "roles" ? "" : "max-w-3xl"}`}>
         {tab === "workspace" && (
+          <div className="space-y-4">
+          <LogoPanel workspaceId={workspaceId} workspaceName={ws.name} logoUrl={logoUrl} />
           <div className="card space-y-4 p-4">
             <Field label="Workspace name"><input className="input" value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -142,6 +161,7 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
             <label className="flex items-start gap-2 text-[13px] sm:col-span-3"><input type="checkbox" className="mt-0.5" checked={meta.publicCerts} onChange={(e) => setMeta({ ...meta, publicCerts: e.target.checked })} />Let anyone confirm a training certificate by its code on onboardops.org/verify. When on, the page shows the employee&apos;s name, the course, your company name and the dates. Turn it off to confirm only that the certificate is real.</label>
             <button className="btn" disabled={pending} onClick={() => exec(() => saveWorkspaceMetaAction(meta), { success: "Decay and branding saved", onOk: done })}>Save decay and branding</button>
             <button className="btn-primary" disabled={pending} onClick={() => exec(() => saveSettingsAction(s), { success: "Settings saved", onOk: done })}>Save settings</button>
+          </div>
           </div>
         )}
         {tab === "structure" && (
@@ -232,13 +252,25 @@ export function Settings({ sso, encryption, mfa, integrations, customFields, fea
             </section>
           </div>
         )}
-        {tab === "domain" && <div className="space-y-4"><TwoFactorPolicy policy={mfa} isOwner={isOwner} /><SsoPanel s={sso} isOwner={isOwner} /><DomainPanel address={domain.address} slug={domain.slug} baseUrl={domain.baseUrl} domain={domain.name} status={domain.status} details={domain.details} vercel={domain.vercel} /></div>}
+        {tab === "domain" && (
+          <div className="space-y-4">
+            <TwoFactorPolicy policy={mfa} isOwner={isOwner} />
+            <DuoPanel s={duo} />
+            <SsoPanel s={sso} isOwner={isOwner} />
+            <SamlPanel s={saml} isOwner={isOwner} />
+            <ScimPanel baseUrl={domain.baseUrl} tokens={scimTokens} />
+            <DomainPanel address={domain.address} slug={domain.slug} baseUrl={domain.baseUrl} domain={domain.name} status={domain.status} details={domain.details} vercel={domain.vercel} />
+          </div>
+        )}
         {tab === "data" && (
           <div className="space-y-4">
             <EncryptionPanel s={encryption} isOwner={isOwner} />
+            <KmsPanel config={kms} isOwner={isOwner} />
+            <SiemPanel config={siem.config} deliveries={siem.deliveries} />
+            <GovernancePanel state={governance} isOwner={isOwner} />
             <div className="card p-4 text-[13px]"><h2 className="text-sm font-semibold">Export everything</h2><p className="mt-1 text-soft">A JSON file with employees, courses, enrollments, cases (including confidential notes), checklists, policies, incident reports, reviews and the audit log. Uploaded files are listed but not included. Each export is recorded in the audit log.</p><a className="btn-primary mt-3" href="/api/export/workspace">Download workspace export</a></div>
             <div className="card p-4 text-[13px]"><h2 className="text-sm font-semibold">Run reminders now</h2><p className="mt-1 text-soft">The daily job expires lapsed certifications, warns before they lapse, and nudges people with due or overdue training. Run it now to see what it would send.</p><button className="btn mt-3" disabled={pending} onClick={() => exec(() => runRemindersNowAction(), { onOk: (r) => toast("ok", `${r.expired} expired, ${r.expiringNotices} expiry notices, ${r.dueReminders} due soon, ${r.overdueReminders} overdue reminders`) })}>Run reminders</button></div>
-            {isOwner && <div className="card border-rose-300 p-4 text-[13px]"><h2 className="text-sm font-semibold">Close workspace</h2><p className="mt-1 text-soft">Permanently delete this workspace and all of its data. Only the owner can do this.</p><button className="btn-danger mt-3" onClick={() => setCloseOpen(true)}>Close workspace…</button></div>}
+            {isOwner && <div className="card border-rose-300 p-4 text-[13px]"><h2 className="text-sm font-semibold">Close workspace</h2><p className="mt-1 text-soft">Permanently delete this workspace and all of its data. Only the owner can do this.{governance.legalHold ? " Disabled while Legal Hold is active." : ""}</p><button className="btn-danger mt-3" disabled={governance.legalHold} onClick={() => setCloseOpen(true)}>Close workspace…</button></div>}
           </div>
         )}
         {tab === "roles" && <RolesPanel initial={rolePerms} customRoles={customRoles} customEnabled={customRolesOn} />}

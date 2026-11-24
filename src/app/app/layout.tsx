@@ -9,6 +9,7 @@ import { LockedScreen } from "@/components/locked-screen";
 import { SupportBanner } from "@/components/support-banner";
 import { KeyLockedScreen } from "@/components/key-locked-screen";
 import { isWorkspaceLocked } from "@/lib/cmk";
+import { workspaceLogoUrl } from "@/lib/logo";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
     {m.support && <SupportBanner workspace={m.workspace.name} until={m.support.expiresAt.toISOString()} />}
-    <Shell notifications={{ unread, items: notes.map((n) => ({ id: n.id, title: n.title, body: n.body, href: n.href, read: !!n.readAt, at: n.createdAt.toISOString() })) }} nav={nav} workspaces={m.support ? [{ id: m.workspaceId, name: m.workspace.name }] : memberships.map((x) => ({ id: x.workspaceId, name: x.workspace.name }))} activeWorkspaceId={m.workspaceId} userName={m.user.nickname || m.user.name} avatarUrl={m.user.avatarUrl} role={m.role}>
+    <Shell notifications={{ unread, items: notes.map((n) => ({ id: n.id, title: n.title, body: n.body, href: n.href, read: !!n.readAt, at: n.createdAt.toISOString() })) }} nav={nav} workspaces={m.support ? [{ id: m.workspaceId, name: m.workspace.name }] : memberships.map((x) => ({ id: x.workspaceId, name: x.workspace.name }))} activeWorkspaceId={m.workspaceId} workspaceLogoUrl={workspaceLogoUrl(m.workspace)} userName={m.user.nickname || m.user.name} avatarUrl={m.user.avatarUrl} role={m.role}>
       {children}
     </Shell>
     </>

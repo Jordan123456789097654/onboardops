@@ -1,4 +1,5 @@
 import { keyedHash } from "./audit-hash";
+import { dispatchAuditToSiem } from "./siem";
 import type { Prisma } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -19,7 +20,7 @@ export async function writeAudit(tx: Tx, a: AuditInput) {
   const prev = await tx.auditLog.findFirst({ where: { workspaceId: a.workspaceId }, orderBy: { createdAt: "desc" }, select: { hash: true } });
   const createdAt = new Date();
   const hash = keyedHash({ prev: prev?.hash ?? "GENESIS", workspaceId: a.workspaceId, actionType: a.actionType, targetType: a.targetType, targetId: a.targetId, summary: a.summary, createdAt });
-  return tx.auditLog.create({
+  const row = await tx.auditLog.create({
     data: {
       workspaceId: a.workspaceId,
       actorMemberId: a.actorMemberId ?? null,
@@ -33,4 +34,6 @@ export async function writeAudit(tx: Tx, a: AuditInput) {
       createdAt,
     },
   });
+  void dispatchAuditToSiem(a.workspaceId, row);
+  return row;
 }

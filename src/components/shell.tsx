@@ -19,7 +19,7 @@ const icons: Record<string, typeof Users> = {
   "/app/roster": Phone, "/app/credentials": Award, "/app/schedule": CalendarDays, "/app/timesheets": Clock, "/app/assets": Package, "/app/handoff": MessageSquareText, "/app/templates": Library,
 };
 
-export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userName, avatarUrl, role, children }: { notifications: { unread: number; items: Notif[] }; nav: NavItem[]; workspaces: { id: string; name: string }[]; activeWorkspaceId: string; userName: string; avatarUrl?: string | null; role: string; children: React.ReactNode }) {
+export function Shell({ notifications, nav, workspaces, activeWorkspaceId, workspaceLogoUrl, userName, avatarUrl, role, children }: { notifications: { unread: number; items: Notif[] }; nav: NavItem[]; workspaces: { id: string; name: string }[]; activeWorkspaceId: string; workspaceLogoUrl?: string | null; userName: string; avatarUrl?: string | null; role: string; children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const [palette, setPalette] = useState(false);
@@ -53,7 +53,13 @@ export function Shell({ notifications, nav, workspaces, activeWorkspaceId, userN
     <nav className="flex h-full flex-col" aria-label="Main">
       <Link href="/" className="flex h-14 items-center border-b border-line px-4"><Brand /></Link>
       <div className="border-b border-line p-3">
-        <label className="label" htmlFor="ws">Workspace</label>
+        <div className="mb-1.5 flex items-center gap-2">
+          {workspaceLogoUrl && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={workspaceLogoUrl} alt="" className="h-6 w-6 shrink-0 rounded border border-line bg-surface object-contain p-0.5" />
+          )}
+          <label className="label !mb-0" htmlFor="ws">Workspace</label>
+        </div>
         <select id="ws" className="input" value={activeWorkspaceId} onChange={(e) => switchWorkspaceAction(e.target.value)}>
           {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>

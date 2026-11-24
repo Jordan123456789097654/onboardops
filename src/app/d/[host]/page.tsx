@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { workspaceForHost } from "@/lib/host";
+import { workspaceLogoUrl } from "@/lib/logo";
 import { StaffLogin } from "@/components/staff-login";
 
 export const dynamic = "force-dynamic";
@@ -16,5 +17,5 @@ export default async function DomainLogin({ params }: { params: { host: string }
       </div>
     );
   }
-  return <StaffLogin workspaceId={ws.id} name={ws.name} onCustomDomain />;
+  return <StaffLogin workspaceId={ws.id} name={ws.name} logoUrl={workspaceLogoUrl(ws)} onCustomDomain />;
 }

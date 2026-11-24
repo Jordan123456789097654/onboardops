@@ -256,8 +256,34 @@ model Workspace {
   rolePerms            Json                       @default("{}")
   legalHold            Boolean                    @default(false)
   legalHoldReason      String                     @default("")
+  legalHoldAt          DateTime?
   setupDone            Boolean                    @default(false)
   timezone             String                     @default("America/New_York")
+  logoData             Bytes?
+  logoMime             String?
+  logoUpdatedAt        DateTime?
+  dataRegion           String                     @default("US")
+  singleTenantRef      String?
+  retentionPolicies    Json                       @default("{}")
+  kmsConfig            Json?
+  siemConfig           Json?
+  duoConfig            Json?
+  externalIntegrations Json                       @default("{}")
+  lmsConfig            Json?
+  isFranchisor         Boolean                    @default(false)
+  franchiseCode        String?                    @unique
+  parentWorkspaceId    String?
+  franchiseParent      Workspace?                 @relation("FranchiseTree", fields: [parentWorkspaceId], references: [id], onDelete: SetNull)
+  franchisees          Workspace[]                @relation("FranchiseTree")
+  saml                 WorkspaceSaml?
+  scimTokens           ScimToken[]
+  siemDeliveries       SiemDelivery[]
+  orgUnits             OrgUnit[]
+  rolloutWaves         RolloutWave[]
+  signatureCerts       SignatureCertificate[]
+  investigations       InvestigationCase[]
+  xapiStatements       XapiStatement[]
+  bulkJobs             BulkJob[]
   customRoles          CustomRole[]
   customFields         CustomField[]
   caseTemplates        CaseTemplate[]
@@ -299,6 +325,8 @@ model WorkspaceMember {
   notifications Notification[]
   customRoleId  String?
   customRole    CustomRole?      @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
+  orgUnitId     String?
+  orgUnit       OrgUnit?         @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -375,6 +403,8 @@ model EmployeeProfile {
   assetCheckouts   AssetCheckout[]
   timeOffAllowance Json                       @default("{}")
   locationId       String?
+  orgUnitId        String?
+  orgUnit          OrgUnit?                   @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
   coachingNotes    CoachingNote[]
   calendarToken    String?                    @unique
   smsOptIn         Boolean                    @default(false)
@@ -402,7 +432,9 @@ model Course {
   shuffleQuestions  Boolean  @default(false)
   shuffleOptions    Boolean  @default(false)
   /// Courses that must be passed before this one can be started.
-  prerequisiteIds   String[] @default([])
+  prerequisiteIds       String[] @default([])
+  jurisdictionStates    String[] @default([])
+  jurisdictionCountries String[] @default([])
 
   workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   lessons     CourseLesson[]
@@ -420,6 +452,10 @@ model CourseLesson {
   title           String
   contentMarkdown String
   videoUrl        String?
+  videoProvider   String?
+  captionsUrl     String?
+  minWatchPct     Int     @default(0)
+  checkpoints     Json    @default("[]")
   minReadSeconds  Int     @default(30)
 
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -692,8 +728,10 @@ model Policy {
 
   workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   acks        PolicyAcknowledgment[]
-  reackDays   Int?
-  externalUrl String?
+  reackDays             Int?
+  externalUrl           String?
+  jurisdictionStates    String[] @default([])
+  jurisdictionCountries String[] @default([])
 
   @@index([workspaceId])
 }
@@ -760,6 +798,7 @@ model IncidentReport {
   investigatorMemberId String?
   investigationDue     DateTime?
   injury               Json             @default("{}")
+  workersComp          Json             @default("{}")
 
   @@index([workspaceId, status, createdAt])
 }
@@ -1177,10 +1216,14 @@ model Location {
   workspaceId String
   name        String
   address     String   @default("")
+  state       String   @default("")
+  country     String   @default("US")
   timezone    String   @default("")
+  orgUnitId   String?
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit?  @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
 }
@@ -1254,4 +1297,239 @@ model JobApplication {
   posting   JobPosting? @relation(fields: [postingId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+}
+
+
+/// Enterprise SAML 2.0 Identity Provider configuration (Okta, Ping, OneLogin, ADFS).
+model WorkspaceSaml {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  entityId    String
+  ssoUrl      String
+  certPem     String
+  prevCertPem String?
+  metadataXml String?
+  domains     String[]  @default([])
+  roleAttr    String    @default("role")
+  enabled     Boolean   @default(false)
+  enforce     Boolean   @default(false)
+  testedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/// Hashed bearer token for SCIM 2.0 directory provisioning and instant deprovisioning.
+model ScimToken {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  name          String
+  prefix        String
+  tokenHash     String    @unique
+  scopes        String[]  @default(["users:write", "groups:write"])
+  createdByName String
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/// Audit log SIEM delivery record (Splunk HEC, Datadog, Sentinel, CrowdStrike).
+model SiemDelivery {
+  id          String   @id @default(cuid())
+  workspaceId String
+  provider    String
+  ok          Boolean
+  statusCode  Int?
+  eventCount  Int      @default(1)
+  error       String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
+
+/// Multi-entity organizational hierarchy: Corporate -> Region -> District -> Store/Site.
+model OrgUnit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  parentId    String?
+  name        String
+  /// CORPORATE | REGION | DISTRICT | SITE
+  kind        String   @default("SITE")
+  code        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    OrgUnit?          @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  OrgUnit[]         @relation("OrgUnitTree")
+  locations Location[]
+  employees EmployeeProfile[]
+  members   WorkspaceMember[]
+
+  @@index([workspaceId, parentId])
+}
+
+/// Staged rollout wave for pushing a Policy or Course to pilot stores -> regions -> all sites.
+model RolloutWave {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  /// POLICY | COURSE
+  targetType    String
+  targetId      String
+  name          String
+  waveOrder     Int       @default(1)
+  orgUnitIds    String[]  @default([])
+  locationIds   String[]  @default([])
+  startsAt      DateTime?
+  /// DRAFT | ACTIVE | COMPLETED
+  status        String    @default("DRAFT")
+  launchedAt    DateTime?
+  assignedCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, targetType, targetId])
+}
+
+/// Records templates/courses pushed from a Franchisor workspace down to legally isolated Franchisee workspaces.
+model FranchisePushLog {
+  id                String   @id @default(cuid())
+  parentWorkspaceId String
+  childWorkspaceId  String
+  /// POLICY | COURSE
+  targetType        String
+  sourceId          String
+  targetId          String
+  title             String
+  pushedByName      String
+  createdAt         DateTime @default(now())
+
+  @@index([parentWorkspaceId, createdAt])
+  @@index([childWorkspaceId, createdAt])
+}
+
+/// ESIGN / UETA tamper-evident forensic signature certificate for policies and infractions.
+model SignatureCertificate {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  /// POLICY | INFRACTION
+  kind            String
+  recordId        String
+  employeeId      String
+  signerName      String
+  signerEmail     String
+  documentTitle   String
+  documentVersion Int      @default(1)
+  documentSha256  String
+  verifyCode      String   @unique
+  ipAddress       String   @default("")
+  userAgent       String   @default("")
+  signedAt        DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, kind, recordId])
+  @@index([workspaceId, signedAt])
+}
+
+/// Multi-party HR Investigation Case Room with chain-of-custody, legal privilege tags, and timeline freeze.
+model InvestigationCase {
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  caseNumber           String
+  title                String
+  /// HARASSMENT | THEFT | WHISTLEBLOWER | SAFETY | POLICY | OTHER
+  category             String    @default("HARASSMENT")
+  /// OPEN | FROZEN | CLOSED
+  status               String    @default("OPEN")
+  legalPrivilege       Boolean   @default(false)
+  frozenAt             DateTime?
+  frozenByName         String?
+  leadInvestigatorId   String?
+  leadInvestigatorName String    @default("")
+  subjectEmployeeIds   String[]  @default([])
+  witnessEmployeeIds   String[]  @default([])
+  summary              String    @default("")
+  findings             String    @default("")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries   InvestigationEntry[]
+
+  @@unique([workspaceId, caseNumber])
+  @@index([workspaceId, status, createdAt])
+}
+
+model InvestigationEntry {
+  id              String   @id @default(cuid())
+  investigationId String
+  /// INTERVIEW | EVIDENCE | NOTE | WITNESS
+  kind            String   @default("NOTE")
+  authorName      String
+  subjectName     String   @default("")
+  content         String   @default("")
+  fileId          String?
+  fileName        String?
+  fileSha256      String?
+  isPrivileged    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  investigation InvestigationCase @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@index([investigationId, createdAt])
+}
+
+/// External LMS / xAPI / LTI learning completion statement.
+model XapiStatement {
+  id          String   @id @default(cuid())
+  workspaceId String
+  statementId String?
+  actorEmail  String
+  actorName   String   @default("")
+  verb        String
+  objectId    String
+  objectName  String   @default("")
+  score       Float?
+  passed      Boolean?
+  source      String   @default("xapi")
+  raw         Json     @default("{}")
+  receivedAt  DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, receivedAt])
+  @@index([workspaceId, actorEmail])
+}
+
+/// Chunked mass-action bulk operation job with progress tracking and rollback log.
+model BulkJob {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  actorMemberId  String?
+  actorName      String
+  /// ASSIGN_COURSE | TRANSFER_ORG | RESIGN_POLICY
+  kind           String
+  /// PENDING | RUNNING | COMPLETED | ROLLED_BACK | FAILED
+  status         String    @default("PENDING")
+  totalCount     Int       @default(0)
+  processedCount Int       @default(0)
+  failedCount    Int       @default(0)
+  params         Json      @default("{}")
+  rollbackData   Json      @default("[]")
+  results        Json      @default("[]")
+  rolledBackAt   DateTime?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }
