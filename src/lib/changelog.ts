@@ -8,6 +8,24 @@ export type ChangelogEntry = {
 
 export const entries: ChangelogEntry[] = [
   {
+    "v": "0.13.0",
+    "date": "2026-11-25",
+    "highlight": "Passkeys, training for owners and managers, and faster privacy requests",
+    "bullets": [
+      "Sign in with a passkey: your fingerprint, face or device PIN instead of a password",
+      "Owners and managers can add themselves to the training roster and take courses",
+      "Closed workspaces now free their address automatically"
+    ],
+    "items": [
+      "Passkeys: add one in Account settings and sign in with your fingerprint, face or device PIN. Passkeys cannot be phished and count as two-factor sign-in, so the authenticator-app code is skipped. You can have up to 10 and remove them any time.",
+      "Owners, admins and managers can now take courses. A new box on the Training page adds you to the training roster, optionally with a job role so its required courses are assigned to you. Your courses, certificates, policy sign-offs and checklists then appear in My Portal.",
+      "Closing a workspace now releases its address and custom domain straight away, and our team has a tool to clear any unused addresses left behind.",
+      "Privacy requests: our team can now prepare a complete download of your own data (account, workspaces, training results, certificates, sign-offs and the emails we sent you) as a single ZIP. It never includes passwords or keys, and every export is recorded.",
+      "Our team can set up a workspace for a new customer, invite the owner and add starter courses, policies and checklists as drafts, with an optional AI-written starting setup for the owner to review.",
+      "Account moderation: account bans, workspace suspension notices, appeals and a team page, plus several security and reliability improvements."
+    ]
+  },
+  {
     "v": "0.12.0",
     "date": "2026-11-24",
     "highlight": "Newsletter, growth analytics, stronger security and a rebuilt email composer",
