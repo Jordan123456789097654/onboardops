@@ -1,4 +1,6 @@
 "use client";
+import { GraphicMenu } from "./graphic-menu";
+import { incidentNumber } from "@/lib/incident-number";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCircle2, ExternalLink, ShieldAlert, Sparkles } from "lucide-react";
@@ -244,9 +246,10 @@ export function StatusManager({
                           <span className="mono rounded border border-line px-1.5 py-0.5 text-[10px] text-soft">{r.type}</span>
                         </div>
                         <p className="mono mt-1 text-[11px] text-soft">
-                          #{r.id} · {fmtDateTime(r.startsAt)}{r.endsAt ? ` to ${fmtDateTime(r.endsAt)}` : ""} · {r.affected.map((a) => a.name).join(", ") || "No services"}
+                          {incidentNumber(r)} · #{r.id} · {fmtDateTime(r.startsAt)}{r.endsAt ? ` to ${fmtDateTime(r.endsAt)}` : ""} · {r.affected.map((a) => a.name).join(", ") || "No services"}
                         </p>
                       </div>
+                      <GraphicMenu id={r.id} />
                       {canEdit && (
                         <div className="flex flex-wrap gap-2">
                           {r.type !== "maintenance" && <button className="btn-primary" onClick={() => open({ update: r })}>Post update</button>}
@@ -441,9 +444,10 @@ export function StatusManager({
                       <tr key={r.id}>
                         <td className="px-4 py-2.5">
                           <div className="font-medium">{r.title}</div>
-                          <div className="mono text-[11px] text-soft">{fmtDateTime(r.startsAt)} · {r.affected.map((a) => a.name).join(", ")}</div>
+                          <div className="mono text-[11px] text-soft">{incidentNumber(r)} · {fmtDateTime(r.startsAt)} · {r.affected.map((a) => a.name).join(", ")}</div>
                         </td>
                         <td className="px-4 py-2.5 text-right">{S(r.type === "maintenance" ? "resolved" : r.state)}</td>
+                        <td className="px-4 py-2.5"><GraphicMenu id={r.id} /></td>
                         {canEdit && (
                           <td className="px-4 py-2.5 text-right">
                             <button
