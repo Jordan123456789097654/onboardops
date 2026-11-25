@@ -60,8 +60,8 @@ export async function renderIncidentGraphic(r: BsReport, forced: Style | null) {
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <div style={{ display: "flex", width: 56, height: 56, borderRadius: 16, background: "#2563EB", alignItems: "center", justifyContent: "center", marginRight: 16 }}>
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
+            <div style={{ display: "flex", marginRight: 16 }}>
+              <svg width="56" height="56" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#1D4ED8"/><circle cx="16" cy="16" r="9.8" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeDasharray="49 12.6" transform="rotate(-15 16 16)"/><path d="M11.5 16.5l3.5 3.5 7-8.5" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </div>
             <div style={{ display: "flex", fontSize: 36, fontWeight: 800, letterSpacing: -0.5 }}>OnboardOps</div>
           </div>

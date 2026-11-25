@@ -33,7 +33,7 @@ const icons = {
   shield: wrap(`${blob(GREEN_S)}<path d="M60 20l33 12v27c0 21-14 35-33 44-19-9-33-23-33-44V32z" fill="${WHITE}"/><path d="M45 62l11 11 19-22" stroke="${GREEN}" stroke-width="4"/>`),
 };
 
-const logo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="8" fill="${ACC}"/><circle cx="16" cy="16" r="8.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="43 10.4" transform="rotate(-20 16 16)"/><path d="M12.2 16.4l2.7 2.7 6.4-7.1" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const logo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="8" fill="${ACC}"/><circle cx="16" cy="16" r="9.8" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="49 12.6" transform="rotate(-15 16 16)"/><path d="M11.5 16.5l3.5 3.5 7-8.5" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const browser = await chromium.launch({ executablePath: EXE, headless: true });
 const ctx = await browser.newContext({ deviceScaleFactor: 2 });

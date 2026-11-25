@@ -75,13 +75,13 @@ export function Field({ label, error, children }: { label: string; error?: strin
   );
 }
 
-/** Mark: an open loop (the employee lifecycle) closing into a check (certified). */
+/** Mark: an open loop (the employee lifecycle) with the check breaking out of it (onboarded and certified). */
 export function Logo({ size = 24, intro }: { size?: number; intro?: boolean }) {
   return (
     <svg className={cn("logo-mark", intro && "intro")} width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
       <rect width="32" height="32" rx="8" fill="rgb(var(--accent))" />
-      <g className="ring"><circle cx="16" cy="16" r="8.5" fill="none" stroke="rgb(var(--accent-fg))" strokeWidth="3" strokeLinecap="round" strokeDasharray="43 10.4" transform="rotate(-20 16 16)" /></g>
-      <path className="tick" d="M12.2 16.4l2.7 2.7 6.4-7.1" fill="none" stroke="rgb(var(--accent-fg))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <g className="ring"><circle cx="16" cy="16" r="9.8" fill="none" stroke="rgb(var(--accent-fg))" strokeWidth="2.8" strokeLinecap="round" strokeDasharray="49 12.6" transform="rotate(-15 16 16)" /></g>
+      <path className="tick" d="M11.5 16.5l3.5 3.5 7-8.5" fill="none" stroke="rgb(var(--accent-fg))" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
