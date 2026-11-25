@@ -20,6 +20,7 @@ export default async function Workspaces({ searchParams }: { searchParams: { q?:
   return (
     <>
       <PageHeader title="Workspaces" sub={`${rows.length} shown. Account details and counts only. Employee data needs support access.`} />
+      <div className="mb-3"><Link className="btn btn-primary" href="/admin/workspaces/new">Set up a workspace for a customer</Link></div>
       <form className="mb-3 flex flex-wrap gap-2"><input name="q" defaultValue={q} className="input !w-72" placeholder="Search name, slug or member email" /><label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="locked" value="1" defaultChecked={searchParams.locked === "1"} />Locked only</label><button className="btn">Search</button></form>
       {rows.length === 0 ? <Empty title="No workspaces match" /> : (
         <div className="card max-h-[72vh] overflow-auto"><table className="w-full min-w-[820px] border-collapse"><thead><tr>{["Workspace", "Owner", "Employees", "Members", "Created", "Last activity", "Status"].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
