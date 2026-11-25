@@ -126,6 +126,22 @@ export async function addProjectDomain(domain: string): Promise<{ ok: boolean; e
   return { ok: false, error: (r.json?.error?.message as string | undefined) ?? `Vercel responded ${r.status}` };
 }
 
+/** Every domain attached to the Vercel project (follows pages). Read-only. */
+export async function listProjectDomains(): Promise<string[]> {
+  if (!vercelConfigured()) return [];
+  const out: string[] = [];
+  let until: string | undefined;
+  for (let i = 0; i < 10; i++) {
+    const r = await fetch(url(`/v9/projects/${project()}/domains`, `limit=100${until ? `&until=${until}` : ""}`), { headers: { Authorization: `Bearer ${token()}` }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`Vercel responded ${r.status} when listing domains.`);
+    const j = (await r.json()) as { domains?: { name: string }[]; pagination?: { next?: number | null } };
+    out.push(...(j.domains ?? []).map((d) => d.name.toLowerCase()));
+    if (!j.pagination?.next) break;
+    until = String(j.pagination.next);
+  }
+  return out;
+}
+
 export async function removeDomain(domain: string) {
   if (!vercelConfigured()) return { ok: true };
   const r = await call("DELETE", `/v9/projects/${project()}/domains/${encodeURIComponent(domain)}`);

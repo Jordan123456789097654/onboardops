@@ -7,6 +7,7 @@ import { requireWorkspaceRole, ADMIN_ROLES } from "@/lib/rbac";
 import { runLoggedDailyJobs } from "@/lib/jobs";
 import { writeAudit } from "@/lib/audit";
 import { assertNotUnderLegalHold } from "@/lib/retention";
+import { releaseWorkspaceAddresses } from "@/lib/subdomain";
 import { run } from "./_util";
 
 /** Runs the same job the daily cron runs, for this workspace only. */
@@ -30,6 +31,7 @@ export async function closeWorkspaceAction(input: unknown) {
     if (d.confirmName.trim() !== ctx.workspace.name) throw new Error("Type the workspace name exactly to confirm.");
     if (!(await verifyPassword(d.password, ctx.user.passwordHash))) throw new Error("That password is incorrect.");
     const wsId = ctx.workspaceId;
+    const addresses = { subdomain: ctx.workspace.subdomain ?? null, customDomain: ctx.workspace.customDomain ?? null };
     await prisma.$transaction(async (tx) => {
       const members = await tx.workspaceMember.findMany({ where: { workspaceId: wsId }, select: { userId: true } });
       await tx.infractionCase.deleteMany({ where: { workspaceId: wsId } });
@@ -40,6 +42,8 @@ export async function closeWorkspaceAction(input: unknown) {
       const orphans = ids.filter((id) => !keep.has(id));
       if (orphans.length) await tx.user.deleteMany({ where: { id: { in: orphans } } });
     }, { timeout: 60000 });
+    // The workspace is gone, so free its address and custom domain. Never blocks closing.
+    await releaseWorkspaceAddresses(addresses);
     return undefined;
   });
   if (!res.ok) return res;

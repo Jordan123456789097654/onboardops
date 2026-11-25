@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { requireWorkspaceRole } from "@/lib/rbac";
 import { enforceRate } from "@/lib/rate-limit";
-import { claimSubdomain, releaseSubdomain, subdomainAvailable, subdomainHost, subdomainLive } from "@/lib/subdomain";
+import { claimSubdomain, releaseSubdomain, sweepOrphanAddresses, subdomainAvailable, subdomainHost, subdomainLive } from "@/lib/subdomain";
 import { getStaff, SUPPORT_STAFF, staffAudit } from "@/lib/platform";
 import { ZONE, retargetRecords, spaceshipConfigured, testDns } from "@/lib/spaceship-dns";
 import { recommendedCname } from "@/lib/vercel-domains";
@@ -101,5 +101,17 @@ export async function adminReleaseSubdomainAction(workspaceId: string) {
     });
     revalidatePath(`/admin/workspaces/${workspaceId}`);
     return undefined;
+  });
+}
+
+/** Staff (owner role): find addresses under our zone that no workspace uses, and optionally remove their DNS record and hosting domain. */
+export async function sweepOrphanAddressesAction(input: unknown) {
+  return run(async () => {
+    const staff = await getStaff();
+    if (!staff || staff.role !== "OWNER") throw new Error("Only the site owner can clean up addresses.");
+    const d = z.object({ apply: z.boolean() }).parse(input);
+    const r = await sweepOrphanAddresses({ apply: d.apply });
+    await prisma.$transaction((tx) => staffAudit(tx, staff, { action: d.apply ? "ADDRESSES_SWEPT" : "ADDRESSES_SCANNED", targetType: "System", targetId: "dns", summary: d.apply ? `Removed ${r.removed.length} unused address(es): ${r.removed.join(", ") || "none"}` : `Scanned for unused addresses: ${r.orphans.length} found` }));
+    return r;
   });
 }

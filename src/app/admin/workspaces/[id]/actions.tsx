@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Lock } from "lucide-react";
-import { adminReleaseSubdomainAction, testDnsConnectionAction, updateDnsTargetsAction } from "@/actions/subdomain";
+import { adminReleaseSubdomainAction, sweepOrphanAddressesAction, testDnsConnectionAction, updateDnsTargetsAction } from "@/actions/subdomain";
 import {
   adminConnectDomainAction,
   adminRemoveDomainAction,
@@ -92,6 +92,11 @@ export function WorkspaceActions({
           {isOwner && <button className="btn" onClick={() => { setDomainInput(customDomain || ""); setDlg("domain"); }}>Connect custom domain…</button>}
           {isOwner && <button className="btn" disabled={pending} onClick={() => exec(() => testDnsConnectionAction(), { onOk: (r) => toast("ok", `DNS connection works (${r.total} records in the zone).`) })}>Test DNS connection</button>}
           {isOwner && <button className="btn" disabled={pending} onClick={() => { if (confirm("Point all workspace addresses at the CNAME target Vercel now recommends? Only records that already point at Vercel are changed.")) exec(() => updateDnsTargetsAction(), { onOk: (r) => toast("ok", `DNS updated: ${r.updated} changed, ${r.already} already correct, ${r.skipped} skipped.`) }); }}>Update DNS targets</button>}
+          {isOwner && <button className="btn" disabled={pending} onClick={() => exec(() => sweepOrphanAddressesAction({ apply: false }), { onOk: (r) => {
+            if (r.skipped && r.orphans.length === 0) { toast("ok", r.skipped); return; }
+            if (r.orphans.length === 0) { toast("ok", "No unused addresses found."); return; }
+            if (confirm("These addresses have no workspace and will have their DNS record and hosting domain removed:\n\n" + r.orphans.join("\n") + "\n\nRemove them?")) exec(() => sweepOrphanAddressesAction({ apply: true }), { onOk: (x) => toast("ok", `Removed ${x.removed.length}${x.errors.length ? `, ${x.errors.length} error(s)` : ""}.`) });
+          } })}>Clean up unused addresses</button>}
           {isOwner && subdomain && <button className="btn-danger" disabled={pending} onClick={() => { if (confirm(`Release ${subdomain}? The workspace loses this address.`)) exec(() => adminReleaseSubdomainAction(workspaceId), { success: "Address released", onOk: () => router.refresh() }); }}>Release address ({subdomain})</button>}
         </div>
       )}

@@ -1,11 +1,12 @@
 import dns from "node:dns/promises";
 import { prisma } from "./prisma";
 import { hit } from "./rate-limit";
-import { ZONE, createSubdomainRecord, deleteSubdomainRecord, spaceshipConfigured } from "./spaceship-dns";
-import { addProjectDomain, recommendedCname, removeDomain, vercelConfigured } from "./vercel-domains";
+import { ZONE, createSubdomainRecord, deleteSubdomainRecord, isVercelTarget, listRecords, spaceshipConfigured } from "./spaceship-dns";
+import { addProjectDomain, listProjectDomains, recommendedCname, removeDomain, vercelConfigured } from "./vercel-domains";
+import { isMainHost } from "./host-shared";
 
 /** Names that must never be claimed: our own services, common infrastructure and easy impersonation targets. */
-const RESERVED = new Set([
+export const RESERVED = new Set([
   "www", "app", "apps", "api", "admin", "staff", "support", "help", "docs", "status", "mail", "email", "smtp", "imap", "pop", "mx", "ns", "ns1", "ns2",
   "dns", "cdn", "static", "assets", "files", "img", "images", "login", "signin", "signup", "register", "auth", "sso", "account", "accounts", "billing", "pay",
   "payments", "security", "privacy", "legal", "terms", "blog", "news", "about", "contact", "careers", "jobs", "demo", "test", "testing", "dev", "staging",
@@ -85,6 +86,73 @@ export async function releaseSubdomain(workspaceId: string) {
   await releaseRecords(ws.subdomain);
   await prisma.workspace.update({ where: { id: workspaceId }, data: { subdomain: null, subdomainStatus: "NONE" } });
   return ws.subdomain;
+}
+
+/**
+ * Frees the OnboardOps address and the custom domain of a workspace that has been deleted: removes the DNS record we created
+ * (only a CNAME that points at Vercel) and the domain from the hosting project. Best effort; it never throws, so closing a workspace never fails because of DNS.
+ * A customer's own DNS is theirs: we only detach the domain from our hosting project.
+ */
+export async function releaseWorkspaceAddresses(ws: { subdomain: string | null; customDomain: string | null }) {
+  const done: string[] = [];
+  const keep = (h: string) => !h || isMainHost(h.toLowerCase());
+  if (ws.subdomain && !RESERVED.has(ws.subdomain) && !keep(subdomainHost(ws.subdomain))) {
+    // Another workspace could have been given the name since; never remove an address that is in use.
+    const inUse = await prisma.workspace.findFirst({ where: { subdomain: ws.subdomain }, select: { id: true } }).catch(() => null);
+    if (!inUse) await releaseRecords(ws.subdomain).then(() => done.push(subdomainHost(ws.subdomain!))).catch(() => {});
+  }
+  if (ws.customDomain && !keep(ws.customDomain)) {
+    const inUse = await prisma.workspace.findFirst({ where: { customDomain: { equals: ws.customDomain, mode: "insensitive" } }, select: { id: true } }).catch(() => null);
+    if (!inUse && vercelConfigured()) await removeDomain(ws.customDomain).then(() => done.push(ws.customDomain!)).catch(() => {});
+  }
+  return done;
+}
+
+export type SweepResult = { configured: boolean; applied: boolean; orphans: string[]; removed: string[]; errors: string[]; skipped?: string };
+
+/**
+ * Finds leftover addresses under our own zone that no workspace uses (for example from workspaces closed before cleanup existed) and removes them.
+ * Safe by design: only single-label names in our zone, never a reserved or platform name, DNS only if it is a CNAME pointing at Vercel,
+ * nothing is removed if the workspace list looks empty, and at most MAX are removed per run. Dry run unless apply is true.
+ */
+export async function sweepOrphanAddresses(opts: { apply: boolean }): Promise<SweepResult> {
+  const MAX = 20;
+  const res: SweepResult = { configured: spaceshipConfigured() || vercelConfigured(), applied: opts.apply, orphans: [], removed: [], errors: [] };
+  if (!res.configured) return { ...res, skipped: "Neither the DNS provider nor the hosting project is connected." };
+  const wss = await prisma.workspace.findMany({ select: { subdomain: true, customDomain: true } });
+  if (wss.length === 0) return { ...res, skipped: "No workspaces were found, so nothing was removed (safety check)." };
+  const used = new Set(wss.map((w) => w.subdomain).filter((s): s is string => !!s));
+  const customs = new Set(wss.map((w) => (w.customDomain ?? "").toLowerCase()).filter(Boolean));
+  const labelOf = (h: string) => (h.endsWith(`.${ZONE}`) ? h.slice(0, -(ZONE.length + 1)) : null);
+  const isOurs = (label: string | null): label is string => !!label && !label.includes(".") && !RESERVED.has(label) && !isMainHost(`${label}.${ZONE}`) && !used.has(label) && !customs.has(`${label}.${ZONE}`);
+
+  const found = new Map<string, { dns: boolean; vercel: boolean }>();
+  if (spaceshipConfigured()) {
+    try {
+      const { items } = await listRecords();
+      for (const r of items) {
+        const label = (r.name ?? "").toLowerCase();
+        if ((r.type ?? "").toUpperCase() === "CNAME" && isVercelTarget(r.cname ?? r.value) && isOurs(label)) found.set(label, { dns: true, vercel: found.get(label)?.vercel ?? false });
+      }
+    } catch (e) { res.errors.push(e instanceof Error ? e.message : "Could not read DNS records."); }
+  }
+  if (vercelConfigured()) {
+    try {
+      for (const d of await listProjectDomains()) { const label = labelOf(d); if (isOurs(label)) found.set(label, { dns: found.get(label)?.dns ?? false, vercel: true }); }
+    } catch (e) { res.errors.push(e instanceof Error ? e.message : "Could not read hosting domains."); }
+  }
+  res.orphans = [...found.keys()].sort().map((l) => `${l}.${ZONE}`);
+  if (!opts.apply) return res;
+  for (const label of [...found.keys()].sort().slice(0, MAX)) {
+    try {
+      // Re-check just before removing: a workspace may have claimed the name a moment ago.
+      if (await prisma.workspace.findFirst({ where: { subdomain: label }, select: { id: true } })) continue;
+      await releaseRecords(label);
+      res.removed.push(`${label}.${ZONE}`);
+    } catch (e) { res.errors.push(`${label}.${ZONE}: ${e instanceof Error ? e.message : "failed"}`); }
+  }
+  if (found.size > MAX) res.skipped = `Removed the first ${MAX}; run it again for the rest.`;
+  return res;
 }
 
 /** Does the name resolve yet? New DNS records can take a few minutes to spread. */
