@@ -5,7 +5,7 @@
 
 export type IncidentPreset = {
   label: string;
-  category: "Major" | "Platform" | "Integrations";
+  category: "Major" | "Platform" | "Integrations" | "Security";
   title: string;
   status: "downtime" | "degraded";
   /** Resource public names to auto-tick on Better Stack. */
@@ -146,6 +146,188 @@ export const INCIDENT_PRESETS: IncidentPreset[] = [
       "We are investigating delays in outbound Discord, Slack, Microsoft Teams, and JSON webhook deliveries as well as third-party HRIS sync actions.",
       "Current impact: Events logged inside OnboardOps (certifications, infractions, checklist verifications, and requests) are still being saved normally in your workspace and audit log, but real-time external webhook notifications may arrive late or require a retry.",
       "Our team is checking outbound delivery queues and will update this incident once real-time delivery has caught up.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Suspected Security Incident",
+    category: "Security",
+    title: "We are investigating a possible security issue",
+    status: "degraded",
+    resources: ["Overall status"],
+    message: [
+      "We are investigating a possible security issue affecting OnboardOps. We have not confirmed that any customer data has been accessed. We are sharing this notice early so you hear it from us first.",
+      "Current impact: OnboardOps is available, but we may briefly sign some people out, reset sessions, or turn off a feature while we investigate. If this happens to you, sign in again and, if asked, choose a new password.",
+      "What we are doing: our team is reviewing access logs, rotating credentials as a precaution, and checking for unusual activity. If we find that your workspace or personal information was affected, we will contact the workspace owner and affected people directly by email, with what happened and what to do next.",
+      "What you can do now: use a strong, unique password, turn on two-factor sign-in or add a passkey in Account settings, and be careful with emails that ask for your password or a code. We will never ask for either. Our next update will be posted within 60 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Sign-in Attacks & Temporary Limits",
+    category: "Security",
+    title: "Temporary sign-in limits while we block automated login attempts",
+    status: "degraded",
+    resources: ["Sign-in", "Overall status"],
+    message: [
+      "We are seeing a high volume of automated sign-in attempts against OnboardOps, which looks like someone trying lists of stolen passwords from other websites. Our protections are working and we have tightened them further.",
+      "Current impact: some people may see \"too many attempts\" messages, be asked for extra verification, or need to wait a few minutes before trying again. This is a protective measure and does not mean your account was accessed.",
+      "What we are doing: blocking the sources of the attempts, strengthening rate limits, and monitoring for any successful sign-in that looks unusual. We will contact anyone whose account shows signs of unauthorized access.",
+      "What you can do: if you reuse your OnboardOps password anywhere else, change it now. Adding a passkey or two-factor sign-in in Account settings stops this kind of attack. We will post another update within 60 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Two-Factor & Passkey Verification Issues",
+    category: "Platform",
+    title: "Problems completing two-factor and passkey verification at sign-in",
+    status: "degraded",
+    resources: ["Sign-in", "Overall status"],
+    message: [
+      "We are investigating an issue where some people cannot complete the second step of sign-in. Authenticator-app codes, backup codes, or passkeys may be rejected even when entered correctly.",
+      "Current impact: affected people can type their password correctly but stop at the verification step. Staff and workspace owners who have two-factor turned on are most likely to notice. Your accounts and your two-factor settings are unchanged and remain secure.",
+      "What we are doing: our team is checking the verification service and the sign-in pipeline. Please do not reset your two-factor settings yet, because this is not caused by anything on your side. If you are locked out, try again in a few minutes or use an email sign-in link if your workspace allows it.",
+      "We will post another update within 30 minutes, and we will tell you as soon as sign-in is back to normal.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Data Restore in Progress",
+    category: "Major",
+    title: "Restoring service from backup after a data problem",
+    status: "downtime",
+    resources: ["Database", "Core API", "Overall status"],
+    message: [
+      "We are restoring OnboardOps from backup after a problem that affected our data store. To protect your records, we have paused changes while the restore runs.",
+      "Current impact: OnboardOps may be unavailable or read-only. You may be unable to sign in, save changes, submit checklists, or complete training. Nothing is lost by waiting.",
+      "What we are doing: we are restoring to the most recent safe point and verifying the data before we reopen the service. If any changes made shortly before the problem cannot be recovered, we will tell workspace owners exactly which time window is affected so they can re-enter anything that is missing.",
+      "We know how much you rely on these records, and we are sorry for the disruption. We will post another update within 30 minutes and a full explanation after service is restored.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Email Delivery to Gmail and Other Providers",
+    category: "Integrations",
+    title: "Some emails from OnboardOps are delayed or going to spam",
+    status: "degraded",
+    resources: ["Email", "Overall status"],
+    message: [
+      "We are investigating an issue where some emails from OnboardOps are delayed, rejected, or landing in spam, particularly for people who use Gmail and some other large email providers.",
+      "Current impact: invitations, password resets, sign-in links, and notifications may arrive late or not at all. Everything inside the web app works normally. You can sign in directly at onboardops.org instead of waiting for an email.",
+      "What we are doing: we are checking our sender authentication records and working with our email providers to restore normal delivery. Affected emails will be retried automatically, and anything that cannot be delivered can be safely resent.",
+      "What you can do: check your spam or junk folder, and add our sending address to your contacts. If an invitation did not arrive, ask the workspace owner to send it again once this is resolved. We will update this notice within 60 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "DNS or Domain Configuration Error",
+    category: "Major",
+    title: "OnboardOps is unreachable for some people because of a DNS problem",
+    status: "downtime",
+    resources: ["Website", "Domains", "Sign-in", "Core API", "Overall status"],
+    message: [
+      "We are investigating a problem with the internet address (DNS) configuration for onboardops.org. Some people may see a page that cannot be reached, or a certificate or security warning.",
+      "Current impact: the website, sign-in, workspace addresses, and the API may be unavailable for some or all people. Your data is stored separately from this system and has not been changed.",
+      "What we are doing: we are reviewing the most recent DNS change, correcting any incorrect records, and confirming that the fix is spreading. DNS changes can take up to an hour to reach everyone, so some people may recover before others. Restarting your browser or switching networks can help once the fix is live.",
+      "Please do not enter your password if your browser shows a certificate warning. We will post another update within 20 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Certificates and Training Records Delayed",
+    category: "Platform",
+    title: "Quiz results, certificates, and training records are delayed",
+    status: "degraded",
+    resources: ["Core API", "File storage", "Overall status"],
+    message: [
+      "We are investigating a problem where training results are not saving or showing correctly, and certificate pages or PDFs are slow or failing to generate.",
+      "Current impact: after submitting a quiz, you may see an error or an old status. Certificate downloads and public certificate verification pages may be slow or unavailable. We are not discarding any results: attempts that were received are being kept and will be processed.",
+      "What we are doing: our team is working on the cause and will reprocess any attempts that were delayed, so passes and certificate codes appear as normal. Please avoid retaking a quiz you have already submitted unless it is still not showing after we post that this is fixed.",
+      "We will post another update within 45 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Reminders and Scheduled Notifications Delayed",
+    category: "Platform",
+    title: "Reminders, due-date notices, and scheduled emails are delayed",
+    status: "degraded",
+    resources: ["Email", "Core API", "Overall status"],
+    message: [
+      "We are investigating an issue with scheduled jobs that send reminders and notices, such as training due dates, certificate expiry warnings, overdue reminders, and checklist notices.",
+      "Current impact: these notices may arrive late, arrive together, or be skipped for now. Due dates and expiry dates in OnboardOps are not affected, so please keep working to them. Manual reminders from Workspace Settings continue to work.",
+      "What we are doing: our team is fixing the scheduler and will send any missed notices once it is healthy again. You may receive a few notices at once when that happens.",
+      "We will post another update within 60 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "AI Features Unavailable",
+    category: "Integrations",
+    title: "AI-assisted features are temporarily unavailable",
+    status: "degraded",
+    resources: ["Core API"],
+    message: [
+      "AI-assisted features in OnboardOps, such as draft generation and suggestions, are temporarily unavailable or slow. This is caused by an outage at the outside provider we use for AI.",
+      "Current impact: buttons that generate drafts or suggestions may show an error or take much longer than usual. Everything else in OnboardOps works normally, and you can still write and edit courses, policies, checklists, and records by hand. Nothing you have already saved is affected.",
+      "What we are doing: we are monitoring the provider and will turn the features back on as soon as it is stable. We will not send anything to the provider during the outage.",
+      "We will post an update when the features are back, or within 2 hours.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Errors After a Recent Release",
+    category: "Platform",
+    title: "Errors after a recent update, rolling back to the last stable version",
+    status: "degraded",
+    resources: ["Website", "Core API", "Overall status"],
+    message: [
+      "Shortly after we released an update to OnboardOps, we began seeing errors on some pages and actions. We are rolling back to the last stable version while we fix the problem.",
+      "Current impact: some pages may fail to load, buttons may not respond, or saving may fail. Refreshing the page can help once the rollback completes. If you were in the middle of something and it did not save, please try again after the rollback. Existing data is not affected.",
+      "What we are doing: reverting the update, checking that the errors have stopped, and then correcting the issue before we re-release it with additional testing.",
+      "We will post another update within 20 minutes, and we will confirm when the rollback is complete.",
+    ].join("\n\n"),
+  },
+  {
+    label: "General Database Outage",
+    category: "Major",
+    title: "OnboardOps is unavailable because of a database outage",
+    status: "downtime",
+    resources: ["Database", "Website", "Sign-in", "Core API", "Public API", "Overall status"],
+    message: [
+      "OnboardOps is currently unavailable because our database is not responding. Our monitoring detected the problem and our team is working on it now.",
+      "Current impact: you will not be able to sign in, view or change employee records, submit checklists, take quizzes, view certificates, or use the API. Pages may show an error or load without data. Nothing you do while we are down will be saved, so please wait rather than retrying repeatedly.",
+      "What we are doing: we are checking the database service, restoring connections, and verifying that your data is complete and correct before we reopen everything. Writes were stopped as soon as we saw the problem to prevent partial or inconsistent changes. We have no sign that any data has been lost or exposed, and we will say so plainly if that changes.",
+      "We will post another update within 20 minutes, and a full explanation after service is restored.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Database Slow or Timing Out",
+    category: "Platform",
+    title: "Slow pages and timeouts caused by database performance",
+    status: "degraded",
+    resources: ["Database", "Website", "Core API", "Overall status"],
+    message: [
+      "We are investigating slow responses and timeouts across OnboardOps caused by degraded database performance.",
+      "Current impact: pages may take many seconds to load, saving may take longer than normal, and some actions may fail with a timeout error. Reports, rosters, and large lists are the most affected. OnboardOps is still working, and your data is intact.",
+      "What we are doing: our team is finding what is slowing the database, such as a heavy query or a spike in traffic, and applying a fix. We may briefly limit some heavy actions, like large exports, to bring performance back. If an action times out, wait a minute and try once more.",
+      "We will post another update within 30 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Database Connection Limit Reached",
+    category: "Platform",
+    title: "Intermittent errors because the database has reached its connection limit",
+    status: "degraded",
+    resources: ["Database", "Core API", "Sign-in", "Overall status"],
+    message: [
+      "We are investigating intermittent errors with messages such as \"too many connections\" or \"server error\". The cause is that our database is at its limit for simultaneous connections.",
+      "Current impact: some pages, sign-ins, and actions may fail at random, then work when you try again. Because it comes and goes, different people may see different results at the same moment. Your data is not affected.",
+      "What we are doing: we are releasing unused connections, restarting the parts of the service that hold them, and raising the limit so this does not happen again. We are also checking what caused the sudden increase.",
+      "If you see an error, wait a few seconds and try again. We will post another update within 30 minutes.",
+    ].join("\n\n"),
+  },
+  {
+    label: "Database Provider Outage",
+    category: "Integrations",
+    title: "Service disruption caused by an outage at our database provider",
+    status: "downtime",
+    resources: ["Database", "Website", "Sign-in", "Core API", "Public API", "Overall status"],
+    message: [
+      "OnboardOps is disrupted because the company that hosts our database is having an outage. We have confirmed this on their status page and are in contact with them.",
+      "Current impact: you may be unable to sign in, load records, save changes, or use the API. The cause is outside our own systems, so our options are limited while we wait for them to recover. Nothing you do during the outage will be saved.",
+      "What we are doing: we are working with the provider for an estimate, keeping the site in a safe state so no one makes changes that cannot be saved, and preparing to check data integrity as soon as the database returns. We will confirm that every workspace is complete before we call this resolved.",
+      "We are sorry for the disruption. We will post another update within 30 minutes, or sooner when the provider gives us news.",
     ].join("\n\n"),
   },
 ];

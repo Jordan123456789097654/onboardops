@@ -475,7 +475,7 @@ export function StatusManager({
           {dlg === "incident" ? (
             <div>
               <div className="mb-1.5 text-xs font-medium text-soft">Long-form incident templates ({INCIDENT_PRESETS.length} presets — click to fill title, message & services)</div>
-              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-line bg-muted/30 p-2">
+              <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-line bg-muted/30 p-2">
                 {INCIDENT_PRESETS.map((p) => (
                   <button
                     key={p.label}
