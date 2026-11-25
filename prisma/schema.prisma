@@ -91,6 +91,7 @@ model User {
   totpLastStep      Int?
   backupCodes       BackupCode[]
   oauthAccounts     OAuthAccount[]
+  passkeys          Passkey[]
   ssoIdentities     SsoIdentity[]
   memberships       WorkspaceMember[]
   tokens            AuthToken[]
@@ -103,6 +104,26 @@ model User {
   bannedAt          DateTime?
   banReason         String            @default("")
   moderationCases   ModerationCase[]
+}
+
+/// A WebAuthn passkey. Only the public key is stored; the private key never leaves the person's device or password manager.
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  /// base64url credential id from the authenticator.
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      Int       @default(0)
+  transports   String[]  @default([])
+  deviceType   String    @default("singleDevice")
+  backedUp     Boolean   @default(false)
+  name         String    @default("Passkey")
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 /// A Google or GitHub identity linked to a user. Sign-in matches on (provider, providerAccountId), never on email alone.

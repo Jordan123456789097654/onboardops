@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Upload } from "lucide-react";
 import { loginAction, registerAction } from "@/actions/auth";
+import { passkeyLoginOptionsAction, passkeyLoginVerifyAction } from "@/actions/passkeys";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { Brand, Field, ThemeToggle, useAction } from "@/components/ui";
 import { MagicLinkBox } from "@/components/magic-link-box";
 import { GitHubIcon, GoogleIcon } from "@/components/social-icons";
@@ -291,6 +293,16 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
                   </p>
                 )}
               </div>
+            )}
+            {mode === "login" && (
+              <button type="button" className="btn w-full" disabled={pending} onClick={() => exec(async () => {
+                const o = await passkeyLoginOptionsAction();
+                if (!o.ok) return o;
+                let response;
+                try { response = await startAuthentication(o.data as Parameters<typeof startAuthentication>[0]); }
+                catch { return { ok: false as const, error: "Passkey sign-in was cancelled or is not available on this device." }; }
+                return passkeyLoginVerifyAction({ response });
+              }, { onOk: (d) => { router.push(d.to); router.refresh(); } })}>Sign in with a passkey</button>
             )}
             {mode === "login" && <button type="button" className="btn w-full" onClick={() => setMagic(true)}>Email me a sign-in link instead</button>}
             {mode === "login" && <p className="text-xs text-soft">Company account? <Link className="text-accent" href="/sso">Sign in with single sign-on</Link></p>}

@@ -8,6 +8,7 @@ import { resendVerificationAction } from "@/actions/auth";
 import { Badge, Field, useAction, useToast } from "@/components/ui";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 import { TwoFactor, type MfaState } from "./two-factor";
+import { Passkeys, type PasskeyRow } from "./passkeys";
 import { ConnectedAccounts, type ConnectedProvider } from "./connected-accounts";
 
 type Me = { id: string; name: string; nickname: string; email: string; verified: boolean; avatarUrl: string | null; hasPassword: boolean; createdAt: string };
@@ -28,7 +29,7 @@ async function toAvatar(file: File): Promise<File> {
   return new File([blob], "avatar.jpg", { type: "image/jpeg" });
 }
 
-export function Account({ me, extras, mfa, need2fa = false, oauth, sessions = [] }: { me: Me; extras: Extra[]; mfa: MfaState; need2fa?: boolean; oauth: { providers: ConnectedProvider[]; canUnlink: boolean; notice?: string; error?: string }; sessions?: { id: string; device: string; ip: string; at: string; current: boolean }[] }) {
+export function Account({ me, extras, mfa, need2fa = false, oauth, sessions = [], passkeys = [] }: { me: Me; extras: Extra[]; mfa: MfaState; passkeys?: PasskeyRow[]; need2fa?: boolean; oauth: { providers: ConnectedProvider[]; canUnlink: boolean; notice?: string; error?: string }; sessions?: { id: string; device: string; ip: string; at: string; current: boolean }[] }) {
   const router = useRouter();
   const toast = useToast();
   const { exec, pending } = useAction();
@@ -101,6 +102,8 @@ export function Account({ me, extras, mfa, need2fa = false, oauth, sessions = []
       </Card>
 
       <ConnectedAccounts providers={oauth.providers} canUnlink={oauth.canUnlink} notice={oauth.notice} error={oauth.error} />
+
+      <Passkeys passkeys={passkeys} hasPassword={me.hasPassword} />
 
       <TwoFactor mfa={mfa} need2fa={need2fa} />
 

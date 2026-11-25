@@ -17,6 +17,7 @@ export default async function AccountPage({ searchParams }: { searchParams: { ne
   if (!user) redirect("/login");
   const [extras, m, sessions, sid] = await Promise.all([prisma.userEmail.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } }), getActiveMembership(), prisma.userSession.findMany({ where: { userId: user.id, revokedAt: null, createdAt: { gt: new Date(Date.now() - 14 * 86400000) } }, orderBy: { lastSeenAt: "desc" }, take: 10 }), currentSessionId()]);
   const [backupLeft, required] = await Promise.all([user.totpEnabledAt ? backupCodesLeft(user.id) : Promise.resolve(0), prisma.workspaceMember.findFirst({ where: { userId: user.id, workspace: { require2fa: true } }, include: { workspace: { select: { name: true } } } })]);
+  const passkeys = await prisma.passkey.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } });
   const linked = await prisma.oAuthAccount.findMany({ where: { userId: user.id } });
   const back = m && !m.support ? (m.role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview") : "/workplaces";
   return (
@@ -31,6 +32,7 @@ export default async function AccountPage({ searchParams }: { searchParams: { ne
           sessions={sessions.map((s) => ({ id: s.id, device: s.device, ip: s.ip, at: s.lastSeenAt.toISOString(), current: s.id === sid }))}
           extras={extras.map((e) => ({ id: e.id, email: e.email, verified: !!e.verifiedAt }))}
           mfa={{ enabled: !!user.totpEnabledAt, backupLeft, hasPassword: !!user.passwordSetAt, requiredBy: searchParams.need2fa === "staff" ? "The staff console" : required?.workspace.name ?? null }}
+          passkeys={passkeys.map((k) => ({ id: k.id, name: k.name, createdAt: k.createdAt.toISOString().slice(0, 10), lastUsedAt: k.lastUsedAt ? k.lastUsedAt.toISOString().slice(0, 10) : null }))}
           need2fa={searchParams.need2fa === "1" || searchParams.need2fa === "staff"}
           oauth={{ providers: PROVIDERS.map((p) => { const l = linked.find((x) => x.provider === p); return { provider: p, label: providerLabel[p], configured: isConfigured(p), connected: l ? { email: l.email, since: l.createdAt.toISOString() } : null }; }), canUnlink: !!user.passwordSetAt || linked.length > 1, notice: searchParams.oauth, error: searchParams.oauth_error ? OAUTH_ERRORS[searchParams.oauth_error] ?? OAUTH_ERRORS.exchange : undefined }}
         />
