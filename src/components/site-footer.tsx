@@ -25,7 +25,7 @@ export function SiteFooter() {
   return (
     <footer className="no-print mt-24 border-t border-line bg-surface">
       <div className="mx-auto max-w-6xl px-4 pt-14">
-        <div className="flex flex-col items-start justify-between gap-5 rounded-xl border border-line bg-white p-6 sm:flex-row sm:items-center">
+        <div className="flex flex-col items-start justify-between gap-5 rounded-xl border border-line bg-canvas p-6 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Write it once. Prove it forever.</h2>
             <p className="mt-1 text-[13px] text-soft">Set up your workspace in minutes. Free while in beta.</p>
