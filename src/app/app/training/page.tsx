@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePageRole, STAFF_ROLES, MANAGEMENT_ROLES } from "@/lib/rbac";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { AssignCourse } from "./assign";
+import { JoinRoster } from "./join-roster";
 
 export const metadata = { title: "Training Academy" };
 
@@ -13,9 +14,11 @@ export default async function Training() {
     prisma.course.findMany({ where: { workspaceId: ctx.workspaceId, ...(canBuild ? {} : { isPublished: true }) }, include: { _count: { select: { lessons: true, questions: true, enrollments: true } }, enrollments: { select: { status: true } } }, orderBy: { createdAt: "asc" } }),
     canBuild ? prisma.employeeProfile.findMany({ where: { workspaceId: ctx.workspaceId, status: { not: "TERMINATED" } }, orderBy: { staffCode: "asc" } }) : Promise.resolve([]),
   ]);
+  const roles = !ctx.profile ? await prisma.jobRole.findMany({ where: { workspaceId: ctx.workspaceId }, orderBy: { title: "asc" }, select: { id: true, title: true } }) : [];
   return (
     <>
       <PageHeader title="Training Academy" sub="Course catalog">{canBuild && <Link href="/app/training/analytics" className="btn">Quiz analytics</Link>}{canBuild && <Link href="/app/training/builder" className="btn-primary">New course</Link>}</PageHeader>
+      {!ctx.profile && <JoinRoster roles={roles} />}
       {courses.length === 0 ? <Empty title="No courses yet" hint="Build a course with Markdown lessons and a quiz, then require it on a job role." /> : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {courses.map((c) => {
