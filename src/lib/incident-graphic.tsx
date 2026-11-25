@@ -5,22 +5,18 @@ import type { BsReport } from "@/lib/betterstack";
 
 const STATUS_HOST = "status.onboardops.org";
 
-export type Style = "degraded" | "outage" | "restored" | "maintenance";
-export const STYLE_LIST: Style[] = ["degraded", "outage", "restored", "maintenance"];
+import { STYLE_LIST, autoStyle, type Style } from "@/lib/incident-style";
+
+export { STYLE_LIST };
+export type { Style };
 
 const THEME: Record<Style, { tag: string; line1: string; line2: string; glow: string; accent: string; soft: string; icon: string }> = {
   degraded: { tag: "Degraded performance", line1: "Things are", line2: "running slow.", glow: "#F59E0B", accent: "#FBBF24", soft: "rgba(251,191,36,0.14)", icon: "M12 9v4M10.4 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.6 3.9a2 2 0 0 0-3.2 0zM12 17h.01" },
   outage: { tag: "Service disruption", line1: "We're having", line2: "an outage.", glow: "#EF4444", accent: "#F87171", soft: "rgba(248,113,113,0.14)", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9l6 6M15 9l-6 6" },
   restored: { tag: "Resolved", line1: "We're back.", line2: "All clear.", glow: "#10B981", accent: "#34D399", soft: "rgba(52,211,153,0.14)", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8.5 12.5l2.5 2.5 4.5-5" },
+  falsepositive: { tag: "False alarm", line1: "False alarm.", line2: "All is well.", glow: "#14B8A6", accent: "#2DD4BF", soft: "rgba(45,212,191,0.14)", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8h.01M11 12h1v4h1" },
   maintenance: { tag: "Planned maintenance", line1: "Scheduled", line2: "maintenance.", glow: "#3B82F6", accent: "#60A5FA", soft: "rgba(96,165,250,0.14)", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2" },
 };
-
-const isDone = (r: BsReport) => !!r.endsAt || /resolved|completed/i.test(r.state);
-function autoStyle(r: BsReport): Style {
-  if (isDone(r)) return "restored";
-  if (/maint/i.test(r.type)) return "maintenance";
-  return r.affected.some((a) => /down/i.test(a.status)) ? "outage" : "degraded";
-}
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " UTC";
 const timeOnly = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" }) + " UTC";
@@ -49,8 +45,9 @@ export async function renderIncidentGraphic(r: BsReport, forced: Style | null) {
   const services = r.affected.slice(0, 6);
   const more = r.affected.length - services.length;
   const done = !!r.endsAt && style === "restored";
-  const bannerRight = done ? `Resolved after ${duration(r.startsAt, r.endsAt!)}` : `${style === "maintenance" ? "Starts" : "Since"} ${timeOnly(r.startsAt)}`;
-  const detail = done ? `Started ${when(r.startsAt)}  ·  Resolved ${when(r.endsAt!)}` : `${style === "maintenance" ? "Starts" : "Started"} ${when(r.startsAt)}`;
+  const fp = style === "falsepositive";
+  const bannerRight = fp ? `Alert at ${timeOnly(r.startsAt)}` : done ? `Resolved after ${duration(r.startsAt, r.endsAt!)}` : `${style === "maintenance" ? "Starts" : "Since"} ${timeOnly(r.startsAt)}`;
+  const detail = fp ? `Alert raised ${when(r.startsAt)}` : done ? `Started ${when(r.startsAt)}  ·  Resolved ${when(r.endsAt!)}` : `${style === "maintenance" ? "Starts" : "Started"} ${when(r.startsAt)}`;
   const title = r.title.length > 100 ? `${r.title.slice(0, 97)}...` : r.title;
   const fonts = await loadFonts();
   const F = fonts ? "Inter" : "sans-serif";
@@ -84,15 +81,27 @@ export async function renderIncidentGraphic(r: BsReport, forced: Style | null) {
           <div style={{ display: "flex", color: t.accent }}>{t.line2}</div>
         </div>
 
-        <div style={{ display: "flex", fontSize: 34, lineHeight: 1.35, color: "#CBD5E1", marginTop: 30, maxWidth: 920 }}>{title}</div>
+        {fp ? (
+          <div style={{ display: "flex", alignItems: "center", marginTop: 34, background: "rgba(255,255,255,0.06)", border: "2px solid rgba(255,255,255,0.14)", borderRadius: 24, padding: "26px 30px" }}>
+            <div style={{ display: "flex", width: 64, height: 64, borderRadius: 32, background: t.soft, border: `2px solid ${t.accent}`, alignItems: "center", justifyContent: "center", marginRight: 24, flexShrink: 0 }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" /></svg>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", fontSize: 34, fontWeight: 800 }}>We're sorry for the inconvenience.</div>
+              <div style={{ display: "flex", fontSize: 26, lineHeight: 1.35, color: "#CBD5E1", marginTop: 6 }}>Our monitoring flagged a problem that wasn't real. Nothing was wrong, and you don't need to do anything.</div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", fontSize: 34, lineHeight: 1.35, color: "#CBD5E1", marginTop: 30, maxWidth: 920 }}>{title}</div>
+        )}
 
         {services.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", marginTop: 34 }}>
-            <div style={{ display: "flex", fontSize: 22, fontWeight: 600, color: "#64748B", letterSpacing: 3, textTransform: "uppercase", marginBottom: 14 }}>Affected services</div>
+            <div style={{ display: "flex", fontSize: 22, fontWeight: 600, color: "#64748B", letterSpacing: 3, textTransform: "uppercase", marginBottom: 14 }}>{fp ? "Checked and working" : "Affected services"}</div>
             <div style={{ display: "flex", flexWrap: "wrap" }}>
               {services.map((s) => (
                 <div key={s.id} style={{ display: "flex", alignItems: "center", background: "rgba(255,255,255,0.07)", border: "2px solid rgba(255,255,255,0.14)", borderRadius: 14, padding: "10px 20px", marginRight: 12, marginBottom: 12, fontSize: 27, fontWeight: 600 }}>
-                  <div style={{ display: "flex", width: 14, height: 14, borderRadius: 7, background: style === "restored" ? "#34D399" : dot(s.status), marginRight: 12 }} />
+                  <div style={{ display: "flex", width: 14, height: 14, borderRadius: 7, background: style === "restored" || fp ? "#34D399" : dot(s.status), marginRight: 12 }} />
                   {s.name}
                 </div>
               ))}
@@ -105,7 +114,7 @@ export async function renderIncidentGraphic(r: BsReport, forced: Style | null) {
         {detail && <div style={{ display: "flex", fontSize: 24, color: "#94A3B8", marginBottom: 18 }}>{detail}</div>}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "2px solid rgba(255,255,255,0.12)", paddingTop: 22 }}>
           <div style={{ display: "flex", fontSize: 30, fontWeight: 800 }}>{STATUS_HOST}</div>
-          <div style={{ display: "flex", fontSize: 26, color: "#94A3B8" }}>{style === "restored" ? "Thank you for your patience" : style === "maintenance" ? "We'll post when it's finished" : "We'll post the next update here"}</div>
+          <div style={{ display: "flex", fontSize: 26, color: "#94A3B8" }}>{fp ? "Thank you for your patience" : style === "restored" ? "Thank you for your patience" : style === "maintenance" ? "We'll post when it's finished" : "We'll post the next update here"}</div>
         </div>
       </div>
     ),

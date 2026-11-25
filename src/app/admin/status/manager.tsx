@@ -249,7 +249,7 @@ export function StatusManager({
                           {incidentNumber(r)} · #{r.id} · {fmtDateTime(r.startsAt)}{r.endsAt ? ` to ${fmtDateTime(r.endsAt)}` : ""} · {r.affected.map((a) => a.name).join(", ") || "No services"}
                         </p>
                       </div>
-                      <GraphicMenu id={r.id} />
+                      <GraphicMenu report={r} />
                       {canEdit && (
                         <div className="flex flex-wrap gap-2">
                           {r.type !== "maintenance" && <button className="btn-primary" onClick={() => open({ update: r })}>Post update</button>}
@@ -447,7 +447,7 @@ export function StatusManager({
                           <div className="mono text-[11px] text-soft">{incidentNumber(r)} · {fmtDateTime(r.startsAt)} · {r.affected.map((a) => a.name).join(", ")}</div>
                         </td>
                         <td className="px-4 py-2.5 text-right">{S(r.type === "maintenance" ? "resolved" : r.state)}</td>
-                        <td className="px-4 py-2.5"><GraphicMenu id={r.id} /></td>
+                        <td className="px-4 py-2.5"><GraphicMenu report={r} /></td>
                         {canEdit && (
                           <td className="px-4 py-2.5 text-right">
                             <button
