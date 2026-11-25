@@ -15,6 +15,8 @@ import { mergeWorkspaceMeta } from "@/lib/workspace-meta";
 import { connectDomain, removeDomain, validateDomain } from "@/lib/vercel-domains";
 import { can, getSupportConfig } from "@/lib/support-config";
 import { emitSupportEvent } from "@/lib/support";
+import { replyTicketCore, suspendWorkspaceCore, unsuspendWorkspaceCore } from "@/lib/staff-ops";
+import { postDiscord } from "@/lib/discord-events";
 import { run } from "./_util";
 
 const ownersOf = (workspaceId: string) => prisma.workspaceMember.findMany({ where: { workspaceId, role: "OWNER" }, include: { user: true } });
@@ -25,24 +27,9 @@ export async function replyToRequestAction(id: string, input: unknown) {
   return run(async () => {
     const staff = await requireStaff(SUPPORT_STAFF);
     const d = z.object({ body: z.string().trim().min(2, "Write a reply").max(8000), markSolved: z.boolean().default(false) }).parse(input);
-    const req = await prisma.supportRequest.findUnique({ where: { id } });
-    if (!req) throw new Error("Request not found.");
-    const ref = req.id.slice(-8).toUpperCase();
-    if (d.markSolved && !can(await getSupportConfig(), staff.role, "close")) throw new Error("You don't have permission to close tickets.");
-    const m = emails.supportReply(req.name, ref, d.body);
-    const sent = await sendEmail(req.email, m.subject, m.text, { html: m.html, kind: "support-reply", workspaceId: req.workspaceId });
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.supportMessage.create({ data: { requestId: id, kind: "REPLY", authorName: staff.name, body: d.body, emailed: sent.ok } });
-      const u = await tx.supportRequest.update({
-        where: { id },
-        data: { status: d.markSolved ? "SOLVED" : "WAITING", solvedAt: d.markSolved ? new Date() : null, resolvedHint: false, idleNudgedAt: null, staffTypingAt: null, assignee: req.assignee ?? staff.name },
-      });
-      await staffAudit(tx, staff, { action: "SUPPORT_REPLY", targetType: "SupportRequest", targetId: id, workspaceId: req.workspaceId, summary: `Replied to request ${ref}${sent.ok ? "" : " (email failed: " + (sent.error ?? "unknown") + ")"}` });
-      return u;
-    });
-    await emitSupportEvent(d.markSolved ? "ticket.solved" : "ticket.replied", updated, d.body);
+    const r = await replyTicketCore(staff, id, d);
     refresh();
-    return { emailed: sent.ok, error: sent.error };
+    return r;
   });
 }
 
@@ -140,16 +127,7 @@ export async function suspendWorkspaceAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
     const d = z.object({ workspaceId: z.string(), reason: z.string().trim().min(10, "Give a reason the owner will see (10+ characters)").max(500) }).parse(input);
-    const ws = await prisma.workspace.findUnique({ where: { id: d.workspaceId } });
-    if (!ws) throw new Error("Workspace not found.");
-    const owners = await ownersOf(ws.id);
-    await prisma.$transaction(async (tx) => {
-      await tx.workspace.update({ where: { id: ws.id }, data: { suspendedAt: new Date(), suspendedReason: d.reason } });
-      await writeAudit(tx, { workspaceId: ws.id, actorName: "OnboardOps", actionType: "WORKSPACE_LOCKED", targetType: "Workspace", targetId: ws.id, summary: `Workspace locked by OnboardOps. Reason: ${d.reason}` });
-      await staffAudit(tx, staff, { action: "WORKSPACE_LOCK", targetType: "Workspace", targetId: ws.id, workspaceId: ws.id, summary: `Locked ${ws.name}. Reason: ${d.reason}` });
-      await tx.moderationCase.create({ data: { targetType: "WORKSPACE", workspaceId: ws.id, action: "SUSPEND", reason: d.reason, actorName: staff.name } });
-    });
-    for (const o of owners) { const m = emails.workspaceLocked(o.user.name, ws.name, d.reason); await sendEmail(o.user.email, m.subject, m.text, { html: m.html, kind: "workspace-locked", workspaceId: ws.id }); }
+    await suspendWorkspaceCore(staff, d);
     refresh();
     return undefined;
   });
@@ -158,16 +136,7 @@ export async function suspendWorkspaceAction(input: unknown) {
 export async function unsuspendWorkspaceAction(workspaceId: string) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
-    const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
-    if (!ws) throw new Error("Workspace not found.");
-    const owners = await ownersOf(ws.id);
-    await prisma.$transaction(async (tx) => {
-      await tx.workspace.update({ where: { id: ws.id }, data: { suspendedAt: null, suspendedReason: "" } });
-      await writeAudit(tx, { workspaceId: ws.id, actorName: "OnboardOps", actionType: "WORKSPACE_UNLOCKED", targetType: "Workspace", targetId: ws.id, summary: "Workspace unlocked by OnboardOps" });
-      await staffAudit(tx, staff, { action: "WORKSPACE_UNLOCK", targetType: "Workspace", targetId: ws.id, workspaceId: ws.id, summary: `Unlocked ${ws.name}` });
-      await tx.moderationCase.create({ data: { targetType: "WORKSPACE", workspaceId: ws.id, action: "UNSUSPEND", reason: "Unlocked by staff", actorName: staff.name } });
-    });
-    for (const o of owners) { const m = emails.workspaceUnlocked(o.user.name, ws.name); await sendEmail(o.user.email, m.subject, m.text, { html: m.html, kind: "workspace-unlocked", workspaceId: ws.id }); }
+    await unsuspendWorkspaceCore(staff, workspaceId);
     refresh();
     return undefined;
   });
@@ -352,6 +321,7 @@ export async function setMaintenanceModeAction(input: unknown) {
     );
     // Show it on the public status page straight away. A failure here must not undo the maintenance change.
     await reconcileMaintenance().catch((e) => console.error("status page update failed", e instanceof Error ? e.message : e));
+    await postDiscord("status", { title: d.enabled ? "Maintenance mode is ON" : d.startsAt ? "Maintenance scheduled" : "Maintenance mode is off", description: d.enabled || d.startsAt ? state.message : "The site is open again.", fields: [{ name: "By", value: staff.name }], tone: d.enabled || d.startsAt ? "warn" : "good" });
     revalidatePath("/", "layout");
     return state;
   });

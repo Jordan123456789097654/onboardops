@@ -1,3 +1,4 @@
+import { postDiscord } from "./discord-events";
 import { prisma } from "./prisma";
 import { getOutageTest, INCIDENT_SETTINGS_ROW_ID } from "./maintenance";
 import { checkAllServices, type ComponentHealth } from "./status";
@@ -170,6 +171,11 @@ export async function saveOpsAlertWebhook(rawUrl: string | null, by: string): Pr
 }
 
 export async function notifyOpsAlert(embed: { title: string; description?: string; color?: number; fields?: { name: string; value: string; inline?: boolean }[] }) {
+  const down = /^monitor down/i.test(embed.title);
+  const good = /recover|resolved/i.test(embed.title);
+  const notice = { title: embed.title, description: embed.description, fields: embed.fields?.map((f) => ({ name: f.name, value: f.value })), tone: (down ? "bad" : good ? "good" : "warn") as "bad" | "good" | "warn" };
+  await postDiscord("status", notice);
+  if (down) await postDiscord("alerts", { ...notice, pingOnCall: true });
   const s = await readSettingsFull();
   if (!s.webhookUrl) return { ok: false as const, error: "No ops alert webhook configured" };
   return sendEmbed(s.webhookUrl, { ...embed, footer: "OnboardOps Incident Alerts" });

@@ -46,6 +46,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         items: [
           { href: "/admin/content", label: "Content studio", icon: "content" },
           { href: "/admin/newsletter", label: "Newsletter", icon: "email" },
+          { href: "/admin/team", label: "Edit team", icon: "team" },
           { href: "/admin/roadmap", label: "Public roadmap", icon: "roadmap" },
           { href: "/admin/testimonials", label: "Testimonials", icon: "testimonials" },
           { href: "/admin/partners", label: "Partners", icon: "partners" },
@@ -58,6 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { href: "/admin/emails", label: "Emails", icon: "compose" },
           { href: "/admin/email", label: "Email log", icon: "email" },
           { href: "/admin/activity", label: "Staff activity", icon: "activity" },
+          { href: "/admin/discord", label: "Link Discord", icon: "team" },
           ...(s.role === "OWNER" ? [{ href: "/admin/staff", label: "Staff & roles", icon: "staff" }] : []),
         ],
       },

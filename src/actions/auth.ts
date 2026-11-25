@@ -22,7 +22,7 @@ import { run, type Result } from "./_util";
 
 const loginSchema = z.object({ email: z.string().email("Enter a valid email"), password: z.string().min(1, "Enter your password") });
 const registerSchema = z.object({
-  accountType: z.enum(["OWNER", "EMPLOYEE"]).default("OWNER"),
+  accountType: z.enum(["OWNER", "EMPLOYEE", "ACCOUNT"]).default("OWNER"),
   name: z.string().trim().min(2, "Enter your name"),
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -86,7 +86,7 @@ export async function registerAction(input: unknown): Promise<Result<{ to: strin
     await rejectBreachedPassword(d.password);
     const passwordHash = await hashPassword(d.password);
 
-    if (d.accountType === "EMPLOYEE") {
+    if (d.accountType !== "OWNER") {
       const user = await prisma.user.create({ data: { email, name: d.name, passwordHash, passwordSetAt: new Date() } });
       await sendVerification(user.id, user.name, user.email);
       await createSession(user.id);

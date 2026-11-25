@@ -70,6 +70,7 @@ const KNOWN_PUBLIC_PATHS = new Set([
   "/why",
   "/changelog",
   "/newsletter",
+  "/team",
   "/feedback",
   "/roadmap",
   "/faq",

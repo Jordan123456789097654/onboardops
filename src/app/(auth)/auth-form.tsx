@@ -117,7 +117,7 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
   const [f, setF] = useState({ name: "", email: "", password: "", workspaceName: "" });
   const [accept, setAccept] = useState(false);
   const [magic, setMagic] = useState(false);
-  const [kind, setKind] = useState<"OWNER" | "EMPLOYEE">("OWNER");
+  const [kind, setKind] = useState<"OWNER" | "EMPLOYEE" | "ACCOUNT">("OWNER");
   const [logoDataUrl, setLogoDataUrl] = useState("");
   const [logoFileName, setLogoFileName] = useState("");
   const [logoBusy, setLogoBusy] = useState(false);
@@ -196,7 +196,7 @@ export function AuthForm({ mode, providers = [], oauthError }: { mode: "login" |
             <div><h1 className="text-xl font-semibold">{mode === "login" ? "Sign in" : kind === "OWNER" ? "Create a workspace" : "Create your account"}</h1><p className="mt-1 text-[13px] text-soft">{mode === "login" ? "Welcome back." : kind === "OWNER" ? "Free during the beta. No card needed." : "For employees. After you verify your email, the workplaces that added you appear for you to join."}</p></div>
             {mode === "register" && (
               <div role="radiogroup" aria-label="Account type" className="grid grid-cols-2 gap-1 rounded-lg border border-line bg-muted p-1 text-[13px]">
-                {([["OWNER", "I run a company"], ["EMPLOYEE", "I work for a company"]] as const).map(([k, l]) => <button type="button" key={k} role="radio" aria-checked={kind === k} onClick={() => setKind(k)} className={`rounded-md px-2 py-1.5 font-medium transition-all ${kind === k ? "bg-surface shadow-sm" : "text-soft hover:text-ink"}`}>{l}</button>)}
+                {([["OWNER", "I run a company"], ["EMPLOYEE", "I work for a company"], ["ACCOUNT", "Just an account for now"]] as const).map(([k, l]) => <button type="button" key={k} role="radio" aria-checked={kind === k} onClick={() => setKind(k)} className={`rounded-md px-2 py-1.5 font-medium transition-all ${kind === k ? "bg-surface shadow-sm" : "text-soft hover:text-ink"}`}>{l}</button>)}
               </div>
             )}
             {mode === "register" && (<>

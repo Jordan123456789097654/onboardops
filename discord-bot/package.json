@@ -1,0 +1,21 @@
+{
+  "name": "onboardops-staff-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Staff Discord bot for OnboardOps",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "check": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@types/node": "26.6.7",
+    "discord.js": "14.28.1",
+    "tsx": "4.23.15",
+    "typescript": "5.6.3"
+  }
+}

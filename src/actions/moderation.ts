@@ -2,8 +2,9 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { emails, sendEmail } from "@/lib/email";
-import { requireStaff, staffAudit, OWNER_ONLY, SUPPORT_STAFF } from "@/lib/platform";
+import { requireStaff, OWNER_ONLY, SUPPORT_STAFF } from "@/lib/platform";
+import { banUserCore, decideAppealCore, unbanUserCore, warnUserCore } from "@/lib/moderation-core";
+import { postDiscord } from "@/lib/discord-events";
 import { run } from "./_util";
 
 const reasonSchema = z.string().trim().min(10, "Give a reason (10+ characters). The person will see it.").max(500);
@@ -14,17 +15,7 @@ export async function banUserAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
     const d = z.object({ userId: z.string(), reason: reasonSchema }).parse(input);
-    const user = await prisma.user.findUnique({ where: { id: d.userId }, select: { id: true, name: true, email: true, bannedAt: true } });
-    if (!user) throw new Error("Account not found.");
-    if (user.bannedAt) throw new Error("This account is already banned.");
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { bannedAt: new Date(), banReason: d.reason } });
-      await tx.userSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.moderationCase.create({ data: { targetType: "USER", userId: user.id, action: "BAN", reason: d.reason, actorName: staff.name } });
-      await staffAudit(tx, staff, { action: "ACCOUNT_BAN", targetType: "User", targetId: user.id, summary: `Banned ${user.email}. Reason: ${d.reason}` });
-    });
-    const m = emails.accountBanned(user.name, d.reason);
-    await sendEmail(user.email, m.subject, m.text, { html: m.html, kind: "moderation" });
+    await banUserCore(staff, d.userId, d.reason);
     refresh();
     return undefined;
   });
@@ -35,16 +26,7 @@ export async function unbanUserAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
     const d = z.object({ userId: z.string(), reason: reasonSchema }).parse(input);
-    const user = await prisma.user.findUnique({ where: { id: d.userId }, select: { id: true, name: true, email: true, bannedAt: true } });
-    if (!user) throw new Error("Account not found.");
-    if (!user.bannedAt) throw new Error("This account is not banned.");
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { bannedAt: null, banReason: "" } });
-      await tx.moderationCase.create({ data: { targetType: "USER", userId: user.id, action: "UNBAN", reason: d.reason, actorName: staff.name } });
-      await staffAudit(tx, staff, { action: "ACCOUNT_UNBAN", targetType: "User", targetId: user.id, summary: `Unbanned ${user.email}. Reason: ${d.reason}` });
-    });
-    const m = emails.accountUnbanned(user.name);
-    await sendEmail(user.email, m.subject, m.text, { html: m.html, kind: "moderation" });
+    await unbanUserCore(staff, d.userId, d.reason);
     refresh();
     return undefined;
   });
@@ -55,14 +37,7 @@ export async function warnUserAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(SUPPORT_STAFF);
     const d = z.object({ userId: z.string(), reason: reasonSchema }).parse(input);
-    const user = await prisma.user.findUnique({ where: { id: d.userId }, select: { id: true, name: true, email: true } });
-    if (!user) throw new Error("Account not found.");
-    await prisma.$transaction(async (tx) => {
-      await tx.moderationCase.create({ data: { targetType: "USER", userId: user.id, action: "WARN", reason: d.reason, actorName: staff.name } });
-      await staffAudit(tx, staff, { action: "ACCOUNT_WARN", targetType: "User", targetId: user.id, summary: `Warned ${user.email}. Reason: ${d.reason}` });
-    });
-    const m = emails.moderationWarning(user.name, d.reason);
-    await sendEmail(user.email, m.subject, m.text, { html: m.html, kind: "moderation" });
+    await warnUserCore(staff, d.userId, d.reason);
     refresh();
     return undefined;
   });
@@ -73,28 +48,7 @@ export async function decideAppealAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
     const d = z.object({ appealId: z.string(), overturn: z.boolean(), note: z.string().trim().min(10, "Explain the decision (10+ characters).").max(500) }).parse(input);
-    const appeal = await prisma.moderationAppeal.findUnique({ where: { id: d.appealId }, include: { case: true } });
-    if (!appeal) throw new Error("Appeal not found.");
-    if (appeal.status !== "PENDING") throw new Error("This appeal has already been decided.");
-    const c = appeal.case;
-    let notifyName = "there";
-    let notifyEmail = appeal.email;
-    await prisma.$transaction(async (tx) => {
-      if (d.overturn && c.targetType === "USER" && c.userId) {
-        await tx.user.update({ where: { id: c.userId }, data: { bannedAt: null, banReason: "" } });
-        await tx.moderationCase.create({ data: { targetType: "USER", userId: c.userId, action: "UNBAN", reason: `Appeal upheld: ${d.note}`, actorName: staff.name } });
-      }
-      if (d.overturn && c.targetType === "WORKSPACE" && c.workspaceId) {
-        await tx.workspace.update({ where: { id: c.workspaceId }, data: { suspendedAt: null, suspendedReason: "" } });
-        await tx.moderationCase.create({ data: { targetType: "WORKSPACE", workspaceId: c.workspaceId, action: "UNSUSPEND", reason: `Appeal upheld: ${d.note}`, actorName: staff.name } });
-      }
-      await tx.moderationAppeal.update({ where: { id: appeal.id }, data: { status: d.overturn ? "OVERTURNED" : "UPHELD", decisionNote: d.note, decidedBy: staff.name, decidedAt: new Date() } });
-      await staffAudit(tx, staff, { action: "APPEAL_DECIDED", targetType: "Appeal", targetId: appeal.id, summary: `Appeal ${d.overturn ? "overturned" : "upheld"}. ${d.note}` });
-    });
-    const u = c.userId ? await prisma.user.findUnique({ where: { id: c.userId }, select: { name: true, email: true } }) : null;
-    if (u) { notifyName = u.name; notifyEmail = u.email; }
-    const m = emails.appealDecided(notifyName, d.overturn, d.note);
-    await sendEmail(notifyEmail, m.subject, m.text, { html: m.html, kind: "moderation" });
+    await decideAppealCore(staff, d.appealId, d.overturn, d.note);
     refresh();
     return undefined;
   });
@@ -124,7 +78,19 @@ export async function submitAppealAction(input: unknown) {
     }
     if (caseId) {
       const pending = await prisma.moderationAppeal.findFirst({ where: { caseId, status: "PENDING" }, select: { id: true } });
-      if (!pending) await prisma.moderationAppeal.create({ data: { caseId, email: d.email, message: d.message } });
+      if (!pending) {
+        const appeal = await prisma.moderationAppeal.create({ data: { caseId, email: d.email, message: d.message } });
+        await postDiscord("appeals", {
+          title: "New appeal waiting",
+          description: "Open the moderation screen to read it, or decide it here.",
+          url: `${(process.env.APP_URL || "https://onboardops.org").replace(/\/$/, "")}/admin/moderation`,
+          tone: "warn",
+          buttons: [
+            { id: `appeal:overturn:${appeal.id}`, label: "Overturn", style: "success" },
+            { id: `appeal:uphold:${appeal.id}`, label: "Uphold", style: "secondary" },
+          ],
+        });
+      }
     }
     return undefined;
   });

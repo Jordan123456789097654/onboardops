@@ -2,6 +2,7 @@ import { createHmac } from "crypto";
 import { z } from "zod";
 import type { SupportRequest } from "@prisma/client";
 import { prisma } from "./prisma";
+import { postDiscord } from "./discord-events";
 import { emails, sendEmail } from "./email";
 import { open as unseal } from "./secret-box";
 import { aiConfigured, chat } from "./ai/groq";
@@ -234,6 +235,7 @@ export async function createTicket(input: {
     },
   });
   await bumpDaily("tickets");
+  await postDiscord(input.topic === "Security report" ? "urgent" : "support", { title: `New ticket ${refOf(req.id)}`, description: `Topic: ${input.topic}`, fields: [{ name: "Source", value: input.source }], url: `${appUrl()}/admin/inbox?open=${req.id}`, tone: input.topic === "Security report" ? "bad" : "info", pingOnCall: input.topic === "Security report", buttons: [{ id: `ticket:claim:${req.id}`, label: "Claim", style: "primary" }, { id: `ticket:solve:${req.id}`, label: "Mark solved", style: "secondary" }] });
   if (sensitive) return req;
   await withTimeout(analyzeTicket(req.id), 6000);
   const fresh = (await prisma.supportRequest.findUnique({ where: { id: req.id } })) ?? req;

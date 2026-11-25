@@ -1738,3 +1738,64 @@ model ModerationAppeal {
   @@index([status, createdAt])
   @@index([caseId])
 }
+
+/// People shown on the public /team page. Edited by the site owner in the staff console.
+model TeamMember {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("")
+  bio       String   @default("")
+  linkUrl   String   @default("")
+  photo     Bytes?
+  photoMime String?
+  visible   Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visible, sortOrder])
+}
+
+/// The heading and intro on the /team page. One row, with id "team".
+model TeamPage {
+  id        String   @id
+  title     String   @default("Our team")
+  intro     String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
+/// Ties a Discord account to a staff account, so bot commands run with that person's staff permissions.
+model DiscordLink {
+  id        String   @id @default(cuid())
+  discordId String   @unique
+  userId    String   @unique
+  linkedAt  DateTime @default(now())
+}
+
+/// A short-lived code the bot gives someone, which they enter in the staff console to prove both accounts are theirs.
+model DiscordLinkCode {
+  id        String   @id @default(cuid())
+  codeHash  String   @unique
+  discordId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([discordId])
+  @@index([expiresAt])
+}
+
+/// A ban started from Discord that a second owner must approve before it takes effect (when there are two or more owners).
+model ModerationRequest {
+  id            String    @id @default(cuid())
+  kind          String
+  userId        String
+  reason        String
+  requestedBy   String
+  requestedById String
+  status        String    @default("PENDING")
+  decidedBy     String    @default("")
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, createdAt])
+}
