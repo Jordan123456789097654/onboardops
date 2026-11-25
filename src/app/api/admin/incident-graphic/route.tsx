@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   let r: BsReport | undefined;
   try { r = (await bsOverview()).reports.find((x) => x.id === id); } catch { return new Response("Could not reach Better Stack.", { status: 502 }); }
   if (!r) return new Response("Incident not found.", { status: 404 });
-  const { img, num, style } = renderIncidentGraphic(r, s && STYLE_LIST.includes(s) ? s : null);
+  const { img, num, style } = await renderIncidentGraphic(r, s && STYLE_LIST.includes(s) ? s : null);
   const headers = new Headers(img.headers);
   headers.set("Content-Disposition", `attachment; filename="${num}-${style}.png"`);
   headers.set("Cache-Control", "no-store");
