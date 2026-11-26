@@ -317,26 +317,30 @@ function monitorEndpointLabel(m: KenerMonitorRow): string {
   return m.monitor_type ? `${m.monitor_type} (${m.tag})` : m.tag;
 }
 
-/** Fetches the most recent monitoring data point for each monitor (last 15 minutes). */
+/** Fetches the most recent monitoring data point for every monitor (last 15 minutes), in parallel batches. */
 export async function fetchLatestMonitorStatuses(tags: string[]): Promise<Map<string, { status: string; checkedAt: string | null }>> {
   const out = new Map<string, { status: string; checkedAt: string | null }>();
   const nowSec = Math.floor(Date.now() / 1000);
   const startSec = nowSec - 900;
   const endSec = nowSec + 60;
-  await Promise.all(
-    tags.slice(0, 40).map(async (tag) => {
-      try {
-        const r = await kenerCall("GET", `/monitors/${encodeURIComponent(tag)}/data?start_ts=${startSec}&end_ts=${endSec}`, undefined, 3500);
-        if (!r.ok) return;
-        const pts = (r.json.data ?? []) as { timestamp: number; status: string }[];
-        if (!pts.length) return;
-        const latest = pts.reduce((a, b) => (b.timestamp > a.timestamp ? b : a), pts[0]);
-        out.set(tag, { status: latest.status, checkedAt: new Date(latest.timestamp * 1000).toISOString() });
-      } catch {
-        // non-fatal
-      }
-    }),
-  );
+  const batchSize = 25;
+  for (let i = 0; i < tags.length; i += batchSize) {
+    const chunk = tags.slice(i, i + batchSize);
+    await Promise.all(
+      chunk.map(async (tag) => {
+        try {
+          const r = await kenerCall("GET", `/monitors/${encodeURIComponent(tag)}/data?start_ts=${startSec}&end_ts=${endSec}`, undefined, 3500);
+          if (!r.ok) return;
+          const pts = (r.json.data ?? []) as { timestamp: number; status: string }[];
+          if (!pts.length) return;
+          const latest = pts.reduce((a, b) => (b.timestamp > a.timestamp ? b : a), pts[0]);
+          out.set(tag, { status: latest.status, checkedAt: new Date(latest.timestamp * 1000).toISOString() });
+        } catch {
+          // non-fatal
+        }
+      }),
+    );
+  }
   return out;
 }
 
@@ -349,7 +353,7 @@ export async function kenerOverview(): Promise<{ resources: StatusResource[]; re
   ]);
   if (!monRes.ok) throw new Error(monRes.status === 401 ? "Kener rejected the API key." : `Kener responded ${monRes.status}`);
 
-  const rawMonitors = (monRes.json.monitors ?? []) as KenerMonitorRow[];
+  const rawMonitors = ((monRes.json.monitors ?? []) as KenerMonitorRow[]).slice().sort((a, b) => a.id - b.id);
   const rawIncidents = (incRes.ok ? (incRes.json.incidents ?? []) : []) as KenerIncidentRow[];
   const rawMaintenances = (maintRes.ok ? (maintRes.json.maintenances ?? []) : []) as KenerMaintenanceRow[];
 
