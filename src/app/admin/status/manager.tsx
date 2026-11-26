@@ -259,7 +259,7 @@ export function StatusManager({
                             <button
                               className="btn"
                               disabled={pending}
-                              onClick={() => exec(() => updateIncidentAction({ id: r.id, message: UPDATE_PRESETS[7].message, status: "resolved", notify: false }), { success: "Marked resolved", onOk: () => router.refresh() })}
+                              onClick={() => exec(() => updateIncidentAction({ id: r.id, message: UPDATE_PRESETS[7].message, status: "resolved", notify: true }), { success: "Marked resolved", onOk: () => router.refresh() })}
                             >
                               Quick resolve
                             </button>

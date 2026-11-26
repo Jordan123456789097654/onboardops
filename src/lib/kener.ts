@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { BETTERSTACK_ROW_ID, getMaintenanceState } from "./maintenance";
 import { ALL_AREAS, AREA_LABEL, type MaintArea } from "./maintenance-areas";
+import { notifyStatusSubscribers } from "./status-subscribers";
 
 /**
  * Keeps the public status page (Kener v4 at status.onboardops.org) in step with what really happens:
@@ -472,6 +473,7 @@ export async function kenerCreateIncident(i: {
     });
     if (!c.ok) throw fail(c, "Posting the initial incident message");
   }
+  if (i.notify) await notifyStatusSubscribers(`Incident: ${i.title}`, i.message.trim() || "We are looking into an issue.");
   return id;
 }
 
@@ -480,7 +482,7 @@ export async function kenerUpdateIncident(
   reportId: string,
   message: string,
   status: "degraded" | "downtime" | "resolved",
-  _notify: boolean,
+  notify: boolean,
 ) {
   const id = reportId.replace(/^m-/, "");
   const state = status === "resolved" ? "RESOLVED" : status === "degraded" ? "MONITORING" : "IDENTIFIED";
@@ -505,6 +507,10 @@ export async function kenerUpdateIncident(
     timestamp: nowSec,
   });
   if (!r.ok) throw fail(r, "Posting the update");
+  if (notify) {
+    const label = status === "resolved" ? "Resolved" : status === "degraded" ? "Update" : "Update";
+    await notifyStatusSubscribers(`${label}: OnboardOps status`, message);
+  }
 }
 
 export async function kenerScheduleMaintenance(i: {

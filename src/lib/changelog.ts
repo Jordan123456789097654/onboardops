@@ -8,6 +8,25 @@ export type ChangelogEntry = {
 
 export const entries: ChangelogEntry[] = [
   {
+    "v": "0.14.0",
+    "date": "2026-11-26",
+    "highlight": "Status updates by email, personal API keys, and your own date and time format",
+    "bullets": [
+      "Get an email when there's an incident or an update, and when it's resolved. Confirm once; unsubscribe any time",
+      "Personal API keys: keys that act as you in one workspace, managed from Account settings",
+      "Pick your date format and 12- or 24-hour clock in Account settings"
+    ],
+    "items": [
+      "Status updates by email: subscribe at /status-updates to hear about incidents, updates and resolutions. You confirm your address first, and every email has a link to stop.",
+          "Personal API keys: create a key that works as you in a workspace you belong to. It can do only what your role allows, stops working if you leave or your role changes, and you can revoke it at any time. You can have up to five.",
+      "New help article on API keys: how to create, store, rotate and revoke a key, with a table of the error codes you may see.",
+      "Date and time format: choose YYYY-MM-DD, MM/DD/YYYY or DD/MM/YYYY, and a 12- or 24-hour clock, in Account settings.",
+      "Delete your account: from Account settings. It asks for your password and a typed confirmation, lists what will be removed, and gives you 14 days to cancel before it is permanent.",
+      "Maya, our support assistant, now knows the live service status. She can tell you when we are already aware of a problem, sends you straight to the right page with a link, and when she can't help she passes your conversation to our team without you having to fill in a form.",
+      "Maya is warmer and more personal: she greets you by first name when you're signed in, and replies in the language you write in."
+    ]
+  },
+  {
     "v": "0.13.0",
     "date": "2026-11-25",
     "highlight": "Passkeys, training for owners and managers, and faster privacy requests",

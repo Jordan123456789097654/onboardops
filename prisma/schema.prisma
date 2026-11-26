@@ -1828,3 +1828,18 @@ model ModerationRequest {
 
   @@index([status, createdAt])
 }
+
+/// People who asked to hear about status incidents and updates. Confirmed by email first (double opt-in).
+model StatusSubscriber {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  status         String    @default("PENDING")
+  /// Long random token for the confirm and unsubscribe links. It identifies the subscription and nothing else.
+  token          String    @unique
+  createdAt      DateTime  @default(now())
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  lastNotifiedAt DateTime?
+
+  @@index([status])
+}
