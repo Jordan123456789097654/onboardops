@@ -51,19 +51,23 @@ const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "nu
 const sizeOf = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
 /** Keeps line breaks, turns web addresses into links, and renders **bold**. Only http(s) links are made clickable. */
+const SITE_SECTIONS = "legal|blog|playbooks|migrate|support|tools|pricing|security|features|solutions|changelog|roadmap|faq|about|contact|tutorial|register|login|why|team|partners|careers|story|brand|newsletter|verify|launch";
+const SITE_PATH_RE = new RegExp(`^\\/(?:${SITE_SECTIONS})(?:\\/[a-zA-Z0-9_-]+)*$`);
+const SPLIT_RE = new RegExp(`(https?:\\/\\/[^\\s)]*[^\\s).,;:!?]|\\*\\*[^*\\n]+\\*\\*|(?<![\\w/])\\/(?:${SITE_SECTIONS})(?:\\/[a-zA-Z0-9_-]+)*(?![\\w/]))`, "g");
+
+/** Keeps line breaks, turns web addresses and OnboardOps page paths into links, and renders **bold**. */
 function Rich({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s)]*[^\s).,;:!?]|\*\*[^*\n]+\*\*)/g);
+  const parts = text.split(SPLIT_RE);
+  const linkCls = "font-medium underline underline-offset-2 [overflow-wrap:anywhere]";
   return (
     <>
-      {parts.map((p, i) =>
-        /^https?:\/\//.test(p) ? (
-          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 [overflow-wrap:anywhere]">{p}</a>
-        ) : /^\*\*[^*\n]+\*\*$/.test(p) ? (
-          <strong key={i}>{p.slice(2, -2)}</strong>
-        ) : (
-          <span key={i}>{p}</span>
-        )
-      )}
+      {parts.map((p, i) => {
+        if (!p) return null;
+        if (/^https?:\/\//.test(p)) return <a key={i} href={p} target="_blank" rel="noopener noreferrer" className={linkCls}>{p}</a>;
+        if (/^\*\*[^*\n]+\*\*$/.test(p)) return <strong key={i}>{p.slice(2, -2)}</strong>;
+        if (SITE_PATH_RE.test(p)) return <Link key={i} href={p} className={linkCls}>{p}</Link>;
+        return <span key={i}>{p}</span>;
+      })}
     </>
   );
 }
@@ -91,6 +95,7 @@ export function MarketingChat() {
   const [info, setInfo] = useState<TicketInfo | null>(null);
   const [handoff, setHandoff] = useState(false);
   const [handoffForm, setHandoffForm] = useState({ name: "", email: "" });
+  const [me, setMe] = useState<{ signedIn: boolean; firstName: string | null }>({ signedIn: false, firstName: null });
   const [hours, setHours] = useState<Hours | null>(null);
   const [pending, setPending] = useState<FileRef[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -121,6 +126,10 @@ export function MarketingChat() {
 
   useEffect(() => {
     if (!open) return;
+    void fetch("/api/ai/chat", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { signedIn?: boolean; firstName?: string | null }) => setMe({ signedIn: !!j.signedIn, firstName: j.firstName ?? null }))
+      .catch(() => {});
     void getSupportStatusAction().then((r) => r.ok && setHours(r.data));
     if (!swept.current) {
       swept.current = true;
@@ -180,9 +189,18 @@ export function MarketingChat() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ messages: nextHistory.slice(-10).map((m) => ({ role: m.role, content: m.content })) }),
       });
-      const data = (await res.json().catch(() => null)) as { reply?: string; escalate?: boolean; suggestedLinks?: SuggestedLink[]; error?: string } | null;
+      const data = (await res.json().catch(() => null)) as { reply?: string; escalate?: boolean; suggestedLinks?: SuggestedLink[]; error?: string; signedIn?: boolean; firstName?: string | null; ticket?: Ticket | null } | null;
       if (!res.ok || !data?.reply) {
         setError(data?.error ?? "I can't answer that right now. You can talk to a person instead.");
+        return;
+      }
+      if (data.signedIn !== undefined) setMe({ signedIn: !!data.signedIn, firstName: data.firstName ?? null });
+      if (data.ticket) {
+        // Maya opened a ticket for a signed-in person on their behalf. Move them straight into it.
+        save(TICKET_KEY, data.ticket);
+        setTicket(data.ticket);
+        setTicketMsgs([{ id: `m-${Date.now()}`, kind: "REPLY", author: brand.name, body: data.reply!, at: new Date().toISOString(), files: [] }]);
+        setMessages([]);
         return;
       }
       setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: data.reply!, suggestedLinks: data.suggestedLinks ?? [], escalate: !!data.escalate }]);
@@ -331,12 +349,15 @@ export function MarketingChat() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Chat with OnboardOps"
-          className={`group relative flex h-14 w-14 items-center justify-center rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.22)] transition-all duration-200 hover:scale-110 ${accentCls}`}
-          style={accentStyle}
+          aria-label={`Chat with ${brand.name}`}
+          className={`group relative flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4 shadow-[0_8px_30px_rgba(0,0,0,0.25)] ring-1 ring-black/5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_36px_rgba(0,0,0,0.3)] ${accentCls}`}
+          style={custom ? accentStyle : { background: "linear-gradient(135deg, rgb(var(--accent)), rgb(var(--accent) / 0.82))", color: "rgb(var(--accent-fg))" }}
         >
-          <MessageCircle className="h-6 w-6" />
-          <span className={`absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface ${hours && !hours.open ? "bg-amber-400" : "bg-emerald-500"}`} />
+          <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-[15px] font-bold">
+            {brand.name.charAt(0).toUpperCase()}
+            <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white/70 ${hours && !hours.open ? "bg-amber-400" : "bg-emerald-400"}`} />
+          </span>
+          <span className="pr-1 text-[13.5px] font-semibold">Chat with {brand.name}</span>
         </button>
       </div>
     );
@@ -388,7 +409,7 @@ export function MarketingChat() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-3">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-[16px] font-semibold">
-                {inTicket ? <User className="h-5 w-5" /> : brand.avatar ? <span>{brand.avatar}</span> : <Sparkles className="h-5 w-5" />}
+                {inTicket ? <User className="h-5 w-5" /> : brand.avatar ? <span>{brand.avatar}</span> : <span className="text-[17px] font-bold">{brand.name.charAt(0).toUpperCase()}</span>}
                 <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white/60 ${away ? "bg-amber-400" : "bg-emerald-400"}`} />
               </div>
               <div className="min-w-0 leading-tight">
@@ -504,8 +525,8 @@ export function MarketingChat() {
           ) : messages.length === 0 ? (
             <div className="space-y-5">
               <div className="space-y-1">
-                <p className="text-[15px] font-semibold">👋 Hey there!</p>
-                <p className="text-[13px] leading-relaxed text-soft">{brand.greeting}</p>
+                <p className="text-[16px] font-semibold">{me.signedIn && me.firstName ? `Hi ${me.firstName}, good to see you! 👋` : "Hi there, I'm glad you stopped by! 👋"}</p>
+                <p className="text-[13px] leading-relaxed text-soft">{me.signedIn ? `I'm ${brand.name}, your OnboardOps guide. I can see your account, so ask me about your role, your training, or anything you're stuck on.` : brand.greeting}</p>
               </div>
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-soft">Popular questions</p>
@@ -549,8 +570,14 @@ export function MarketingChat() {
                 <p className="text-[14px] font-semibold">Talk to our team</p>
                 <p className="mt-0.5 text-[12.5px] text-soft">{away ? `We're away right now, but your message is saved. Replies usually come ${hours!.responseTarget}.` : `We'll reply here and by email, usually ${hours?.responseTarget ?? "within 2 business days"}.`} You can add screenshots once the chat is open.</p>
               </div>
-              <input className="input w-full" placeholder="Your name" required minLength={2} value={handoffForm.name} onChange={(e) => setHandoffForm({ ...handoffForm, name: e.target.value })} />
-              <input className="input w-full" type="email" placeholder="Your email" required value={handoffForm.email} onChange={(e) => setHandoffForm({ ...handoffForm, email: e.target.value })} />
+              {me.signedIn ? (
+                <p className="text-[12.5px] text-soft">We&apos;ll use your account details, so there&apos;s nothing else to fill in.</p>
+              ) : (
+                <>
+                  <input className="input w-full" placeholder="Your name" required minLength={2} value={handoffForm.name} onChange={(e) => setHandoffForm({ ...handoffForm, name: e.target.value })} />
+                  <input className="input w-full" type="email" placeholder="Your email" required value={handoffForm.email} onChange={(e) => setHandoffForm({ ...handoffForm, email: e.target.value })} />
+                </>
+              )}
               <div className="flex gap-2">
                 <button className="btn-primary flex-1 justify-center" disabled={loading}>{loading ? "Opening…" : "Send to support"}</button>
                 <button type="button" className="btn" onClick={() => setHandoff(false)}>Cancel</button>

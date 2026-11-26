@@ -22,15 +22,22 @@ export async function createChatTicketAction(input: unknown) {
   return run(async () => {
     await enforceRate("chat-ticket", 10, 3600);
     const d = z.object({
-      name: z.string().trim().min(2, "Enter your name").max(100),
-      email: z.string().trim().email("Enter a valid email"),
+      name: z.string().trim().max(100).optional().nullable(),
+      email: z.string().trim().max(200).optional().nullable(),
       message: z.string().trim().min(5, "Tell us what you need").max(3000),
       transcript: z.string().max(4000).default(""),
       page: z.string().trim().max(200).regex(/^\/[a-zA-Z0-9/_-]*$/).optional(),
     }).parse(input);
+    // Signed-in people are not asked for their details: the ticket uses their account.
+    const { getActiveMembership } = await import("@/lib/auth");
+    const m = await getActiveMembership().catch(() => null);
+    const name = m?.user.name || d.name || "";
+    const email = m?.user.email || d.email || "";
+    if (name.length < 2) throw new Error("Enter your name.");
+    if (!z.string().email().safeParse(email).success) throw new Error("Enter a valid email.");
     const token = newChatToken();
     const body = d.transcript ? `${d.message}\n\n--- Chat before handoff ---\n${d.transcript}` : d.message;
-    const req = await createTicket({ name: d.name, email: d.email, topic: "Question", message: body, source: "CHAT", chatTokenHash: hashChatToken(token), pageUrl: d.page ?? null });
+    const req = await createTicket({ name, email, topic: "Question", message: body, source: "CHAT", chatTokenHash: hashChatToken(token), pageUrl: d.page ?? null });
     return { id: req.id, token, ref: refOf(req.id) };
   });
 }

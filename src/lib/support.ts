@@ -279,6 +279,21 @@ export async function resolveMerged(req: SupportRequest): Promise<SupportRequest
 
 const SWEEP_JOB = "support-sweep";
 
+/** Words that mean the customer has it covered, so no check-in is sent. */
+const HANDLING_RE = /\b(i'?m handling it|i am handling it|i got it|i've got it|got it now|figured it out|figured (it|this) out|fixed it|sorted|sorted it|all good now|no longer need|don'?t need help|resolved it|solved it|thanks,? i'?ll handle)\b/i;
+
+/** Check-in wording by what the ticket is about. Each one asks a single, specific question. */
+export function idleNudgeFor(topic: string, first: string): string {
+  const t = topic.toLowerCase();
+  if (/bill|invoice|payment|refund|charge|price/.test(t))
+    return `Hi ${first}, just checking in on your billing question. Did you get what you needed on the invoice or payment? If anything is still unclear, reply here and we'll sort it out.`;
+  if (/bug|error|broken|crash|issue/.test(t))
+    return `Hi ${first}, just checking in on the problem you reported. Is it working now, or are you still seeing it? A quick reply helps us know whether to keep looking.`;
+  if (/account|login|sign|password|access|invite|role/.test(t))
+    return `Hi ${first}, just checking in on your account question. Are you able to get in and do what you need now? If you're still stuck, reply here and we'll pick it straight back up.`;
+  return `Hi ${first}, just checking in. Did that sort things out? If you still need help, reply here and we'll pick it straight back up.`;
+}
+
 export async function runSupportSweep(): Promise<void> {
   try {
     const last = await prisma.jobRun.findFirst({ where: { name: SWEEP_JOB }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
@@ -301,8 +316,14 @@ export async function runSupportSweep(): Promise<void> {
       for (const r of cands) {
         const lastMsg = r.messages[0];
         if (!lastMsg || lastMsg.kind !== "REPLY" || lastMsg.createdAt > nudgeCut) continue;
+        // The customer said they're handling it: stop nudging. The far-future stamp keeps the sweep from picking it again or closing it.
+        const lastVisitor = await prisma.supportMessage.findFirst({ where: { requestId: r.id, kind: "VISITOR" }, orderBy: { createdAt: "desc" }, select: { body: true, createdAt: true } });
+        if (lastVisitor && lastVisitor.createdAt > lastMsg.createdAt && HANDLING_RE.test(lastVisitor.body)) {
+          await prisma.supportRequest.update({ where: { id: r.id }, data: { idleNudgedAt: new Date("2100-01-01T00:00:00Z") } });
+          continue;
+        }
         const first = r.name.trim().split(/\s+/)[0] || "there";
-        const body = `Hi ${first}, just checking in. Did that sort things out? If you still need help, reply here and we'll pick it straight back up.`;
+        const body = idleNudgeFor(r.topic, first);
         const m = emails.supportReply(r.name, refOf(r.id), body);
         const sent = await sendEmail(r.email, m.subject, m.text, { html: m.html, kind: "support-reply", workspaceId: r.workspaceId });
         await prisma.supportMessage.create({ data: { requestId: r.id, kind: "REPLY", authorName: "Maya", body, emailed: sent.ok } });

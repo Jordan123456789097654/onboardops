@@ -8,8 +8,15 @@ import { prisma } from "@/lib/prisma";
 import { getActiveMembership } from "@/lib/auth";
 import { entries as changelog } from "@/lib/changelog";
 import { getSupportConfig, hoursStatus } from "@/lib/support-config";
-import { bumpDaily } from "@/lib/support";
+import { bumpDaily, createTicket, refOf } from "@/lib/support";
 import { clientIp, hit } from "@/lib/rate-limit";
+import { hashChatToken, newChatToken } from "@/lib/chat-ticket";
+import { buildOutageView } from "@/lib/incidents";
+import { recordGap } from "@/lib/maya-ops";
+import { legalPages } from "@/lib/site";
+import { posts } from "@/lib/blog";
+import { playbooks } from "@/lib/playbooks";
+import { guides } from "@/lib/migrate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -58,6 +65,10 @@ const STOP = new Set([
 ]);
 
 const VALID_DOC_SLUGS = new Set(articles.map((a) => a.slug));
+const LEGAL_PATHS = new Set(["/legal", ...legalPages.map((p) => p.href)]);
+const BLOG_SLUGS = new Set(posts.map((p) => p.slug));
+const PLAYBOOK_SLUGS = new Set(playbooks.map((p) => p.slug));
+const MIGRATE_SLUGS = new Set(guides.map((g) => g.slug));
 const KNOWN_PUBLIC_PATHS = new Set([
   "/",
   "/pricing",
@@ -77,6 +88,11 @@ const KNOWN_PUBLIC_PATHS = new Set([
   "/register",
   "/login",
   "/tools",
+  "/tools/discipline-ladder",
+  "/tools/handbook-outline",
+  "/tools/policy-builder",
+  "/tools/should-i-write-this-up",
+  "/tools/write-up-helper",
   "/playbooks",
   "/migrate",
   "/launch",
@@ -85,12 +101,29 @@ const KNOWN_PUBLIC_PATHS = new Set([
   "/blog",
   "/partners",
   "/careers",
-  "/legal/privacy",
-  "/legal/terms",
-  "/legal/beta-terms",
-  "/legal/data-processing",
-  "/legal/cookies",
+  "/contact",
+  "/brand",
+  "/story",
+  "/founder",
+  "/legal",
 ]);
+
+/** Every page Maya may link to, grouped for the prompt so she knows what exists. */
+function linkableFacts(): string {
+  const legal = legalPages.map((p) => `${p.label} (${p.href})`).join("; ");
+  return [
+    "",
+    "=== PAGES YOU CAN LINK TO (use these exact paths) ===",
+    "Main pages: /pricing, /features, /solutions, /why, /security, /security/summary, /changelog, /roadmap, /faq, /about, /story, /team, /partners, /careers, /contact, /tutorial, /register, /login, /tools",
+    "Free tools: /tools/discipline-ladder, /tools/handbook-outline, /tools/policy-builder, /tools/should-i-write-this-up, /tools/write-up-helper",
+    `Legal pages (link them; never restate their wording): ${legal}`,
+    `Help articles: ${articles.map((a) => `/support/${a.slug} (${a.title})`).join("; ")}`,
+    `Blog posts: ${posts.map((p) => `/blog/${p.slug} (${p.title})`).join("; ")}`,
+    `Playbooks: ${playbooks.map((p) => `/playbooks/${p.slug} (${p.title})`).join("; ")}`,
+    `Migration guides: ${guides.map((g) => `/migrate/${g.slug} (${g.title})`).join("; ")}`,
+    "Use a link whenever it helps the visitor. Put it in your reply as a plain path like /legal/beta-terms, and also add it to suggestedLinks.",
+  ].join("\n");
+}
 
 function isAllowedHref(href: string): boolean {
   if (href === "https://status.onboardops.org" || href.startsWith("https://status.onboardops.org/")) {
@@ -99,9 +132,11 @@ function isAllowedHref(href: string): boolean {
   if (!href.startsWith("/") || href.startsWith("//") || !/^\/[a-zA-Z0-9/_-]*$/.test(href)) {
     return false;
   }
-  if (href.startsWith("/support/")) {
-    return VALID_DOC_SLUGS.has(href.slice("/support/".length));
-  }
+  if (href.startsWith("/support/")) return VALID_DOC_SLUGS.has(href.slice("/support/".length));
+  if (href.startsWith("/blog/")) return BLOG_SLUGS.has(href.slice("/blog/".length));
+  if (href.startsWith("/playbooks/")) return PLAYBOOK_SLUGS.has(href.slice("/playbooks/".length));
+  if (href.startsWith("/migrate/")) return MIGRATE_SLUGS.has(href.slice("/migrate/".length));
+  if (LEGAL_PATHS.has(href)) return true;
   return KNOWN_PUBLIC_PATHS.has(href);
 }
 
@@ -234,6 +269,7 @@ async function accountFacts(): Promise<string> {
     return [
       "",
       "=== SIGNED-IN USER (their own account only) ===",
+      `First name (use it warmly): ${m.user.name.trim().split(/\s+/)[0]}`,
       `Name: ${m.user.name}`,
       `Workspace: ${m.workspace.name}`,
       `Role in this workspace: ${m.role}`,
@@ -248,28 +284,63 @@ async function accountFacts(): Promise<string> {
   }
 }
 
-const SYSTEM_PROMPT = `You are Maya, the OnboardOps support assistant. You are warm, upbeat, and genuinely excited to help people get the most out of OnboardOps. You feel like a knowledgeable friend who works at the company — not a corporate FAQ bot.
+/** Who is signed in, for the greeting and for automatic hand-off. Null when nobody is signed in. */
+async function signedInUser(): Promise<{ id: string; name: string; email: string; firstName: string } | null> {
+  try {
+    const m = await getActiveMembership();
+    if (!m) return null;
+    return { id: m.userId, name: m.user.name, email: m.user.email, firstName: m.user.name.trim().split(/\s+/)[0] || "there" };
+  } catch {
+    return null;
+  }
+}
+
+/** The live status from the status page data: is anything down right now, and what the latest public update says. */
+async function liveStatusFacts(): Promise<string> {
+  try {
+    const v = await buildOutageView();
+    if (!v.active && v.incidents.length === 0) {
+      return "=== LIVE STATUS ===\nAll OnboardOps services are operating normally right now. If someone reports a problem, don't assume it's on our side. Ask what they see, and point them to https://status.onboardops.org.";
+    }
+    const lines = v.incidents.slice(0, 3).map((i) => {
+      const latest = i.updates?.[0];
+      return `- ${i.name} (${i.status}${i.startedAt ? `, started ${i.startedAt}` : ""})${latest ? `. Latest update: ${latest.message}` : ""}`;
+    });
+    return [
+      "=== LIVE STATUS (we are aware of this right now) ===",
+      v.incidents.length ? lines.join("\n") : `Services currently affected: ${v.services.join(", ") || "some services"}.`,
+      "When a visitor asks about login, data, errors or slowness, open with 'We're aware of an outage right now' and share only what the status page says. Do not guess at causes, do not describe any security incident beyond what the status page says, and point them to https://status.onboardops.org for the latest update.",
+    ].join("\n");
+  } catch {
+    return "";
+  }
+}
+
+const SYSTEM_PROMPT = `You are Maya, the OnboardOps support assistant. You are warm, kind, patient and genuinely glad to help. You feel like a caring, knowledgeable teammate who makes people feel looked after, not a corporate FAQ bot.
 
 Your personality:
-- Use casual, natural language. It's okay to say "Great question!", "Absolutely!", "Happy to help with that!" or start with a friendly acknowledgement.
-- Keep it human. Short paragraphs, plain English, no jargon. Use bullet points when listing steps or options.
-- If someone seems frustrated, acknowledge it warmly before answering. ("That can be a bit confusing — here's the deal:")
-- Use "you" and "your" freely. Make the person feel like you're talking directly to them.
-- When you don't know something, say so cheerfully and connect them to someone who can help.
+- Greet people by first name when you know it, and make it feel personal ("Hi Sam, good to see you!"). Never use a name you weren't given.
+- Be warm and encouraging. Acknowledge feelings first when someone is stressed or frustrated ("I'm sorry this is getting in your way, let's sort it out together.").
+- Keep it human and easy to scan. Short paragraphs, plain English, bullet points for steps.
+- Reply in the same language the visitor writes in. If they write in Spanish, answer in Spanish, and so on for any language.
+- When you don't know something, say so kindly and offer to get a teammate on it.
+- Never sound robotic, never pad with filler, and never repeat yourself.
 
 STRICT RULES (never break these):
-1. Answer ONLY using the public help docs, pricing summary, and security facts provided in the prompt. Never invent features, prices, or claims.
+1. Answer ONLY using the public help docs, pricing summary, security facts, live status and account facts provided in the prompt. Never invent features, prices, timelines or claims.
 2. NEVER claim SOC 2, ISO 27001, HIPAA, or any certification not explicitly stated in the context.
-3. NEVER give legal, HR, compliance, or employment-law advice. If asked, say something like "I'm not qualified to give legal advice on that — definitely worth chatting with a lawyer. But I can point you to our docs!"
-4. You can read only the signed-in visitor's own account facts when provided. You cannot change accounts or see other people's data. For account changes or problems, set escalate to true and offer to connect them with the team.
-5. Keep replies concise and easy to scan — a couple of sentences or short bullets is usually perfect. If the docs don't cover it, be honest, point to /support, and set escalate to true.
-6. Reply with ONLY a valid JSON object:
+3. NEVER give legal, HR, compliance, employment-law or security advice as fact. Say you can't give that advice and point to the right page or a teammate.
+4. NEVER promise refunds, outcomes, dates or fixes that the team hasn't confirmed. Only share what the live status or docs say.
+5. You see only the signed-in visitor's own account facts. You cannot change accounts or see anyone else's data, employee records or case text. For account changes or problems, escalate.
+6. If live status shows an incident, open by acknowledging it ("We're aware of an outage right now...") and share only what the status page says.
+7. Keep replies concise: a couple of sentences or short bullets is usually perfect. If the docs don't cover it, be honest, point to /support, and escalate.
+8. Reply with ONLY a valid JSON object:
 {
-  "reply": "friendly, helpful plain-text answer",
+  "reply": "warm, helpful plain-text answer",
   "escalate": true or false,
   "suggestedLinks": [{ "label": "short link label", "href": "/path or https://status.onboardops.org" }]
 }
-Set escalate to true when: the visitor asks for a person, needs an account change, asks something you can't answer confidently, or has a complaint/problem that needs human attention. Say something warm like "I'll get a teammate on this for you!" when escalating.
+Set escalate to true when: the visitor asks for a person, needs an account change, reports a bug or outage, is upset or in distress, or asks something you can't answer confidently. When you escalate, say something like "I've passed this to a teammate and they'll pick it up from here. You won't need to repeat yourself." Do not ask the visitor for their name or email; their details are handled for them.
 Include at most 3 relevant links. Every href MUST be a path from the context (like "/pricing", "/support/<slug>") or "https://status.onboardops.org".`;
 
 export async function POST(req: Request) {
@@ -312,7 +383,8 @@ export async function POST(req: Request) {
   const hours = hoursStatus(cfg);
   const hoursLine = `\n\n=== SUPPORT TEAM RIGHT NOW ===\n${hours.open ? "The support team is online." : `The support team is away${hours.nextOpenLabel ? `, back ${hours.nextOpenLabel}` : ""}. Tickets still reach them and they reply when back.`} Reply target: ${cfg.responseTarget}.`;
   if (messages.length === 1) await bumpDaily("chats");
-  const knowledge = buildPublicKnowledge(recentUserText) + (await changelogAndLegal()) + (await accountFacts()) + hoursLine;
+  const me = await signedInUser();
+  const knowledge = [buildPublicKnowledge(recentUserText), linkableFacts(), await changelogAndLegal(), await liveStatusFacts(), await accountFacts(), hoursLine].join("\n");
   const transcript = messages
     .map((m) => `${m.role === "user" ? "Visitor" : "Assistant"}: ${m.content}`)
     .join("\n");
@@ -345,14 +417,41 @@ export async function POST(req: Request) {
         seen.add(l.href);
         return true;
       })
-      .slice(0, 3);
+      .slice(0, 4);
 
     await bumpDaily("aiReplies");
     if (out.data.escalate) await bumpDaily("escalations");
+
+    // Signed-in people never have to fill in a form: when Maya hands off, the ticket is opened for them right away.
+    let ticket: { id: string; token: string; ref: string } | null = null;
+    if (out.data.escalate) {
+      // Logged for the weekly report, so the docs can be improved where Maya couldn't help.
+      const asked = [...messages].reverse().find((m) => m.role === "user")?.content;
+      if (asked) await recordGap(asked);
+    }
+    if (out.data.escalate && me) {
+      const lastQuestion = [...messages].reverse().find((m) => m.role === "user")?.content ?? "Asked to speak with support from the website chat.";
+      const transcript = messages.slice(-6).map((m) => `${m.role === "user" ? "Visitor" : "Assistant"}: ${m.content}`).join("\n");
+      const token = newChatToken();
+      const req = await createTicket({
+        name: me.name,
+        email: me.email,
+        topic: "Question",
+        message: transcript ? `${lastQuestion}\n\n--- Chat with Maya before handoff ---\n${transcript}` : lastQuestion,
+        source: "CHAT",
+        chatTokenHash: hashChatToken(token),
+        pageUrl: null,
+      });
+      ticket = { id: req.id, token, ref: refOf(req.id) };
+    }
+
     return NextResponse.json({
       reply: out.data.reply,
       escalate: out.data.escalate,
       suggestedLinks,
+      signedIn: !!me,
+      firstName: me?.firstName ?? null,
+      ticket,
     });
   } catch (e) {
     if (e instanceof AiError) {
@@ -371,4 +470,10 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+/** Who is signed in, so Maya can greet them by name before they type anything. Returns no account details beyond the first name. */
+export async function GET() {
+  const me = await signedInUser();
+  return NextResponse.json({ signedIn: !!me, firstName: me?.firstName ?? null }, { headers: { "Cache-Control": "no-store" } });
 }

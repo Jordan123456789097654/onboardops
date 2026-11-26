@@ -9,6 +9,7 @@ import { saveMaintenanceState } from "@/lib/maintenance";
 import { reconcileMaintenance } from "@/lib/betterstack";
 import { staffAudit } from "@/lib/platform";
 import { postDiscord } from "@/lib/discord-events";
+import { askMaya, draftReply, sentimentOf, summarizeTicket, takeGaps } from "@/lib/maya-ops";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -44,7 +45,7 @@ async function userIdByEmail(email: string): Promise<string> {
 
 async function handle(req: Request, path: string[], method: "GET" | "POST"): Promise<Response> {
   const route = path.join("/");
-  const system = route.startsWith("ops/signals") || route.startsWith("ops/digest") || route.startsWith("ops/tickets");
+  const system = route.startsWith("ops/signals") || route.startsWith("ops/digest") || route.startsWith("ops/tickets") || route.startsWith("ops/maya");
   const a = await authBot(req, { needsUser: !system });
   if (!a.ok) return a.res;
 
@@ -97,14 +98,38 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
         where: { createdAt: { gt: isNaN(since.getTime()) ? new Date(Date.now() - 60_000) : since }, kind: { in: ["VISITOR", "REPLY"] }, request: { discordThreadId: { not: null } } },
         orderBy: { createdAt: "asc" },
         take: 100,
-        select: { kind: true, authorName: true, body: true, createdAt: true, request: { select: { discordThreadId: true } } },
+        select: { kind: true, authorName: true, body: true, createdAt: true, request: { select: { id: true, discordThreadId: true } } },
       });
-      return json({ messages: rows.map((m) => ({ threadId: m.request.discordThreadId, kind: m.kind, author: m.authorName, body: m.body, at: m.createdAt.toISOString() })) });
+      return json({ messages: rows.map((m) => ({ ticketId: m.request.id, threadId: m.request.discordThreadId, kind: m.kind, author: m.authorName, body: m.body, at: m.createdAt.toISOString() })) });
     }
     if (method === "POST" && route === "ops/tickets/thread") {
       const d = z.object({ id: z.string().min(5), threadId: z.string().regex(/^\d{15,25}$/) }).parse(body);
       await prisma.supportRequest.update({ where: { id: d.id }, data: { discordThreadId: d.threadId } });
       return json({ ok: true });
+    }
+    // Maya's suggestions for staff. Nothing here is sent to a customer; the bot posts it for a person to approve.
+    if (method === "POST" && route === "ops/tickets/draft") {
+      const d = z.object({ id: z.string().min(5) }).parse(body);
+      return json({ draft: await draftReply(d.id) });
+    }
+    if (method === "POST" && route === "ops/tickets/summary") {
+      const d = z.object({ id: z.string().min(5) }).parse(body);
+      return json(await summarizeTicket(d.id));
+    }
+    if (method === "POST" && route === "ops/tickets/sentiment") {
+      const d = z.object({ text: z.string().max(2000) }).parse(body);
+      return json(await sentimentOf(d.text));
+    }
+    return json({ error: "Unknown route" }, 404);
+  }
+
+  if (route.startsWith("ops/maya")) {
+    if (method === "POST" && route === "ops/maya/ask") {
+      const d = z.object({ question: z.string().trim().min(3).max(500) }).parse(body);
+      return json(await askMaya(d.question));
+    }
+    if (method === "GET" && route === "ops/maya/gaps") {
+      return json({ items: await takeGaps() });
     }
     return json({ error: "Unknown route" }, 404);
   }
