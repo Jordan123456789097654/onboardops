@@ -49,3 +49,21 @@ export async function postDiscord(channel: DiscordChannel, n: DiscordNotice): Pr
     /* ignore */
   }
 }
+
+/** Copies a chat message into a ticket's Discord thread, so staff see the whole conversation there. Best effort: never blocks the chat. */
+export async function mirrorToTicketThread(threadId: string, author: string, body: string): Promise<void> {
+  try {
+    const url = process.env.DISCORD_WEBHOOK_SUPPORT?.trim();
+    if (!url || !HOOK_RE.test(url) || !/^\d{15,25}$/.test(threadId)) return;
+    const text = body.length > 1700 ? `${body.slice(0, 1699)}…` : body;
+    await fetch(`${url}?thread_id=${threadId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "OnboardOps tickets", content: `**${author.slice(0, 80)}:** ${text}`, allowed_mentions: { parse: [] } }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(4000),
+    });
+  } catch {
+    /* ignore: the message is already saved on the ticket */
+  }
+}

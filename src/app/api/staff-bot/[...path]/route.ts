@@ -132,7 +132,7 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
       const t = d.threadId
         ? await prisma.supportRequest.findUnique({ where: { discordThreadId: d.threadId } }).then((x) => x ?? (() => { throw new Error("This thread is not linked to a ticket."); })())
         : await ticketByRef(d.ref!);
-      const r = await replyTicketCore(staff, t.id, { body: d.body, markSolved: d.markSolved });
+      const r = await replyTicketCore(staff, t.id, { body: d.body, markSolved: d.markSolved, fromDiscord: true });
       return json({ ok: true, ref: refOf(t.id), emailed: r.emailed });
     }
 
