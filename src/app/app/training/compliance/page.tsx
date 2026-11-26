@@ -83,7 +83,7 @@ export default async function Compliance() {
                   <td className="td"><Link href={`/app/employee/${e.id}`} className="font-medium">{e.fullName}</Link> <span className="mono text-xs text-soft">{e.staffCode}</span></td>
                   {courses.map((c) => {
                     const en = e.enrollments.find((x) => x.courseId === c.id);
-                    return <td key={c.id} className={`td mono text-center text-xs ${en ? cell[en.status] : ""}`}>{en ? (en.status === "PASSED" ? `${en.bestScore}%` : en.status.replace("_", " ")) : ""}</td>;
+                    return <td key={c.id} className={`td mono text-center text-xs ${en ? cell[en.status] : ""}`}>{en ? <Link href={`/app/training/compliance/${en.id}`} className="block hover:underline">{en.status === "PASSED" ? `${en.bestScore}%` : en.status.replace("_", " ")}</Link> : ""}</td>;
                   })}
                 </tr>
               ))}

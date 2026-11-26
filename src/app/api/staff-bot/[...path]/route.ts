@@ -90,6 +90,17 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
       const rows = await prisma.supportRequest.findMany({ where: { discordThreadId: { not: null }, status: { not: "SOLVED" }, mergedIntoId: null }, orderBy: { createdAt: "asc" }, take: 200, select: { id: true, status: true, discordThreadId: true, assignee: true } });
       return json({ tickets: rows.map((t) => ({ id: t.id, ref: refOf(t.id), status: t.status, threadId: t.discordThreadId, assignee: t.assignee })) });
     }
+    if (method === "GET" && route === "ops/tickets/feed") {
+      // Chat messages on linked tickets since a time. The bot posts them into the ticket's Discord thread.
+      const since = new Date(q.get("since") ?? Date.now() - 60_000);
+      const rows = await prisma.supportMessage.findMany({
+        where: { createdAt: { gt: isNaN(since.getTime()) ? new Date(Date.now() - 60_000) : since }, kind: { in: ["VISITOR", "REPLY"] }, request: { discordThreadId: { not: null } } },
+        orderBy: { createdAt: "asc" },
+        take: 100,
+        select: { kind: true, authorName: true, body: true, createdAt: true, request: { select: { discordThreadId: true } } },
+      });
+      return json({ messages: rows.map((m) => ({ threadId: m.request.discordThreadId, kind: m.kind, author: m.authorName, body: m.body, at: m.createdAt.toISOString() })) });
+    }
     if (method === "POST" && route === "ops/tickets/thread") {
       const d = z.object({ id: z.string().min(5), threadId: z.string().regex(/^\d{15,25}$/) }).parse(body);
       await prisma.supportRequest.update({ where: { id: d.id }, data: { discordThreadId: d.threadId } });
@@ -132,7 +143,7 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
       const t = d.threadId
         ? await prisma.supportRequest.findUnique({ where: { discordThreadId: d.threadId } }).then((x) => x ?? (() => { throw new Error("This thread is not linked to a ticket."); })())
         : await ticketByRef(d.ref!);
-      const r = await replyTicketCore(staff, t.id, { body: d.body, markSolved: d.markSolved, fromDiscord: true });
+      const r = await replyTicketCore(staff, t.id, { body: d.body, markSolved: d.markSolved, });
       return json({ ok: true, ref: refOf(t.id), emailed: r.emailed });
     }
 

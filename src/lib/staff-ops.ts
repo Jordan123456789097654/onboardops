@@ -4,7 +4,6 @@ import { emails, sendEmail } from "./email";
 import { staffAudit, type Staff } from "./platform";
 import { can, getSupportConfig } from "./support-config";
 import { emitSupportEvent } from "./support";
-import { mirrorToTicketThread } from "./discord-events";
 
 /**
  * The staff actions that both the staff console and the Discord bot perform. The caller has already checked the staff member's role.
@@ -14,14 +13,13 @@ import { mirrorToTicketThread } from "./discord-events";
 const ownersOf = (workspaceId: string) => prisma.workspaceMember.findMany({ where: { workspaceId, role: "OWNER" }, include: { user: true } });
 
 /** Replies to a support ticket by email, and optionally marks it solved. */
-export async function replyTicketCore(staff: Staff, id: string, d: { body: string; markSolved: boolean; fromDiscord?: boolean }) {
+export async function replyTicketCore(staff: Staff, id: string, d: { body: string; markSolved: boolean }) {
   const req = await prisma.supportRequest.findUnique({ where: { id } });
   if (!req) throw new Error("Request not found.");
   const ref = req.id.slice(-8).toUpperCase();
   if (d.markSolved && !can(await getSupportConfig(), staff.role, "close")) throw new Error("You don't have permission to close tickets.");
   const m = emails.supportReply(req.name, ref, d.body);
   const sent = await sendEmail(req.email, m.subject, m.text, { html: m.html, kind: "support-reply", workspaceId: req.workspaceId });
-  if (req.discordThreadId && !d.fromDiscord) await mirrorToTicketThread(req.discordThreadId, staff.name, d.body);
   const updated = await prisma.$transaction(async (tx) => {
     await tx.supportMessage.create({ data: { requestId: id, kind: "REPLY", authorName: staff.name, body: d.body, emailed: sent.ok } });
     const u = await tx.supportRequest.update({
