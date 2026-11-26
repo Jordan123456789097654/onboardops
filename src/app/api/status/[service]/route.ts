@@ -1,9 +1,10 @@
 import { maybeReconcile, syncDegraded } from "@/lib/betterstack";
+import { checkAi, checkDiscord, checkMailAuth, checkOauth } from "@/lib/status-extra";
 import { checkApi, checkAuth, checkDatabase, checkDomains, checkEmail, checkFrontend, checkStorage } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
-const CHECKS = { frontend: checkFrontend, database: checkDatabase, auth: checkAuth, api: checkApi, email: checkEmail, storage: checkStorage, domains: checkDomains } as const;
+const CHECKS = { frontend: checkFrontend, database: checkDatabase, auth: checkAuth, api: checkApi, email: checkEmail, storage: checkStorage, domains: checkDomains, ai: checkAi, oauth: checkOauth, discord: checkDiscord, mailauth: checkMailAuth } as const;
 const HEADERS = { "Cache-Control": "no-store, no-cache, must-revalidate", "Access-Control-Allow-Origin": "*" };
 
 /** One service on its own: 200 when it is healthy, 503 when it is not. Monitors can watch each service separately. */
