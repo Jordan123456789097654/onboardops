@@ -77,10 +77,6 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
     return json({ days, newAccounts: accounts, newWorkspaces: workspaces, ticketsOpened: tickets, ticketsSolved: solved, newSubscribers: subscribers, newsletterIssues: issues });
   }
 
-  /* Everything below acts as a linked staff member, with that person's own role. */
-  const staff: Staff | null = await actorFor(a.call.discordId!);
-  if (!staff) return noLink();
-  const need = (roles: PlatformRole[]) => { if (!roles.includes(staff.role)) throw new Denied("Your staff role doesn't allow that."); };
   const body = method === "POST" ? ((await req.json().catch(() => ({}))) as Record<string, unknown>) : {};
   const q = new URL(req.url).searchParams;
 
@@ -102,6 +98,11 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
     return json({ error: "Unknown route" }, 404);
   }
 
+
+  /* Everything below acts as a linked staff member, with that person's own role. */
+  const staff: Staff | null = await actorFor(a.call.discordId!);
+  if (!staff) return noLink();
+  const need = (roles: PlatformRole[]) => { if (!roles.includes(staff.role)) throw new Denied("Your staff role doesn't allow that."); };
 
   try {
     /* ---- Support ---- */
