@@ -334,14 +334,18 @@ export async function setAnnouncementAction(input: unknown) {
     const d = z
       .object({
         enabled: z.boolean(),
-        message: z.string().trim().max(400).default(""),
+        message: z.string().trim().max(4000).default(""),
         tone: z.enum(["info", "warning", "success"]).default("info"),
         linkUrl: z.string().trim().max(300).optional().nullable(),
         linkLabel: z.string().trim().max(60).optional().nullable(),
         dismissible: z.boolean().default(true),
+        style: z.enum(["banner", "modal"]).default("banner"),
+        expiresAt: z.string().trim().max(40).optional().nullable(),
+        personalize: z.boolean().default(false),
       })
       .parse(input);
     if (d.enabled && d.message.length < 3) throw new Error("Enter an announcement message.");
+    if (d.expiresAt && isNaN(Date.parse(d.expiresAt))) throw new Error("Expiry time is not a valid date.");
     const state = await saveAnnouncementState({ ...d, updatedBy: staff.name });
     await prisma.$transaction((tx) =>
       staffAudit(tx, staff, {

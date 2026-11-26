@@ -6,6 +6,8 @@ import { PwaRegister } from "@/components/pwa";
 import { UpdateOverlay } from "@/components/update-overlay";
 import { MaintenanceGate } from "@/components/maintenance-gate";
 import { getAnnouncementState, getMaintenanceState } from "@/lib/maintenance";
+import { getCurrentUser } from "@/lib/auth";
+import { AnnouncementModal } from "@/components/announcement-modal";
 import { getStaff } from "@/lib/platform";
 import { buildOutageView } from "@/lib/incidents";
 import { OutageGate } from "@/components/outage-gate";
@@ -30,13 +32,15 @@ export const metadata: Metadata = {
 const themeScript = `document.documentElement.classList.add('js');(function(){try{var t=localStorage.getItem('oo-theme');if(t==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}else if(t!=='dark'){t='light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [maintenance, announcement, staff, outage] = await Promise.all([
+  const [maintenance, announcement, staff, outage, me] = await Promise.all([
     getMaintenanceState(),
     getAnnouncementState(),
     getStaff(),
     buildOutageView(),
+    getCurrentUser().catch(() => null),
   ]);
   const isOwner = staff?.role === "OWNER";
+  const firstName = me?.name?.trim().split(/\s+/)[0] || null;
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
@@ -49,6 +53,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <MaintenanceGate maintenance={maintenance} announcement={announcement} isOwner={isOwner}>
             <OutageGate outage={outage} isOwner={isOwner}>{children}</OutageGate>
           </MaintenanceGate>
+          {announcement.enabled && announcement.style === "modal" && (
+            <AnnouncementModal
+              message={announcement.message}
+              tone={announcement.tone}
+              linkUrl={announcement.linkUrl}
+              linkLabel={announcement.linkLabel}
+              dismissible={announcement.dismissible}
+              expiresAt={announcement.expiresAt}
+              personalize={announcement.personalize}
+              firstName={firstName}
+              stamp={announcement.updatedAt ?? "1"}
+            />
+          )}
           <ChatMount enabled={aiConfigured()} />
         </ToastProvider>
       </body>

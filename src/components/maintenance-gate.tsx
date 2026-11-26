@@ -106,6 +106,7 @@ export function MaintenanceGate({
 
   const showAnnouncement =
     announcement.enabled &&
+    announcement.style === "banner" &&
     announcement.message.trim().length > 0 &&
     (!announcement.dismissible || dismissedAt !== (announcement.updatedAt ?? "1"));
 

@@ -16,6 +16,11 @@ export function AnnouncementPanel({ initial, canManage }: { initial: Announcemen
   const [linkUrl, setLinkUrl] = useState(initial.linkUrl ?? "");
   const [linkLabel, setLinkLabel] = useState(initial.linkLabel ?? "");
   const [dismissible, setDismissible] = useState(initial.dismissible);
+  const [style, setStyle] = useState<"banner" | "modal">(initial.style);
+  // Entered as Eastern Standard Time. Stored with a fixed -05:00 offset.
+  const [expiresLocal, setExpiresLocal] = useState(initial.expiresAt ? "" : "");
+  const [personalize, setPersonalize] = useState(initial.personalize);
+  const expiresAt = expiresLocal ? `${expiresLocal.length === 16 ? expiresLocal + ":00" : expiresLocal}-05:00` : null;
 
   return (
     <>
@@ -47,7 +52,7 @@ export function AnnouncementPanel({ initial, canManage }: { initial: Announcemen
                   className="btn-danger"
                   disabled={pending}
                   onClick={() =>
-                    exec(() => setAnnouncementAction({ enabled: false, message, tone, linkUrl, linkLabel, dismissible }), {
+                    exec(() => setAnnouncementAction({ enabled: false, message, tone, linkUrl, linkLabel, dismissible, style, expiresAt, personalize }), {
                       success: "Announcement banner cleared",
                       onOk: () => router.refresh(),
                     })
@@ -101,15 +106,30 @@ export function AnnouncementPanel({ initial, canManage }: { initial: Announcemen
           <Field label="Optional link URL">
             <input className="input mono" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="/changelog or https://..." />
           </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Display">
+              <select className="input" value={style} onChange={(e) => setStyle(e.target.value as "banner" | "modal")}>
+                <option value="banner">Top banner (every page)</option>
+                <option value="modal">Pop-up in the middle of the screen</option>
+              </select>
+            </Field>
+            <Field label="Expires (Eastern Standard Time)">
+              <input className="input" type="datetime-local" value={expiresLocal} onChange={(e) => setExpiresLocal(e.target.value)} />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={personalize} onChange={(e) => setPersonalize(e.target.checked)} />
+            Greet each signed-in person by first name (pop-up only)
+          </label>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={dismissible} onChange={(e) => setDismissible(e.target.checked)} />
-            Allow users to dismiss this banner
+            Allow users to dismiss this announcement
           </label>
           <button
             className="btn-primary w-full"
             disabled={pending || message.trim().length < 3}
             onClick={() =>
-              exec(() => setAnnouncementAction({ enabled: true, message, tone, linkUrl, linkLabel, dismissible }), {
+              exec(() => setAnnouncementAction({ enabled: true, message, tone, linkUrl, linkLabel, dismissible, style, expiresAt, personalize }), {
                 success: "Announcement banner is now live",
                 onOk: () => {
                   setOpen(false);

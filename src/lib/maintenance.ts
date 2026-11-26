@@ -78,6 +78,12 @@ export type AnnouncementState = {
   linkUrl: string | null;
   linkLabel: string | null;
   dismissible: boolean;
+  /** "banner" = strip at the top of every page. "modal" = centered pop-up. */
+  style: "banner" | "modal";
+  /** ISO time after which the announcement stops showing. Null = until cleared. */
+  expiresAt: string | null;
+  /** When true, the modal opens with "Hi {first name}," for signed-in people. */
+  personalize: boolean;
   updatedBy: string | null;
   updatedAt: string | null;
 };
@@ -185,21 +191,26 @@ export async function getMaintenanceCached(): Promise<MaintenanceState> {
 export async function getAnnouncementState(): Promise<AnnouncementState> {
   try {
     const row = await prisma.jobRun.findUnique({ where: { id: ANNOUNCEMENT_ROW_ID } });
-    if (!row) return { enabled: false, message: "", tone: "info", linkUrl: null, linkLabel: null, dismissible: true, updatedBy: null, updatedAt: null };
+    if (!row) return { enabled: false, message: "", tone: "info", linkUrl: null, linkLabel: null, dismissible: true, style: "banner", expiresAt: null, personalize: false, updatedBy: null, updatedAt: null };
     const s = (row.summary ?? {}) as Record<string, unknown>;
     const tone = s.tone === "warning" || s.tone === "success" ? s.tone : "info";
+    const expiresAt = typeof s.expiresAt === "string" && !isNaN(Date.parse(s.expiresAt)) ? s.expiresAt : null;
+    const expired = expiresAt !== null && Date.now() >= Date.parse(expiresAt);
     return {
-      enabled: !!row.ok && typeof s.message === "string" && s.message.trim().length > 0,
+      enabled: !!row.ok && !expired && typeof s.message === "string" && s.message.trim().length > 0,
       message: typeof s.message === "string" ? s.message : "",
       tone,
       linkUrl: typeof s.linkUrl === "string" && s.linkUrl.trim() ? s.linkUrl.trim() : null,
       linkLabel: typeof s.linkLabel === "string" && s.linkLabel.trim() ? s.linkLabel.trim() : null,
       dismissible: s.dismissible !== false,
+      style: s.style === "modal" ? "modal" : "banner",
+      expiresAt,
+      personalize: s.personalize === true,
       updatedBy: typeof s.updatedBy === "string" ? s.updatedBy : null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : row.createdAt.toISOString(),
     };
   } catch {
-    return { enabled: false, message: "", tone: "info", linkUrl: null, linkLabel: null, dismissible: true, updatedBy: null, updatedAt: null };
+    return { enabled: false, message: "", tone: "info", linkUrl: null, linkLabel: null, dismissible: true, style: "banner", expiresAt: null, personalize: false, updatedBy: null, updatedAt: null };
   }
 }
 
@@ -210,6 +221,9 @@ export async function saveAnnouncementState(input: {
   linkUrl?: string | null;
   linkLabel?: string | null;
   dismissible?: boolean;
+  style?: "banner" | "modal";
+  expiresAt?: string | null;
+  personalize?: boolean;
   updatedBy: string;
 }): Promise<AnnouncementState> {
   const updatedAt = new Date().toISOString();
@@ -220,6 +234,9 @@ export async function saveAnnouncementState(input: {
     linkUrl: input.linkUrl?.trim() || null,
     linkLabel: input.linkLabel?.trim() || null,
     dismissible: input.dismissible !== false,
+    style: input.style === "modal" ? "modal" : "banner",
+    expiresAt: input.expiresAt?.trim() || null,
+    personalize: input.personalize === true,
     updatedBy: input.updatedBy,
     updatedAt,
   };
