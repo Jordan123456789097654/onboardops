@@ -17,6 +17,7 @@ export const RULES: Rule[] = [
   // Callers that are machines, from few addresses: allow bursts but still cap them.
   { prefix: "/api/scim", limit: 1200 },
   { prefix: "/api/support/inbound", limit: 600 },
+  { prefix: "/api/kener", limit: 600 },
   { prefix: "/api/betterstack", limit: 600 },
   { prefix: "/api/cron", limit: 60 },
   { prefix: "/api/v1", limit: 300 },

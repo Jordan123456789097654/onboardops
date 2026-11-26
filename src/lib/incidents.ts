@@ -1,11 +1,12 @@
 import { postDiscord } from "./discord-events";
+import { fetchLatestMonitorStatuses, kenerCall, kenerConfigured } from "./kener";
 import { prisma } from "./prisma";
 import { getOutageTest, INCIDENT_SETTINGS_ROW_ID } from "./maintenance";
 import { checkAllServices, type ComponentHealth } from "./status";
 import { open as unseal, seal } from "./secret-box";
 import { COLORS, sendEmbed, validWebhookUrl } from "./webhooks";
 
-/** Better Stack incidents & resource states. Kept by polling + webhook, read by the site on each request. */
+/** Status page (Kener) incidents & resource states. Kept by polling + webhook, read by the site on each request. */
 export const INCIDENTS_ROW_ID = "__platform_betterstack_incidents__";
 export const PLATFORM_INCIDENT_IDS = [INCIDENTS_ROW_ID, INCIDENT_SETTINGS_ROW_ID];
 
@@ -62,18 +63,28 @@ type IncidentStore = {
   syncedAt?: string;
 };
 
-const CORE_RESOURCE_NAMES = new Set(["database", "sign-in", "core api", "website"]);
+const CORE_RESOURCE_NAMES = new Set(["database", "sign-in", "sign in", "auth", "core api", "core-api", "api", "website", "frontend"]);
 const CORE_SERVICE_IDS = new Set(["database", "auth", "api", "frontend"]);
 
 const RESOURCE_TO_SERVICE: Record<string, string> = {
   website: "frontend",
+  frontend: "frontend",
+  web: "frontend",
   database: "database",
+  db: "database",
   "sign-in": "auth",
+  "sign in": "auth",
+  auth: "auth",
   "core api": "api",
+  "core-api": "api",
+  api: "api",
   email: "email",
   "file storage": "storage",
+  "file-storage": "storage",
+  storage: "storage",
   domains: "domains",
   "public api": "public_api",
+  "public-api": "public_api",
 };
 
 const CHECK_EVERY_MS = 25_000;
@@ -181,92 +192,128 @@ export async function notifyOpsAlert(embed: { title: string; description?: strin
   return sendEmbed(s.webhookUrl, { ...embed, footer: "OnboardOps Incident Alerts" });
 }
 
-/* ---------------- Better Stack live sync ---------------- */
+/* ---------------- Kener v4 live sync ---------------- */
 
-async function syncFromBetterStack(force = false) {
-  const token = process.env.BETTERSTACK_API_TOKEN?.trim();
-  if (!token || (!force && Date.now() - lastCheck < CHECK_EVERY_MS)) return;
+function mapKenerImpact(impact?: string): string {
+  const k = (impact ?? "").toUpperCase();
+  if (k === "DEGRADED") return "degraded";
+  if (k === "MAINTENANCE") return "maintenance";
+  if (k === "UP") return "operational";
+  return "downtime";
+}
+
+function mapKenerPoint(raw?: string | null): string {
+  const k = (raw ?? "").toUpperCase();
+  if (k === "DOWN") return "downtime";
+  if (k === "DEGRADED") return "degraded";
+  if (k === "MAINTENANCE") return "maintenance";
+  return "operational";
+}
+
+async function syncFromKener(force = false) {
+  if (!kenerConfigured() || (!force && Date.now() - lastCheck < CHECK_EVERY_MS)) return;
   if (checking) return checking;
   lastCheck = Date.now();
   checking = (async () => {
     try {
-      const pageId = process.env.BETTERSTACK_STATUS_PAGE_ID?.trim() || "272831";
-      const headers = { Authorization: `Bearer ${token}`, "User-Agent": "OnboardOps/1.0" };
-      const [repRes, resRes] = await Promise.all([
-        fetch(`https://uptime.betterstack.com/api/v2/status-pages/${pageId}/status-reports?per_page=20&sort=-starts_at`, { headers, signal: AbortSignal.timeout(3500) }),
-        fetch(`https://uptime.betterstack.com/api/v3/status-pages/${pageId}/resources?per_page=100`, { headers, signal: AbortSignal.timeout(3500) }).catch(() => null),
+      const [incRes, monRes] = await Promise.all([
+        kenerCall("GET", "/incidents", undefined, 4000),
+        kenerCall("GET", "/monitors", undefined, 4000).catch(() => null),
       ]);
-      if (!repRes.ok) return;
+      if (!incRes.ok) return;
 
-      const repJson = (await repRes.json().catch(() => ({}))) as { data?: { id: unknown; attributes: Record<string, unknown> }[] };
-      const resJson = resRes && resRes.ok ? ((await resRes.json().catch(() => ({}))) as { data?: { id: unknown; attributes: { public_name?: string; status?: string } }[] }) : null;
+      const rawIncidents = (incRes.json.incidents ?? []) as {
+        id: number;
+        title?: string;
+        start_date_time: number;
+        end_date_time: number | null;
+        state?: string;
+        incident_source?: string;
+        monitors?: { monitor_tag: string; impact?: string }[];
+      }[];
 
-      const resourceNameById = new Map<string, string>();
-      const resources: ResourceState[] = [];
-      for (const r of resJson?.data ?? []) {
-        const name = str(r.attributes?.public_name, 80);
-        const status = str(r.attributes?.status, 32)?.toLowerCase() ?? "operational";
-        if (name) {
-          resourceNameById.set(String(r.id), name);
-          resources.push({ name, status });
-        }
+      const rawMonitors = (monRes && monRes.ok ? (monRes.json.monitors ?? []) : []) as {
+        tag: string;
+        name?: string;
+        status?: string;
+        default_status?: string;
+        is_hidden?: string;
+      }[];
+
+      const monitorNameByTag = new Map<string, string>();
+      for (const m of rawMonitors) {
+        const name = str(m.name, 80) ?? m.tag;
+        monitorNameByTag.set(m.tag, name);
       }
 
-      const activeReports = (repJson.data ?? []).filter((r) => isActiveOutageReport(r.attributes ?? {}));
+      const nowMs = Date.now();
+      const activeIncidents = rawIncidents.filter((inc) => {
+        const st = String(inc.state ?? "").toUpperCase();
+        if (st === "RESOLVED") return false;
+        if (inc.end_date_time != null && inc.end_date_time * 1000 <= nowMs) return false;
+        return true;
+      });
 
-      // Fetch live status_updates timeline for open reports (usually 0-2 reports) in parallel.
-      const updatesByReport = new Map<string, IncidentUpdate[]>();
-      await Promise.all(
-        activeReports.slice(0, 4).map(async (r) => {
-          const rid = String(r.id).slice(0, 64);
+      const [latestPoints, ...commentResults] = await Promise.all([
+        rawMonitors.length
+          ? fetchLatestMonitorStatuses(rawMonitors.filter((m) => m.is_hidden !== "YES" && m.status !== "INACTIVE").map((m) => m.tag))
+          : Promise.resolve(new Map<string, { status: string; checkedAt: string | null }>()),
+        ...activeIncidents.slice(0, 4).map(async (inc) => {
+          const rid = String(inc.id).slice(0, 64);
           try {
-            const ur = await fetch(`https://uptime.betterstack.com/api/v2/status-pages/${pageId}/status-reports/${rid}/status-updates?per_page=15`, {
-              headers,
-              signal: AbortSignal.timeout(2500),
-            });
-            if (!ur.ok) return;
-            const uj = (await ur.json().catch(() => ({}))) as { data?: { id: unknown; attributes?: { message?: string; published_at?: string } }[] };
-            const list: IncidentUpdate[] = (uj.data ?? [])
-              .map((u) => ({
-                id: String(u.id).slice(0, 64),
-                message: str(u.attributes?.message, 1500) ?? "",
-                publishedAt: str(u.attributes?.published_at, 64),
+            const cr = await kenerCall("GET", `/incidents/${rid}/comments`, undefined, 2500);
+            if (!cr.ok) return [rid, [] as IncidentUpdate[]] as const;
+            const rawComments = (cr.json.comments ?? []) as { id: number; comment?: string; timestamp?: number; created_at?: string }[];
+            const list: IncidentUpdate[] = rawComments
+              .map((c) => ({
+                id: String(c.id).slice(0, 64),
+                message: str(c.comment, 1500) ?? "",
+                publishedAt: c.timestamp ? new Date(c.timestamp * 1000).toISOString() : str(c.created_at, 64),
               }))
               .filter((u) => u.message.length > 0)
               .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
               .slice(0, 8);
-            updatesByReport.set(rid, list);
+            return [rid, list] as const;
           } catch {
-            // non-fatal: keep incident without updates
+            return [rid, [] as IncidentUpdate[]] as const;
           }
-        })
-      );
+        }),
+      ]);
+
+      const updatesByIncident = new Map<string, IncidentUpdate[]>(commentResults);
+
+      const resources: ResourceState[] = rawMonitors
+        .filter((m) => m.is_hidden !== "YES" && m.status !== "INACTIVE")
+        .map((m) => ({
+          name: monitorNameByTag.get(m.tag) ?? m.tag,
+          status: mapKenerPoint(latestPoints.get(m.tag)?.status ?? m.default_status),
+        }));
 
       const statusPage: Record<string, OpenIncident> = {};
-      for (const r of activeReports) {
-        const a = r.attributes ?? {};
-        const id = String(r.id).slice(0, 64);
-        const rawAffected = Array.isArray(a.affected_resources) ? (a.affected_resources as { status_page_resource_id?: unknown; status?: string }[]) : [];
+      for (const inc of activeIncidents) {
+        const id = String(inc.id).slice(0, 64);
+        const rawAffected = Array.isArray(inc.monitors) ? inc.monitors : [];
         const affected: IncidentAffected[] = rawAffected
           .map((x) => ({
-            name: resourceNameById.get(String(x.status_page_resource_id ?? "")) ?? "",
-            status: String(x.status ?? a.aggregate_state ?? "downtime").toLowerCase(),
+            name: monitorNameByTag.get(x.monitor_tag) ?? x.monitor_tag,
+            status: mapKenerImpact(x.impact),
           }))
           .filter((x) => x.name.length > 0);
-        const updates = updatesByReport.get(id) ?? [];
+        const updates = updatesByIncident.get(id) ?? [];
         const latestMsg = updates[0]?.message ?? null;
-        const fallbackCause = affected.length > 0
-          ? `${affected.map((x) => x.name).slice(0, 4).join(", ")}${affected.length > 4 ? ` +${affected.length - 4} more` : ""}`
-          : rawAffected.length > 0
-            ? `${rawAffected.length} service${rawAffected.length === 1 ? "" : "s"} affected`
+        const fallbackCause =
+          affected.length > 0
+            ? `${affected.map((x) => x.name).slice(0, 4).join(", ")}${affected.length > 4 ? ` +${affected.length - 4} more` : ""}`
             : null;
+        const hasDown = affected.some((x) => x.status === "downtime");
+        const status = hasDown || affected.length === 0 ? "downtime" : "degraded";
         statusPage[id] = {
           id,
-          name: str(a.title, 200) ?? "Service incident",
-          cause: str(a.message, 400) ?? (latestMsg ? latestMsg.slice(0, 300) : fallbackCause),
-          startedAt: str(a.starts_at, 64),
-          status: str(a.aggregate_state, 32)?.toLowerCase() ?? "downtime",
-          reportType: str(a.report_type, 32)?.toLowerCase() ?? "automatic",
+          name: str(inc.title, 200) ?? "Service incident",
+          cause: latestMsg ? latestMsg.slice(0, 300) : fallbackCause,
+          startedAt: inc.start_date_time ? new Date(inc.start_date_time * 1000).toISOString() : null,
+          status,
+          reportType: inc.incident_source === "API" || inc.incident_source === "MANUAL" ? "manual" : "automatic",
           affected,
           updates,
         };
@@ -284,7 +331,7 @@ async function syncFromBetterStack(force = false) {
       };
       await prisma.jobRun.upsert({
         where: { id: INCIDENTS_ROW_ID },
-        create: { id: INCIDENTS_ROW_ID, name: "platform:betterstack-incidents", ok: true, summary, durationMs: 0 },
+        create: { id: INCIDENTS_ROW_ID, name: "platform:statuspage-incidents", ok: true, summary, durationMs: 0 },
         update: { summary },
       });
 
@@ -293,7 +340,7 @@ async function syncFromBetterStack(force = false) {
         if (!prevSp[id]) {
           await notifyOpsAlert({
             title: `Incident opened: ${inc.name}`,
-            description: inc.cause ?? "Better Stack reported an active service incident.",
+            description: inc.cause ?? "The status page reported an active service incident.",
             color: inc.status === "degraded" ? COLORS.warn : COLORS.danger,
             fields: [
               { name: "Status", value: inc.status, inline: true },
@@ -307,20 +354,20 @@ async function syncFromBetterStack(force = false) {
         if (!statusPage[id]) {
           await notifyOpsAlert({
             title: `Incident resolved: ${old.name}`,
-            description: "The Better Stack status report is no longer active.",
+            description: "The status page incident is no longer active.",
             color: COLORS.ok,
           }).catch(() => {});
         }
       }
     } catch {
-      // Better Stack unreachable: keep what we have. The site must never break because of this.
+      // Status page unreachable: keep what we have. The site must never break because of this.
     }
   })().finally(() => { checking = null; });
   return checking;
 }
 
 export async function getIncidentSnapshot(opts?: { force?: boolean }): Promise<{ incidents: OpenIncident[]; resources: ResourceState[]; syncedAt: string | null }> {
-  await syncFromBetterStack(!!opts?.force);
+  await syncFromKener(!!opts?.force);
   try {
     const row = await prisma.jobRun.findUnique({ where: { id: INCIDENTS_ROW_ID } });
     const s = (row?.summary ?? {}) as IncidentStore;
@@ -468,45 +515,73 @@ export async function buildOutageView(opts?: { forceSync?: boolean }): Promise<O
   };
 }
 
-/* ---------------- Better Stack incident webhook ---------------- */
+/* ---------------- Status page incident webhook (Kener v4 + legacy) ---------------- */
 
-/** Applies one Better Stack incident webhook. Open incidents are kept separately from status-page polling; resolved ones are removed. */
+/** Applies one Kener alert webhook (or legacy Better Stack webhook). Open incidents are kept separately from polling; resolved ones are removed. */
 export async function applyIncidentWebhook(body: unknown) {
-  const data = (body as { data?: { id?: unknown; attributes?: Record<string, unknown> } })?.data;
-  const id = data?.id != null ? String(data.id).slice(0, 64) : null;
-  const a = data?.attributes ?? {};
+  const obj = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const isKener = obj.alert_id != null || obj.alert_name != null || obj.alert_for != null || obj.is_resolved != null;
+
+  let id: string | null = null;
+  let resolved = false;
+  let name = "Service incident";
+  let cause: string | null = null;
+  let startedAt: string | null = null;
+  let status = "downtime";
+  let affected: IncidentAffected[] | undefined;
+
+  if (isKener) {
+    id = obj.alert_id != null ? `kener-${String(obj.alert_id).slice(0, 56)}` : str(obj.alert_for, 64);
+    const alertStatus = String(obj.alert_status ?? "").toUpperCase();
+    resolved = obj.is_resolved === true || alertStatus === "RESOLVED" || alertStatus === "CLOSED" || alertStatus === "UP";
+    const target = str(obj.alert_for, 80);
+    name = str(obj.alert_name, 160) ?? (target ? `${target} alert` : "Service incident");
+    cause = str(obj.alert_message, 400);
+    startedAt = str(obj.alert_timestamp, 64) ?? new Date().toISOString();
+    const sev = String(obj.alert_severity ?? "").toUpperCase();
+    status = sev === "WARNING" ? "degraded" : "downtime";
+    if (target) affected = [{ name: target, status }];
+  } else {
+    const data = obj.data as { id?: unknown; attributes?: Record<string, unknown> } | undefined;
+    id = data?.id != null ? String(data.id).slice(0, 64) : null;
+    const a = data?.attributes ?? {};
+    resolved = !!str(a.resolved_at) || String(a.status ?? "").toLowerCase() === "resolved";
+    name = str(a.name) ?? str(a.url) ?? "Service incident";
+    cause = str(a.cause);
+    startedAt = str(a.started_at);
+    status = str(a.status) ?? "downtime";
+  }
+
   if (!id) return { ok: false as const };
   const row = await prisma.jobRun.findUnique({ where: { id: INCIDENTS_ROW_ID } });
   const prev = (row?.summary ?? {}) as IncidentStore;
   const webhook = { ...(prev.webhook ?? {}) };
-  const resolved = !!str(a.resolved_at) || String(a.status ?? "").toLowerCase() === "resolved";
-  const name = str(a.name) ?? str(a.url) ?? "Service incident";
-  const cause = str(a.cause);
   if (resolved) {
     delete webhook[id];
-    await notifyOpsAlert({ title: `Monitor recovered: ${name}`, description: "Better Stack webhook reported this monitor as resolved.", color: COLORS.ok }).catch(() => {});
+    await notifyOpsAlert({ title: `Monitor recovered: ${name}`, description: "Status page webhook reported this monitor as resolved.", color: COLORS.ok }).catch(() => {});
   } else {
     const isNew = !webhook[id];
     webhook[id] = {
       id,
       name,
       cause,
-      startedAt: str(a.started_at),
-      status: str(a.status) ?? "downtime",
+      startedAt,
+      status,
       reportType: "webhook",
+      ...(affected ? { affected } : {}),
     };
     if (isNew) {
       await notifyOpsAlert({
         title: `Monitor down: ${name}`,
-        description: cause ?? "Better Stack webhook reported downtime.",
-        color: COLORS.danger,
+        description: cause ?? "Status page webhook reported downtime.",
+        color: status === "degraded" ? COLORS.warn : COLORS.danger,
       }).catch(() => {});
     }
   }
   const summary: IncidentStore = { statusPage: prev.statusPage ?? {}, webhook, resources: prev.resources ?? [], syncedAt: prev.syncedAt };
   await prisma.jobRun.upsert({
     where: { id: INCIDENTS_ROW_ID },
-    create: { id: INCIDENTS_ROW_ID, name: "platform:betterstack-incidents", ok: true, summary, durationMs: 0 },
+    create: { id: INCIDENTS_ROW_ID, name: "platform:statuspage-incidents", ok: true, summary, durationMs: 0 },
     update: { summary },
   });
   return { ok: true as const, open: Object.keys(webhook).length };

@@ -1,32 +1,54 @@
 "use client";
 import { useEffect, useState } from "react";
 
-/** Live status badge from the status page. Follows the site's light or dark theme. */
+type BadgeState = "ok" | "degraded" | "down";
+
+/** Live status badge backed by our status feed and linked to status.onboardops.org. Follows light/dark theme automatically. */
 export function StatusBadge() {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  const [state, setState] = useState<BadgeState>("ok");
 
   useEffect(() => {
-    const read = () => setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
-    read();
-    const mo = new MutationObserver(read);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => mo.disconnect();
+    let alive = true;
+    fetch("/api/incidents", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { active?: boolean; mode?: string } | null) => {
+        if (!alive || !d) return;
+        if (d.active && d.mode === "lock") setState("down");
+        else if (d.active) setState("degraded");
+        else setState("ok");
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  const dot =
+    state === "down"
+      ? "bg-rose-500"
+      : state === "degraded"
+        ? "bg-amber-500"
+        : "bg-emerald-500";
+  const label =
+    state === "down"
+      ? "Service disruption"
+      : state === "degraded"
+        ? "Partial degradation"
+        : "All systems operational";
+
   return (
-    <span className="inline-block h-[30px] w-[250px] max-w-full">
-      {theme && (
-        <iframe
-          key={theme}
-          src={`https://status.onboardops.org/badge?theme=${theme}`}
-          title="OnboardOps system status"
-          width={250}
-          height={30}
-          loading="lazy"
-          scrolling="no"
-          style={{ border: 0, colorScheme: "normal", maxWidth: "100%" }}
-        />
-      )}
-    </span>
+    <a
+      href="https://status.onboardops.org"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex h-[30px] items-center gap-2 rounded-full border border-line bg-surface px-3 text-xs font-medium text-ink transition-colors hover:border-ink/30 hover:bg-muted"
+      title="View live system status on status.onboardops.org"
+    >
+      <span className="relative flex h-2 w-2">
+        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-50 ${dot}`} />
+        <span className={`relative inline-flex h-2 w-2 rounded-full ${dot}`} />
+      </span>
+      <span>{label}</span>
+    </a>
   );
 }

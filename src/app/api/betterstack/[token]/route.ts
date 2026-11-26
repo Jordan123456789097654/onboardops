@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Better Stack incident webhook. The secret is in the URL, because Better Stack webhooks cannot send custom headers. */
 export async function POST(req: Request, { params }: { params: { token: string } }) {
   const { token } = params;
-  const expected = process.env.BETTERSTACK_WEBHOOK_SECRET?.trim() ?? "";
+  const expected = process.env.KENER_WEBHOOK_SECRET?.trim() || process.env.BETTERSTACK_WEBHOOK_SECRET?.trim() || "";
   const actualBuf = Buffer.from(token);
   const expectedBuf = Buffer.from(expected);
   if (!expected || actualBuf.length !== expectedBuf.length || !timingSafeEqual(actualBuf, expectedBuf)) {

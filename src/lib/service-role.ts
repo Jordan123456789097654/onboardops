@@ -6,7 +6,7 @@
  * Moved route groups on api.onboardops.org:
  *  - A: Public API v1 (/v1/*)
  *  - B (API probes only): /status, /status/*, /health  (note: /api/status/frontend stays live on web too)
- *  - C: Webhooks & cron (/betterstack/*, /cron/*)
+ *  - C: Webhooks & cron (/kener/*, /betterstack/*, /cron/*)
  *  - D (unauthenticated public feeds/media): /calendar/*, /testimonial-photo/*, /track
  */
 
@@ -71,6 +71,7 @@ function matchMovedCleanPath(clean: string): { cors: boolean } | null {
   if (clean === "/health" || clean.startsWith("/health/")) return { cors: true };
   if (clean === "/track") return { cors: true };
   if (clean.startsWith("/testimonial-photo/")) return { cors: true };
+  if (clean.startsWith("/kener/")) return { cors: false };
   if (clean.startsWith("/betterstack/")) return { cors: false };
   if (clean.startsWith("/cron/")) return { cors: false };
   if (clean.startsWith("/calendar/")) return { cors: false };

@@ -1,6 +1,6 @@
 import { requireStaffPage, SUPPORT_STAFF } from "@/lib/platform";
 import { PageHeader } from "@/components/ui";
-import { betterstackConfigured, bsOverview, STATUS_PAGE_URL, type BsMonitor, type BsReport, type BsResource } from "@/lib/betterstack";
+import { kenerConfigured, kenerOverview, STATUS_PAGE_URL, type StatusMonitor, type StatusReport, type StatusResource } from "@/lib/kener";
 import { getOutageTest } from "@/lib/maintenance";
 import { getIncidentSettings } from "@/lib/incidents";
 import { aiConfigured } from "@/lib/ai/groq";
@@ -11,18 +11,18 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminStatus() {
   const staff = await requireStaffPage(SUPPORT_STAFF);
-  const configured = betterstackConfigured();
+  const configured = kenerConfigured();
   const [test, settings] = await Promise.all([getOutageTest(), getIncidentSettings()]);
-  let data: { resources: BsResource[]; reports: BsReport[]; monitors: BsMonitor[] } = { resources: [], reports: [], monitors: [] };
+  let data: { resources: StatusResource[]; reports: StatusReport[]; monitors: StatusMonitor[] } = { resources: [], reports: [], monitors: [] };
   let error = "";
   if (configured) {
-    try { data = await bsOverview(); } catch (e) { error = e instanceof Error ? e.message : "Could not reach Better Stack."; }
+    try { data = await kenerOverview(); } catch (e) { error = e instanceof Error ? e.message : "Could not reach Kener status page."; }
   }
   return (
     <>
       <PageHeader
         title="Status & Incidents"
-        sub="Manage Better Stack incidents, long-form status updates, in-app outage screen overrides, staff Discord/Slack alerts, and outage drills."
+        sub="Manage status.onboardops.org (Kener) incidents, long-form status updates, in-app outage screen overrides, staff Discord/Slack alerts, and outage drills."
       />
       <StatusManager
         configured={configured}

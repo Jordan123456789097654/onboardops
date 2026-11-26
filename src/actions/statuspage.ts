@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { OWNER_ONLY, requireStaff, staffAudit } from "@/lib/platform";
-import { bsCreateIncident, bsDeleteReport, bsEndMaintenance, bsOverview, bsScheduleMaintenance, bsUpdateIncident, betterstackConfigured } from "@/lib/betterstack";
+import { kenerConfigured, kenerCreateIncident, kenerDeleteReport, kenerEndMaintenance, kenerOverview, kenerScheduleMaintenance, kenerUpdateIncident } from "@/lib/kener";
 import { MAX_OUTAGE_MINUTES, OUTAGE_SERVICES, startOutageTest, stopOutageTest } from "@/lib/maintenance";
 import { notifyOpsAlert, saveIncidentOverride, saveOpsAlertWebhook } from "@/lib/incidents";
 import { aiConfigured, chat } from "@/lib/ai/groq";
@@ -13,7 +13,7 @@ import { run } from "./_util";
 /** The status page manager. Site owner only, because what is posted here is public. Every change is written to the staff audit log. */
 async function owner() {
   const staff = await requireStaff(OWNER_ONLY);
-  if (!betterstackConfigured()) throw new Error("BETTERSTACK_API_TOKEN is not set in the hosting settings, so the status page cannot be reached yet.");
+  if (!kenerConfigured()) throw new Error("KENER_API_KEY is not set in the hosting settings, so the status page cannot be reached yet.");
   return staff;
 }
 const audit = (staff: { id?: string; email: string; name: string; role: string }, action: string, id: string, summary: string) =>
@@ -21,9 +21,10 @@ const audit = (staff: { id?: string; email: string; name: string; role: string }
 
 const title = z.string().trim().min(3, "Give it a title").max(160);
 const message = z.string().trim().min(3, "Write a message").max(4000, "Keep the message under 4,000 characters");
-const ids = z.array(z.string().regex(/^\d+$/)).min(1, "Pick at least one service").max(40);
+const ids = z.array(z.string().trim().min(1).max(100)).min(1, "Pick at least one service").max(40);
+const reportIdSchema = z.string().regex(/^(m-)?\d+$/);
 
-/** The outage test only changes what the health checks report, so it does not need Better Stack to be connected. */
+/** The outage test only changes what the health checks report, so it does not need Kener to be connected. */
 export async function startOutageTestAction(input: unknown) {
   return run(async () => {
     const staff = await requireStaff(OWNER_ONLY);
@@ -75,7 +76,7 @@ export async function testOpsAlertWebhookAction() {
     const staff = await requireStaff(OWNER_ONLY);
     const r = await notifyOpsAlert({
       title: "Test incident alert from OnboardOps Staff Console",
-      description: `Sent by ${staff.name} (${staff.email}) to verify Discord/Slack/Teams delivery for Better Stack outages and status updates.`,
+      description: `Sent by ${staff.name} (${staff.email}) to verify Discord/Slack/Teams delivery for status page outages and incident updates.`,
       color: COLORS.info,
       fields: [
         { name: "Status page", value: "https://status.onboardops.org", inline: true },
@@ -134,7 +135,7 @@ export async function draftIncidentUpdateAction(input: unknown) {
 export async function testStatusConnectionAction() {
   return run(async () => {
     const staff = await owner();
-    const o = await bsOverview();
+    const o = await kenerOverview();
     await audit(staff, "STATUSPAGE_TESTED", "connection", `Status page connection tested (${o.resources.length} services)`);
     return { services: o.resources.length };
   });
@@ -144,7 +145,7 @@ export async function createIncidentAction(input: unknown) {
   return run(async () => {
     const staff = await owner();
     const d = z.object({ title, message, resourceIds: ids, status: z.enum(["degraded", "downtime"]), notify: z.boolean() }).parse(input);
-    const id = await bsCreateIncident(d);
+    const id = await kenerCreateIncident(d);
     await audit(staff, "STATUSPAGE_INCIDENT", id, `Posted ${d.status} incident: ${d.title}`);
     await notifyOpsAlert({
       title: `Manual incident posted: ${d.title}`,
@@ -164,8 +165,8 @@ export async function createIncidentAction(input: unknown) {
 export async function updateIncidentAction(input: unknown) {
   return run(async () => {
     const staff = await owner();
-    const d = z.object({ id: z.string().regex(/^\d+$/), message, status: z.enum(["degraded", "downtime", "resolved"]), notify: z.boolean() }).parse(input);
-    await bsUpdateIncident(d.id, d.message, d.status, d.notify);
+    const d = z.object({ id: reportIdSchema, message, status: z.enum(["degraded", "downtime", "resolved"]), notify: z.boolean() }).parse(input);
+    await kenerUpdateIncident(d.id, d.message, d.status, d.notify);
     await audit(staff, d.status === "resolved" ? "STATUSPAGE_RESOLVED" : "STATUSPAGE_UPDATE", d.id, `Incident ${d.id}: ${d.status} (${d.message.slice(0, 80)})`);
     await notifyOpsAlert({
       title: d.status === "resolved" ? `Incident #${d.id} marked resolved` : `Incident #${d.id} updated (${d.status})`,
@@ -186,7 +187,7 @@ export async function scheduleMaintenanceAction(input: unknown) {
     const s = Date.parse(d.startsAt), e = Date.parse(d.endsAt);
     if (isNaN(s) || isNaN(e)) throw new Error("Enter a start and an end time");
     if (e <= s) throw new Error("The end must be after the start");
-    const id = await bsScheduleMaintenance({ ...d, startsAt: new Date(s).toISOString(), endsAt: new Date(e).toISOString() });
+    const id = await kenerScheduleMaintenance({ ...d, startsAt: new Date(s).toISOString(), endsAt: new Date(e).toISOString() });
     await audit(staff, "STATUSPAGE_MAINTENANCE", id, `Scheduled maintenance: ${d.title}`);
     revalidatePath("/admin/status");
     return { id };
@@ -196,8 +197,8 @@ export async function scheduleMaintenanceAction(input: unknown) {
 export async function endMaintenanceAction(id: string) {
   return run(async () => {
     const staff = await owner();
-    z.string().regex(/^\d+$/).parse(id);
-    await bsEndMaintenance(id);
+    reportIdSchema.parse(id);
+    await kenerEndMaintenance(id);
     await audit(staff, "STATUSPAGE_MAINTENANCE_ENDED", id, `Ended maintenance report ${id}`);
     revalidatePath("/admin/status");
     return undefined;
@@ -207,8 +208,8 @@ export async function endMaintenanceAction(id: string) {
 export async function deleteStatusReportAction(id: string) {
   return run(async () => {
     const staff = await owner();
-    z.string().regex(/^\d+$/).parse(id);
-    await bsDeleteReport(id);
+    reportIdSchema.parse(id);
+    await kenerDeleteReport(id);
     await audit(staff, "STATUSPAGE_DELETED", id, `Deleted status report ${id}`);
     revalidatePath("/admin/status");
     revalidatePath("/", "layout");

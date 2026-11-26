@@ -40,7 +40,7 @@ const OVERRIDE_OPTIONS: { value: OutageOverrideMode; title: string; desc: string
   {
     value: "banner",
     title: "Force Banner Only",
-    desc: "Never full-lock visitors during Better Stack incidents — always show the top warning banner with live timeline details instead.",
+    desc: "Never full-lock visitors during status page incidents — always show the top warning banner with live timeline details instead.",
   },
   {
     value: "muted",
@@ -152,7 +152,7 @@ export function StatusManager({
 
   return (
     <div className="space-y-6">
-      {error && <div className="card border-red-400/50 bg-red-500/5 p-4 text-[13px]"><b>Could not load Better Stack.</b> {error}</div>}
+      {error && <div className="card border-red-400/50 bg-red-500/5 p-4 text-[13px]"><b>Could not load status page (Kener).</b> {error}</div>}
 
       {/* Top Summary Strip */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -164,7 +164,7 @@ export function StatusManager({
         <div className={`card p-4 ${downMonitors > 0 ? "border-rose-400/60 bg-rose-500/5" : ""}`}>
           <div className="text-xs text-soft">Monitors healthy</div>
           <div className="mono mt-1 text-2xl font-semibold">{monitors.length - downMonitors}/{monitors.length}</div>
-          <div className="mt-1 text-xs text-soft">{downMonitors > 0 ? `${downMonitors} monitor${downMonitors === 1 ? "" : "s"} currently down` : "All Better Stack monitors up"}</div>
+          <div className="mt-1 text-xs text-soft">{downMonitors > 0 ? `${downMonitors} monitor${downMonitors === 1 ? "" : "s"} currently down` : "All status page monitors up"}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs text-soft">In-app outage screen</div>
@@ -172,7 +172,7 @@ export function StatusManager({
             <span className="text-sm font-semibold capitalize">{incidentSettings.overrideMode}</span>
             <Badge value={incidentSettings.overrideMode === "muted" ? "PENDING" : "ACTIVE"} label={incidentSettings.overrideMode === "auto" ? "Smart" : incidentSettings.overrideMode === "banner" ? "Banner only" : "Muted"} />
           </div>
-          <div className="mt-1 text-xs text-soft">{outageTest.active ? "Outage simulator running" : "Live Better Stack sync"}</div>
+          <div className="mt-1 text-xs text-soft">{outageTest.active ? "Outage simulator running" : "Live Kener status sync"}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs text-soft">Staff ops alert webhook</div>
@@ -212,7 +212,7 @@ export function StatusManager({
           {configured && canEdit && <button className="btn" onClick={() => open("maintenance")}>Schedule maintenance</button>}
           {configured && canEdit && (
             <button className="btn" disabled={pending} onClick={() => exec(() => testStatusConnectionAction(), { onOk: (r) => toast("ok", `Connected. ${r.services} services on the page.`) })}>
-              Test Better Stack
+              Test status API
             </button>
           )}
           <a className="btn" href="/?preview-outage=1" target="_blank" rel="noopener noreferrer">Preview outage screen</a>
@@ -222,8 +222,8 @@ export function StatusManager({
 
       {!configured && (
         <div className="card max-w-2xl p-5 text-[13px]">
-          <h2 className="text-sm font-semibold">Connect Better Stack to manage public incidents</h2>
-          <p className="mt-2 text-soft">Add <span className="mono text-ink">BETTERSTACK_API_TOKEN</span> to Vercel and redeploy. Outage simulator, screen override, and ops webhook controls still work in the Controls tab.</p>
+          <h2 className="text-sm font-semibold">Connect Kener to manage public incidents</h2>
+          <p className="mt-2 text-soft">Create an API key in Kener (<span className="mono text-ink">status.onboardops.org/manage</span>), add <span className="mono text-ink">KENER_API_KEY</span> to Vercel, and redeploy. Outage simulator, screen override, and ops webhook controls still work in the Controls tab.</p>
         </div>
       )}
 
@@ -313,7 +313,7 @@ export function StatusManager({
                 <h2 className="text-sm font-semibold">In-app outage screen behavior</h2>
               </div>
               <p className="text-soft">
-                Control how <span className="mono text-ink">onboardops.org</span> reacts when Better Stack reports an active incident. Use <b>Mute</b> to silence monitor false positives without deleting public reports.
+                Control how <span className="mono text-ink">onboardops.org</span> reacts when the status page reports an active incident. Use <b>Mute</b> to silence monitor false positives without deleting public reports.
               </p>
               <div className="space-y-2">
                 {OVERRIDE_OPTIONS.map((opt) => {
@@ -349,7 +349,7 @@ export function StatusManager({
                 <h2 className="text-sm font-semibold">Staff incident alert webhook (Discord / Slack / Teams)</h2>
               </div>
               <p className="text-soft">
-                Automatically post an embed to your private ops channel whenever Better Stack opens or resolves an outage, or when staff publish a manual status update. Stored encrypted.
+                Automatically post an embed to your private ops channel whenever the status page opens or resolves an outage, or when staff publish a manual status update. Stored encrypted.
               </p>
               <div className="rounded-md border border-line bg-muted/40 px-3 py-2 text-xs">
                 Status: <b>{incidentSettings.webhookConfigured ? `Connected (${incidentSettings.webhookLabel})` : "Not configured"}</b>
@@ -470,7 +470,7 @@ export function StatusManager({
       )}
 
       {/* MODAL: New Incident or Schedule Maintenance (with rich long-form presets) */}
-      <Modal open={dlg === "incident" || dlg === "maintenance"} onClose={() => setDlg(null)} title={dlg === "maintenance" ? "Schedule Better Stack maintenance" : "Report a public incident"}>
+      <Modal open={dlg === "incident" || dlg === "maintenance"} onClose={() => setDlg(null)} title={dlg === "maintenance" ? "Schedule status page maintenance" : "Report a public incident"}>
         <div className="space-y-3 text-[13px]">
           {dlg === "incident" ? (
             <div>
