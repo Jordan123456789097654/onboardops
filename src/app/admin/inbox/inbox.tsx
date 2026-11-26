@@ -229,7 +229,7 @@ export function Inbox({ rows, me, initialStatus, openId, ai, info, initialQuery 
         <Empty title={q ? "No tickets match that search" : "Nothing here"} hint={q ? "Try fewer words, or search by reference, email or tag." : "New messages from the chat, contact form, email and the in-app feedback button appear here as they arrive."} />
       ) : (
         <div className="grid gap-3 lg:grid-cols-[400px_minmax(0,1fr)]">
-          <div className={cn("card max-h-[calc(100vh-20rem)] min-h-[420px] overflow-y-auto", cur && "hidden lg:block")}>
+          <div className={cn("card min-h-[420px] overflow-y-auto lg:h-[calc(100vh-13rem)]", cur && "hidden lg:block")}>
             <label className="flex cursor-pointer items-center gap-2 border-b border-line px-3 py-2 text-[12px] text-soft">
               <input type="checkbox" checked={allChecked} onChange={() => setChecked(allChecked ? new Set() : new Set(shown.map((r) => r.id)))} />
               Select all {shown.length}
@@ -266,7 +266,7 @@ export function Inbox({ rows, me, initialStatus, openId, ai, info, initialQuery 
             })}
           </div>
 
-          <div className={cn("card min-h-[420px] overflow-hidden lg:max-h-[calc(100vh-20rem)]", !cur && "hidden lg:block")}>
+          <div className={cn("card min-h-[420px] overflow-hidden lg:h-[calc(100vh-13rem)]", !cur && "hidden lg:block")}>
             {cur ? (
               <TicketPane key={cur.id} r={cur} all={rows} info={info} ai={ai} me={me} onBack={() => setSel(null)} onSelect={setSel} />
             ) : (

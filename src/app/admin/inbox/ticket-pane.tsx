@@ -137,7 +137,7 @@ export function TicketPane({ r, all, info, ai, me, onBack, onSelect }: { r: Req;
         </div>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4" ref={threadRef}>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4" ref={threadRef}>
         {(r.aiSummary || r.resolvedHint) && (
           <div className="space-y-2 rounded-xl border border-accent/30 bg-accent/5 px-3.5 py-2.5 text-[12.5px]">
             {r.aiSummary && <div className="flex items-start gap-2"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" /><span><strong>AI summary:</strong> {r.aiSummary}{r.category ? ` (${r.category})` : ""}</span></div>}
@@ -211,6 +211,9 @@ export function TicketPane({ r, all, info, ai, me, onBack, onSelect }: { r: Req;
           )}
         </div>
 
+        <details className="rounded-lg border border-line px-3 py-2 text-[12.5px]">
+          <summary className="cursor-pointer select-none text-soft">Tags, linked tickets and AI tools</summary>
+          <div className="mt-2 space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {r.tags.map((t) => (
             <span key={t} className="inline-flex items-center gap-1 rounded-full border border-line bg-muted px-2 py-0.5 text-[11.5px]">
@@ -244,6 +247,8 @@ export function TicketPane({ r, all, info, ai, me, onBack, onSelect }: { r: Req;
             ))}
           </div>
         )}
+          </div>
+        </details>
 
         <div className="relative">
           <textarea className="textarea w-full" rows={reply.length > 200 ? 8 : 4} placeholder={`Reply to ${r.email}. It's sent by email${r.source === "CHAT" ? " and appears in their chat" : ""}.`} value={reply} onChange={(e) => onType(e.target.value)} />
