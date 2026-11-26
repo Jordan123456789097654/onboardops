@@ -695,6 +695,8 @@ model SupportRequest {
   inbox         String?
   pageUrl       String?
   spam          Boolean   @default(false)
+  /// The Discord thread the staff bot opened for this ticket (set by the bot).
+  discordThreadId String? @unique
   mergedIntoId  String?
   linkedIds     String[]  @default([])
   solvedAt      DateTime?

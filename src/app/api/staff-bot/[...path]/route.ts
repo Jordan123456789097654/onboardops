@@ -44,7 +44,7 @@ async function userIdByEmail(email: string): Promise<string> {
 
 async function handle(req: Request, path: string[], method: "GET" | "POST"): Promise<Response> {
   const route = path.join("/");
-  const system = route.startsWith("ops/signals") || route.startsWith("ops/digest");
+  const system = route.startsWith("ops/signals") || route.startsWith("ops/digest") || route.startsWith("ops/tickets");
   const a = await authBot(req, { needsUser: !system });
   if (!a.ok) return a.res;
 
@@ -84,6 +84,25 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
   const body = method === "POST" ? ((await req.json().catch(() => ({}))) as Record<string, unknown>) : {};
   const q = new URL(req.url).searchParams;
 
+  /* Ticket threads: the bot opens one Discord thread per ticket. These carry references and topics only, never customer messages or emails. */
+  if (route.startsWith("ops/tickets")) {
+    if (method === "GET" && route === "ops/tickets/unthreaded") {
+      const rows = await prisma.supportRequest.findMany({ where: { discordThreadId: null, status: { not: "SOLVED" }, mergedIntoId: null }, orderBy: { createdAt: "asc" }, take: 10 });
+      return json({ tickets: rows.map((t) => ({ ...summary(t), security: t.topic === "Security report" })) });
+    }
+    if (method === "GET" && route === "ops/tickets/threaded") {
+      const rows = await prisma.supportRequest.findMany({ where: { discordThreadId: { not: null }, status: { not: "SOLVED" }, mergedIntoId: null }, orderBy: { createdAt: "asc" }, take: 200, select: { id: true, status: true, discordThreadId: true, assignee: true } });
+      return json({ tickets: rows.map((t) => ({ id: t.id, ref: refOf(t.id), status: t.status, threadId: t.discordThreadId, assignee: t.assignee })) });
+    }
+    if (method === "POST" && route === "ops/tickets/thread") {
+      const d = z.object({ id: z.string().min(5), threadId: z.string().regex(/^\d{15,25}$/) }).parse(body);
+      await prisma.supportRequest.update({ where: { id: d.id }, data: { discordThreadId: d.threadId } });
+      return json({ ok: true });
+    }
+    return json({ error: "Unknown route" }, 404);
+  }
+
+
   try {
     /* ---- Support ---- */
     if (method === "GET" && route === "support/ticket") { need(SUPPORT); return json(summary(await ticketByRef(q.get("ref") ?? ""))); }
@@ -107,8 +126,11 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
     }
     if (method === "POST" && route === "support/reply") {
       need(SUPPORT);
-      const d = z.object({ ref: z.string(), body: z.string().trim().min(2).max(4000), markSolved: z.boolean().default(false) }).parse(body);
-      const t = await ticketByRef(d.ref);
+      const d = z.object({ ref: z.string().optional(), threadId: z.string().regex(/^\d{15,25}$/).optional(), body: z.string().trim().min(2).max(4000), markSolved: z.boolean().default(false) }).parse(body);
+      if (!d.ref && !d.threadId) throw new Error("Give a ticket reference or use this inside the ticket's thread.");
+      const t = d.threadId
+        ? await prisma.supportRequest.findUnique({ where: { discordThreadId: d.threadId } }).then((x) => x ?? (() => { throw new Error("This thread is not linked to a ticket."); })())
+        : await ticketByRef(d.ref!);
       const r = await replyTicketCore(staff, t.id, { body: d.body, markSolved: d.markSolved });
       return json({ ok: true, ref: refOf(t.id), emailed: r.emailed });
     }
