@@ -100,6 +100,12 @@ model User {
   quietStart        Int?
   quietEnd          Int?
   timezone          String?
+  /// How this person sees dates: "YYYY-MM-DD", "MM/DD/YYYY" or "DD/MM/YYYY". Null = the default.
+  dateFormat        String?
+  /// true = 24-hour clock, false = 12-hour. Null = the default.
+  clock24           Boolean?
+  /// Set when the person asks to delete their account. Deleted for good after a 14-day grace period unless cancelled.
+  deletionRequestedAt DateTime?
   /// Set when a moderator bans the account. A banned account cannot sign in or keep a session.
   bannedAt          DateTime?
   banReason         String            @default("")

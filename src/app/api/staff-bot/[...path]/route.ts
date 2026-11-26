@@ -10,6 +10,7 @@ import { reconcileMaintenance } from "@/lib/betterstack";
 import { staffAudit } from "@/lib/platform";
 import { postDiscord } from "@/lib/discord-events";
 import { askMaya, draftReply, sentimentOf, summarizeTicket, takeGaps } from "@/lib/maya-ops";
+import { finalizeDueDeletions } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -45,7 +46,7 @@ async function userIdByEmail(email: string): Promise<string> {
 
 async function handle(req: Request, path: string[], method: "GET" | "POST"): Promise<Response> {
   const route = path.join("/");
-  const system = route.startsWith("ops/signals") || route.startsWith("ops/digest") || route.startsWith("ops/tickets") || route.startsWith("ops/maya");
+  const system = route.startsWith("ops/signals") || route.startsWith("ops/digest") || route.startsWith("ops/tickets") || route.startsWith("ops/maya") || route.startsWith("ops/jobs");
   const a = await authBot(req, { needsUser: !system });
   if (!a.ok) return a.res;
 
@@ -119,6 +120,14 @@ async function handle(req: Request, path: string[], method: "GET" | "POST"): Pro
     if (method === "POST" && route === "ops/tickets/sentiment") {
       const d = z.object({ text: z.string().max(2000) }).parse(body);
       return json(await sentimentOf(d.text));
+    }
+    return json({ error: "Unknown route" }, 404);
+  }
+
+  /* Scheduled jobs run by the bot on Railway. */
+  if (route.startsWith("ops/jobs")) {
+    if (method === "POST" && route === "ops/jobs/account-deletions") {
+      return json(await finalizeDueDeletions());
     }
     return json({ error: "Unknown route" }, 404);
   }

@@ -8,6 +8,8 @@ import { backupCodesLeft } from "@/lib/mfa";
 import { OAUTH_ERRORS, PROVIDERS, isConfigured, providerLabel } from "@/lib/oauth";
 import { Account } from "./account";
 import { NotifyPrefs } from "./notify-prefs";
+import { DeleteAccountCard, PersonalKeysCard, PreferencesCard } from "./extras";
+import { DELETION_GRACE_DAYS } from "@/lib/account-deletion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Account settings", robots: { index: false, follow: false } };
@@ -19,6 +21,8 @@ export default async function AccountPage({ searchParams }: { searchParams: { ne
   const [backupLeft, required] = await Promise.all([user.totpEnabledAt ? backupCodesLeft(user.id) : Promise.resolve(0), prisma.workspaceMember.findFirst({ where: { userId: user.id, workspace: { require2fa: true } }, include: { workspace: { select: { name: true } } } })]);
   const passkeys = await prisma.passkey.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } });
   const linked = await prisma.oAuthAccount.findMany({ where: { userId: user.id } });
+  const memberships = await prisma.workspaceMember.findMany({ where: { userId: user.id }, include: { workspace: { select: { name: true } } }, orderBy: { createdAt: "asc" } });
+  const personalKeys = await prisma.apiKey.findMany({ where: { revokedAt: null, createdByMemberId: { in: memberships.map((x) => x.id) } }, include: { workspace: { select: { name: true } } }, orderBy: { createdAt: "desc" } });
   const back = m && !m.support ? (m.role === "EMPLOYEE" ? "/app/my-portal" : "/app/overview") : "/workplaces";
   return (
     <div className="mx-auto min-h-screen max-w-3xl px-4 py-4">
@@ -37,6 +41,12 @@ export default async function AccountPage({ searchParams }: { searchParams: { ne
           oauth={{ providers: PROVIDERS.map((p) => { const l = linked.find((x) => x.provider === p); return { provider: p, label: providerLabel[p], configured: isConfigured(p), connected: l ? { email: l.email, since: l.createdAt.toISOString() } : null }; }), canUnlink: !!user.passwordSetAt || linked.length > 1, notice: searchParams.oauth, error: searchParams.oauth_error ? OAUTH_ERRORS[searchParams.oauth_error] ?? OAUTH_ERRORS.exchange : undefined }}
         />
         <NotifyPrefs quietStart={user.quietStart ?? null} quietEnd={user.quietEnd ?? null} timezone={user.timezone ?? ""} prefs={(user.emailPrefs ?? {}) as Record<string, boolean>} />
+        <PreferencesCard dateFormat={user.dateFormat ?? null} clock24={user.clock24 ?? null} />
+        <PersonalKeysCard
+          keys={personalKeys.map((k) => ({ id: k.id, name: k.name.replace(/ \(personal\)$/, ""), prefix: k.prefix, workspace: k.workspace.name, scopes: k.scopes, createdAt: k.createdAt.toISOString(), lastUsedAt: k.lastUsedAt ? k.lastUsedAt.toISOString() : null, expiresAt: k.expiresAt ? k.expiresAt.toISOString() : null }))}
+          workspaces={memberships.map((x) => ({ id: x.workspaceId, name: x.workspace.name }))}
+        />
+        <DeleteAccountCard email={user.email} scheduledFor={user.deletionRequestedAt ? new Date(user.deletionRequestedAt.getTime() + DELETION_GRACE_DAYS * 86400000).toISOString().slice(0, 10) : null} />
       </div>
     </div>
   );

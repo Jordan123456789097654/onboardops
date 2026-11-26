@@ -19,6 +19,34 @@ const table = (head: string[], rows: string[][]): Block => ({ t: "table", head, 
 
 export const articles: Article[] = [
   {
+    slug: "api-keys", cat: "Integrations", title: "API keys: create, use, rotate and revoke", summary: "How to make a key, keep it safe, swap it without downtime, and shut it off.",
+    body: [
+      p("An API key lets one of your own systems (a payroll tool, a scheduler, a script) read or change your workspace. Keys belong to your workspace, not to a person, but every action a key takes is recorded in the audit log under the key's name, and a key can never do more than the person who created it."),
+      h("Create a key"),
+      ol("Sign in as an owner or admin and open Settings, then Integrations.", "Choose Create API key and give it a name that says what uses it, such as \"Payroll sync\".", "Tick only the scopes that system needs. Reading and writing are separate scopes, so most systems only need the read ones.", "Copy the key straight away. It is shown once. If you lose it, revoke it and create a new one."),
+      note("Give each system its own key. If one key is ever exposed, you can shut it off without breaking the others."),
+      h("Use a key"),
+      p("Send the key in the Authorization header on every request, as a Bearer token: Authorization: Bearer oo_live_... Use HTTPS only. Never put a key in a URL, a web page, a screenshot, a support ticket, or a shared document."),
+      h("Store it safely"),
+      ul("Keep keys in your system's secret store or environment variables, not in code or config files you commit to a repository.", "Limit who can see the secret store. Anyone with the key can act with its scopes.", "If a key appears anywhere it should not have, revoke it first and investigate second."),
+      h("Rotate a key without downtime"),
+      ol("Create a new key with the same scopes and a name like \"Payroll sync (new)\".", "Update your system to use the new key and confirm it works (a read request is enough to test).", "Revoke the old key once nothing uses it. Revoking stops it working immediately, so do it after the switch."),
+      h("Revoke a key"),
+      p("Open Settings, then Integrations, and revoke the key. It stops working straight away, and the revoke is recorded in the audit log. Revoking cannot be undone, so create a replacement first if something still depends on it."),
+      h("Troubleshooting"),
+      table(["Response", "What it means", "What to do"], [
+        ["401 missing_key", "No key was sent", "Check the Authorization header is present and starts with Bearer"],
+        ["401 invalid_key", "The key is wrong, was copied incorrectly, or has been revoked", "Copy the full key again, or create a new one"],
+        ["401 key_expired", "The key has passed its expiry date", "Create a new key and switch to it"],
+        ["403 insufficient_scope", "The key's scope does not allow this request", "Create a key with the scope you need, or use a read-only key for reads"],
+        ["429", "Too many requests in a minute", "Slow down and retry after the wait shown in the Retry-After header"],
+      ]),
+      p("Every error includes a requestId. Quote it when you contact support so we can find the exact request."),
+      h("Good practice"),
+      ul("Review keys every few months and revoke any you no longer use.", "Choose the smallest set of scopes that works.", "When someone who created a key leaves the workspace, the key can no longer write. Still replace it, so the system keeps working on purpose rather than by accident.", "See the full endpoint list and examples in the API reference."),
+    ],
+  },
+  {
     slug: "api-reference", cat: "Integrations", title: "API reference (read and write)", summary: "Keys, scopes, every endpoint, errors, rate limits and examples.",
     body: [
       p("The API lets your own systems read and change data in your workspace. Everything it does is checked on the server the same way the app checks it, and every write is recorded in your audit log under the name of the key. Base URL: https://api.onboardops.org (legacy https://www.onboardops.org/api/v1/... URLs redirect permanently to api.onboardops.org)."),
