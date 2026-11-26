@@ -21,9 +21,9 @@ export async function replyTicketCore(staff: Staff, id: string, d: { body: strin
   if (d.markSolved && !can(await getSupportConfig(), staff.role, "close")) throw new Error("You don't have permission to close tickets.");
   const m = emails.supportReply(req.name, ref, d.body);
   const sent = await sendEmail(req.email, m.subject, m.text, { html: m.html, kind: "support-reply", workspaceId: req.workspaceId });
+  if (req.discordThreadId && !d.fromDiscord) await mirrorToTicketThread(req.discordThreadId, staff.name, d.body);
   const updated = await prisma.$transaction(async (tx) => {
     await tx.supportMessage.create({ data: { requestId: id, kind: "REPLY", authorName: staff.name, body: d.body, emailed: sent.ok } });
-    if (req.discordThreadId && !d.fromDiscord) void mirrorToTicketThread(req.discordThreadId, staff.name, d.body);
     const u = await tx.supportRequest.update({
       where: { id },
       data: { status: d.markSolved ? "SOLVED" : "WAITING", solvedAt: d.markSolved ? new Date() : null, resolvedHint: false, idleNudgedAt: null, staffTypingAt: null, assignee: req.assignee ?? staff.name },

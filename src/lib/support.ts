@@ -249,7 +249,7 @@ export async function addVisitorMessage(reqId: string, authorName: string, body:
   const req = await prisma.supportRequest.findUnique({ where: { id: reqId } });
   if (!req) throw new Error("This conversation could not be found.");
   const msg = await prisma.supportMessage.create({ data: { requestId: req.id, kind: "VISITOR", authorName, body } });
-  if (req.discordThreadId) void mirrorToTicketThread(req.discordThreadId, authorName, body);
+  if (req.discordThreadId) await mirrorToTicketThread(req.discordThreadId, authorName, body);
   if (opts.attachmentIds?.length) {
     await prisma.supportAttachment.updateMany({ where: { id: { in: opts.attachmentIds }, requestId: req.id, messageId: null }, data: { messageId: msg.id } });
   }
