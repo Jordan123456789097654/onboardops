@@ -349,15 +349,11 @@ export function MarketingChat() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label={`Chat with ${brand.name}`}
-          className={`group relative flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4 shadow-[0_8px_30px_rgba(0,0,0,0.25)] ring-1 ring-black/5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_36px_rgba(0,0,0,0.3)] ${accentCls}`}
-          style={custom ? accentStyle : { background: "linear-gradient(135deg, rgb(var(--accent)), rgb(var(--accent) / 0.82))", color: "rgb(var(--accent-fg))" }}
+          aria-label={`Open chat`}
+          className={`flex h-14 w-14 items-center justify-center rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.25)] transition-transform duration-200 hover:scale-105 ${accentCls}`}
+          style={custom ? accentStyle : { background: "rgb(var(--accent))", color: "rgb(var(--accent-fg))" }}
         >
-          <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-[15px] font-bold">
-            {brand.name.charAt(0).toUpperCase()}
-            <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white/70 ${hours && !hours.open ? "bg-amber-400" : "bg-emerald-400"}`} />
-          </span>
-          <span className="hidden pr-1 text-[13px] font-semibold sm:inline">Chat with {brand.name}</span>
+          <MessageCircle className="h-6 w-6" strokeWidth={2} />
         </button>
       </div>
     );
