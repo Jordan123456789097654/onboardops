@@ -345,7 +345,7 @@ export function MarketingChat() {
 
   if (!open) {
     return (
-      <div className="no-print fixed bottom-5 right-5 z-40">
+      <div className="no-print fixed bottom-4 right-4 z-40">
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -357,7 +357,7 @@ export function MarketingChat() {
             {brand.name.charAt(0).toUpperCase()}
             <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white/70 ${hours && !hours.open ? "bg-amber-400" : "bg-emerald-400"}`} />
           </span>
-          <span className="pr-1 text-[13.5px] font-semibold">Chat with {brand.name}</span>
+          <span className="hidden pr-1 text-[13px] font-semibold sm:inline">Chat with {brand.name}</span>
         </button>
       </div>
     );
@@ -403,7 +403,7 @@ export function MarketingChat() {
       <div
         role="dialog"
         aria-label="OnboardOps chat"
-        className="chat-panel no-print fixed bottom-5 right-5 z-50 flex h-[min(620px,calc(100vh-2.5rem))] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface text-ink shadow-[0_12px_48px_rgba(0,0,0,0.28)]"
+        className="chat-panel no-print fixed bottom-5 right-5 z-50 flex h-[min(440px,calc(100vh-6rem))] w-[320px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-line bg-surface text-ink shadow-[0_12px_48px_rgba(0,0,0,0.28)]"
       >
         <div className="px-4 py-3.5" style={headStyle}>
           <div className="flex items-center justify-between gap-2">
